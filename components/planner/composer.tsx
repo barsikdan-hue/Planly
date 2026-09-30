@@ -1,0 +1,55 @@
+'use client';
+import { useState, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { ImageIcon, Video, Plus, Send, Bookmark, Sparkles, X, Eye, Heart, MessageCircle, Upload, Check, Hash } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { Card, SocialIcon, Action, Empty } from './common';
+import { networkNames, type Post, type Network, type Media, type Status, validatePost } from '@/lib/planner';
+export type ComposerProps = {
+    draft: Post;
+    setDraft: Dispatch<SetStateAction<Post>>;
+    media: Media[];
+    upload: (files: FileList | File[]) => Promise<Media[]>;
+    save: (post: Post, status: Status) => void;
+    accounts: Record<Network, boolean>;
+    saving?: boolean;
+    quick?: boolean;
+    expand?: () => void;
+};
+export function Composer({ draft, setDraft, media, upload, save, accounts, saving = false, quick = false, expand }: ComposerProps) {
+    const [preview, setPreview] = useState<Network>('telegram');
+    const [variant, setVariant] = useState<Network | 'common'>('common');
+    const [when, setWhen] = useState('scheduled');
+    const [picker, setPicker] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const input = useRef<HTMLInputElement>(null);
+    const mounted = useRef(true);
+    useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+    const patch = (p: Partial<Post>) => setDraft(current => ({ ...current, ...p }));
+    const attached = media.filter(m => draft.mediaIds.includes(m.id));
+    const changeText = (text: string) => variant === 'common' ? patch({ text }) : patch({ overrides: { ...draft.overrides, [variant]: text } });
+    const addFiles = async (files: FileList | File[]) => { setBusy(true); try {
+        const added = await upload(files);
+        if (mounted.current) setDraft(current => ({ ...current, mediaIds: [...current.mediaIds, ...added.map(m => m.id)] }));
+    }
+    finally {
+        setBusy(false);
+    } };
+    const submit = (status: Status) => { const error = validatePost(draft, status); if (error) {
+        toast.error(error);
+        return;
+    } if (status !== 'draft' && draft.networks.some(n => !accounts[n])) {
+        toast.error('Выбранная соцсеть отключена. Измени выбор или включи демоаккаунт.');
+        return;
+    } save(draft, status); };
+    const editor = <><label className="sr-only" htmlFor={quick ? 'quick-text' : 'post-text'}>Текст публикации</label><textarea id={quick ? 'quick-text' : 'post-text'} placeholder="О чём расскажем сегодня?" disabled={saving} value={variant === 'common' ? draft.text : (draft.overrides[variant] ?? draft.text)} onChange={e => changeText(e.target.value)} className={quick ? 'quick-text' : 'editor-text'} maxLength={20000}/><div className="editor-toolbar"><div><Button variant="ghost" size="icon" aria-label="Добавить фото" title="Добавить фото" onClick={() => input.current?.click()}><ImageIcon size={19}/></Button><Button variant="ghost" size="icon" aria-label="Добавить видео" title="Добавить видео" onClick={() => input.current?.click()}><Video size={19}/></Button><Button variant="ghost" size="icon" aria-label="Добавить хештег" title="Добавить хештег" onClick={() => changeText(`${variant === 'common' ? draft.text : (draft.overrides[variant] ?? draft.text)}\n#недвижимость #сочи`)}><Hash size={18}/></Button><span className="toolbar-divider"/><Button variant="ghost" className="ai-ghost" onClick={() => toast.info('AI появится в Phase 7 — после стабильной публикации.')}><Sparkles size={16}/> AI-помощник <span className="tiny-label">скоро</span></Button></div><span className="char-count">{(variant === 'common' ? draft.text : (draft.overrides[variant] ?? draft.text)).length} символов</span></div></>;
+    const targets = <div className="network-choices">{(Object.keys(networkNames) as Network[]).map(n => <label className={`network-choice ${draft.networks.includes(n) ? 'selected' : ''}`} key={n}><Checkbox checked={draft.networks.includes(n)} onCheckedChange={checked => { if (!checked && variant === n)
+        setVariant('common'); patch({ networks: checked ? [...new Set([...draft.networks, n])] : draft.networks.filter(x => x !== n) }); }} aria-label={networkNames[n]}/><SocialIcon network={n} small/>{!quick && networkNames[n]}</label>)}</div>;
+    const timing = <div className="date-inputs"><label><span className="sr-only">Дата публикации</span><input aria-label="Дата публикации" type="date" value={draft.date} onChange={e => patch({ date: e.target.value })}/></label><label><span className="sr-only">Время публикации МСК</span><input aria-label="Время публикации МСК" type="time" value={draft.time} onChange={e => patch({ time: e.target.value })}/></label></div>;
+    return <><input ref={input} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple hidden onChange={e => { if (e.target.files)
+        void addFiles(e.target.files); e.target.value = ''; }}/>{quick ? <Card title={<><span className="title-icon"><FilePen /></span>Быстрое создание поста</>} action={<Button variant="ghost" className="text-link" onClick={expand}>Открыть редактор</Button>} className="quick-create"><div className="quick-layout"><div className="quick-editor">{editor}{attached.length > 0 && <div className="attachment-chips">{attached.map(m => <span key={m.id}>{m.name}<button aria-label={`Убрать ${m.name}`} onClick={() => patch({ mediaIds: draft.mediaIds.filter(id => id !== m.id) })}><X size={12}/></button></span>)}</div>}</div><div className="quick-controls"><label className="field-label">Куда публикуем</label>{targets}{timing}<Action onClick={() => submit('scheduled')} disabled={busy || saving}><Send size={16}/>Запланировать</Action><span className="mini-note">Деморежим · время МСК</span></div></div></Card> : <div className="composer-layout"><div className="compose-main"><Card title="Текст публикации" action={<span className="subtle-label">Один пост — несколько площадок</span>}><Tabs value={variant} onValueChange={v => setVariant(v as Network | 'common')}><TabsList className="text-tabs"><TabsTrigger value="common">Общий текст</TabsTrigger>{draft.networks.map(n => <TabsTrigger key={n} value={n}>{networkNames[n]}</TabsTrigger>)}</TabsList></Tabs><div className="editor-box">{editor}</div></Card><Card title="Медиа" action={<span className="subtle-label">Фото и видео</span>}><div className="media-drop" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); void addFiles(e.dataTransfer.files); }}><Upload size={24}/><p>Перетащи файлы сюда или <button className="inline-link" onClick={() => input.current?.click()}>выбери на компьютере</button></p><small>JPG, PNG, WebP, MP4, WebM · до 20 МБ на файл</small></div>{attached.length > 0 && <div className="attached-media">{attached.map(m => <div key={m.id}>{m.type.startsWith('video/') ? <video src={m.url} muted/> : <img src={m.url} alt={m.name}/>}<button onClick={() => patch({ mediaIds: draft.mediaIds.filter(id => id !== m.id) })} aria-label={`Убрать ${m.name}`}><X size={14}/></button></div>)}</div>}<Button variant="ghost" className="text-link" onClick={() => setPicker(true)}><Plus size={15}/>Из медиатеки</Button></Card><Card title="Публикация"><label className="field-label">Выбери соцсети</label>{targets}<div className="when-line"><label className="field-label">Когда публикуем</label><Tabs value={when} onValueChange={setWhen}><TabsList><TabsTrigger value="scheduled">Запланировать</TabsTrigger><TabsTrigger value="published">Сейчас (демо)</TabsTrigger></TabsList></Tabs></div>{when === 'scheduled' && timing}<p className="mini-note">Московское время · UTC+3. Реальная отправка появится после интеграций.</p><div className="composer-actions"><Action secondary onClick={() => submit('draft')} disabled={busy || saving}><Bookmark size={16}/>Сохранить черновик</Action><Action onClick={() => submit(when as Status)} disabled={busy || saving}><Send size={16}/>{when === 'scheduled' ? 'Запланировать' : 'Опубликовать (демо)'}</Action></div></Card></div><aside className="preview-column"><div className="preview-heading"><Eye size={18}/><h2>Предпросмотр</h2><span>В реальном времени</span></div><Tabs value={preview} onValueChange={v => setPreview(v as Network)}><TabsList className="preview-tabs">{(Object.keys(networkNames) as Network[]).map(n => <TabsTrigger value={n} key={n}>{networkNames[n]}</TabsTrigger>)}</TabsList></Tabs><div className={`social-preview ${preview}`}><div className="preview-account"><span className="account-avatar">А</span><div><strong>Агент без галстука</strong><small>{preview === 'telegram' ? '1 240 подписчиков' : preview === 'vk' ? 'Личный блог' : 'agent.bez.galstuka'}</small></div><SocialIcon network={preview} small/></div><div className="preview-text">{draft.overrides[preview] ?? draft.text ?? ''}{!(draft.overrides[preview] ?? draft.text) && <span className="muted">Здесь появится твой пост…</span>}</div>{attached.map(m => m.type.startsWith('video/') ? <video key={m.id} controls src={m.url} className="preview-media"/> : <img key={m.id} src={m.url} alt={m.name} className="preview-media"/>)}<div className="preview-reactions"><span><Heart size={16}/> —</span><span><MessageCircle size={16}/> —</span><span><Eye size={16}/> —</span><small>{draft.time}</small></div></div><div className="preview-note"><Check size={17}/><p>Проверь текст и медиа перед публикацией. Вид поста на площадке может отличаться.</p></div></aside></div>}<Dialog open={picker} onOpenChange={setPicker}><DialogContent><DialogTitle>Выбрать из медиатеки</DialogTitle><DialogDescription>Добавь фото или видео к публикации.</DialogDescription>{media.length ? <div className="media-picker-grid">{media.map(m => <button className={draft.mediaIds.includes(m.id) ? 'active' : ''} key={m.id} onClick={() => patch({ mediaIds: draft.mediaIds.includes(m.id) ? draft.mediaIds.filter(id => id !== m.id) : [...draft.mediaIds, m.id] })}>{m.type.startsWith('video/') ? <video src={m.url} muted/> : <img src={m.url} alt={m.name}/>}<span>{m.name}</span>{draft.mediaIds.includes(m.id) && <Check size={18}/>}</button>)}</div> : <Empty title="Медиатека пока пуста" description="Загрузи первый файл с компьютера."/>}<Action onClick={() => setPicker(false)}>Готово</Action></DialogContent></Dialog></>;
+}
+function FilePen() { return <Bookmark size={17}/>; }
