@@ -1,0 +1,15 @@
+import {build} from 'rolldown';
+import {compile} from '@tailwindcss/node';
+import {Scanner} from '@tailwindcss/oxide';
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../',import.meta.url));
+await mkdir(path.join(root,'dist'),{recursive:true});
+await build({cwd:root,input:'app/standalone.tsx',platform:'browser',resolve:{alias:{'@':root}},transform:{jsx:'react-jsx',define:{'process.env.NODE_ENV':'"production"'}},output:{file:path.join(root,'dist/app.js'),format:'iife',minify:true},onwarn(warn){if(warn.code!=='MODULE_LEVEL_DIRECTIVE')console.warn(warn.message)}});
+const css=await compile(await readFile(path.join(root,'app/globals.css'),'utf8'),{base:path.join(root,'app'),onDependency(){}});
+const scanner=new Scanner({sources:[{base:root,pattern:'components/**/*.tsx',negated:false},{base:root,pattern:'app/**/*.tsx',negated:false}]});
+await writeFile(path.join(root,'dist/style.css'),css.build(scanner.scan()));
+await copyFile(path.join(root,'public/favicon.svg'),path.join(root,'dist/favicon.svg'));
+await writeFile(path.join(root,'dist/index.html'),'<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Личный планировщик контента: посты, соцсети и расписание."><title>Planly — Personal SMM Planner</title><link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./style.css"></head><body><div id="root"></div><script src="./app.js"></script></body></html>');
+console.log('Production frontend built in dist/');

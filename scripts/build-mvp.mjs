@@ -1,0 +1,12 @@
+import './build-static.mjs';
+import {build} from 'rolldown';
+import {readFile,mkdir,writeFile,cp} from 'node:fs/promises';
+const assets={};
+for(const [file,type] of [['index.html','text/html; charset=utf-8'],['app.js','text/javascript; charset=utf-8'],['style.css','text/css; charset=utf-8'],['favicon.svg','image/svg+xml']]) assets['/'+file]={type,body:await readFile(`dist/${file}`,'utf8')};
+await mkdir('dist/server',{recursive:true});
+await build({input:'server/worker.mjs',platform:'neutral',plugins:[{name:'planly-assets',resolveId(id){if(id==='virtual:planly-assets')return id},load(id){if(id==='virtual:planly-assets')return 'export default '+JSON.stringify(assets)}}],output:{file:'dist/server/index.js',format:'esm',minify:true}});
+await mkdir('dist/.openai',{recursive:true});
+await cp('.openai/hosting.json','dist/.openai/hosting.json');
+await cp('drizzle','dist/.openai/drizzle',{recursive:true});
+await writeFile('dist/server/wrangler.json',JSON.stringify({name:'planly-mvp',main:'index.js',compatibility_date:'2026-09-01',d1_databases:[{binding:'DB',database_name:'planly',database_id:'local-only'}],r2_buckets:[{binding:'BUCKET',bucket_name:'planly-media'}]},null,2));
+console.log('MVP Worker and migrations built.');

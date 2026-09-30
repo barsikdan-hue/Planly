@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789984164932,
+      "tag": "0000_hard_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789984633290,
+      "tag": "0001_dashing_junta",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {validatePost,seed,dateInput} from '../lib/planner.ts';
+const now=Date.now();
+const base={text:'Проверка публикации',networks:['Telegram'],date:dateInput(new Date(now+86400000)),status:'scheduled'};
+test('future post with text and destination can be scheduled',()=>assert.equal(validatePost(base,now),''));
+test('empty text is blocked',()=>assert.match(validatePost({...base,text:'  '},now),/текст/));
+test('destination is required for scheduling',()=>assert.match(validatePost({...base,networks:[]},now),/соцсеть/));
+test('past and invalid dates are blocked',()=>{for(const date of ['', 'invalid',dateInput(new Date(now-86400000))])assert.match(validatePost({...base,date},now),/будущем/)});
+test('draft supports incomplete scheduling and destinations',()=>assert.equal(validatePost({...base,status:'draft',networks:[],date:''},now),''));
+test('mock data has unique ids and all three statuses',()=>{const s=seed();assert.equal(new Set(s.posts.map(p=>p.id)).size,s.posts.length);assert.deepEqual(new Set(s.posts.map(p=>p.status)),new Set(['scheduled','draft','published']));assert.equal(s.accounts.length,3)});

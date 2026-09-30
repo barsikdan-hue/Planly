@@ -1,0 +1,1 @@
+ALTER TABLE `posts` ADD `mutation` text DEFAULT '' NOT NULL;
