@@ -1,6 +1,5 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
-import { cookies } from 'next/headers';
 import { getDb } from '../../../db/index.ts';
 import { sessions, users } from '../../../db/schema.ts';
 import { getOwnerAuthEnv, getServerEnv, getSessionEnv } from '../env.ts';
@@ -64,21 +63,4 @@ export async function getOwnerBySessionToken(rawToken: string): Promise<Owner | 
 export async function deleteSessionByToken(rawToken: string): Promise<void> {
   if (!rawToken) return;
   await getDb().delete(sessions).where(eq(sessions.tokenHash, sessionTokenHash(rawToken)));
-}
-
-export async function setOwnerSessionCookie(rawToken: string): Promise<void> {
-  const store = await cookies();
-  store.set(SESSION_COOKIE_NAME, rawToken, sessionCookieOptions());
-}
-
-export async function getOwnerFromSession(): Promise<Owner | null> {
-  const rawToken = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  return rawToken ? getOwnerBySessionToken(rawToken) : null;
-}
-
-export async function destroyOwnerSession(): Promise<void> {
-  const store = await cookies();
-  const rawToken = store.get(SESSION_COOKIE_NAME)?.value;
-  if (rawToken) await deleteSessionByToken(rawToken);
-  store.delete(SESSION_COOKIE_NAME);
 }
