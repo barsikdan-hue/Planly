@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790830630029,
+      "tag": "0000_classy_manta",
+      "breakpoints": true
+    }
+  ]
 }
