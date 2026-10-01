@@ -1,6 +1,6 @@
 import { requireApiOwner } from '../../../lib/server/auth/owner.ts';
 import { apiError, json } from '../../../lib/server/http.ts';
-import { listMediaAssets } from '../../../lib/server/media.ts';
+import { listMediaAssetsWithPreview } from '../../../lib/server/media.ts';
 import { listPlannerPosts } from '../../../lib/server/posts.ts';
 import { getProfile } from '../../../lib/server/profile.ts';
 import { listSocialAccounts } from '../../../lib/server/social-accounts.ts';
@@ -11,7 +11,7 @@ export async function GET(request: Request): Promise<Response> {
     const [profile, posts, media, socialAccounts] = await Promise.all([
       getProfile(owner.id),
       listPlannerPosts(owner.id),
-      listMediaAssets(owner.id),
+      listMediaAssetsWithPreview(owner.id),
       listSocialAccounts(owner.id),
     ]);
     return json({ profile, posts, media, socialAccounts });
