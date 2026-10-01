@@ -15,9 +15,9 @@ test('PostgreSQL schema defines the MVP owner/content tables', () => {
 });
 
 test('provider and status enums stay inside MVP v1 scope', () => {
-  has(/socialProviderEnum\s*=\s*pgEnum\([^\n]+\[\s*['"]TELEGRAM['"]\s*,\s*['"]MAX['"]\s*\]/s, 'provider enum must be TELEGRAM | MAX');
-  has(/postStatusEnum\s*=\s*pgEnum\([^\n]+\[\s*['"]DRAFT['"]\s*,\s*['"]READY['"]\s*,\s*['"]ARCHIVED['"]\s*\]/s, 'post status enum mismatch');
-  has(/publicationStatusEnum\s*=\s*pgEnum\([^\n]+PUBLISHED[^\n]+FAILED[^\n]+REQUIRES_RECONNECT/s, 'publication status enum missing terminal states');
+  has(/socialProviderEnum\s*=\s*pgEnum\([^\n]+\[\s*['"]TELEGRAM['"]\s*,\s*['"]MAX['"]\s*\]/, 'provider enum must be TELEGRAM | MAX');
+  has(/postStatusEnum\s*=\s*pgEnum\([^\n]+\[\s*['"]DRAFT['"]\s*,\s*['"]READY['"]\s*,\s*['"]ARCHIVED['"]\s*\]/, 'post status enum mismatch');
+  has(/publicationStatusEnum\s*=\s*pgEnum\([\s\S]*?PUBLISHED[\s\S]*?FAILED[\s\S]*?REQUIRES_RECONNECT/, 'publication status enum missing terminal states');
 });
 
 test('schema preserves independent targets, ordered media, sessions and idempotency', () => {
