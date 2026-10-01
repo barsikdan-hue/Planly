@@ -1,13 +1,31 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "./schema";
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { getServerEnv } from '@/lib/server/env';
+import * as schema from './schema';
 
-export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
+type DbGlobals = typeof globalThis & {
+  __planlyPool?: Pool;
+  __planlyDb?: NodePgDatabase<typeof schema>;
+};
+
+const globals = globalThis as DbGlobals;
+
+export function getDb(): NodePgDatabase<typeof schema> {
+  if (!globals.__planlyPool) {
+    globals.__planlyPool = new Pool({
+      connectionString: getServerEnv().DATABASE_URL,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
   }
+  globals.__planlyDb ??= drizzle(globals.__planlyPool, { schema });
+  return globals.__planlyDb;
+}
 
-  return drizzle(env.DB, { schema });
+export async function closeDb(): Promise<void> {
+  const pool = globals.__planlyPool;
+  globals.__planlyDb = undefined;
+  globals.__planlyPool = undefined;
+  if (pool) await pool.end();
 }
