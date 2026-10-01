@@ -1,7 +1,7 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { getServerEnv } from '../lib/server/env';
-import * as schema from './schema';
+import { getServerEnv } from '../lib/server/env.ts';
+import * as schema from './schema.ts';
 
 type DbGlobals = typeof globalThis & {
   __planlyPool?: Pool;
