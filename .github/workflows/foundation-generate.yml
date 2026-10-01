@@ -4,26 +4,46 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   generate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Check migration dialect
+        id: dialect
+        run: |
+          if grep -q '"dialect": "postgresql"' drizzle/meta/_journal.json 2>/dev/null; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.dialect.outputs.current != 'true'
         with:
           node-version: 22.13.0
       - name: Install pnpm
+        if: steps.dialect.outputs.current != 'true'
         run: npm install --global pnpm@11.25.0
       - name: Install dependencies
+        if: steps.dialect.outputs.current != 'true'
         run: pnpm install --frozen-lockfile
-      - name: Clean stale migration metadata
-        run: rm -rf drizzle
-      - name: Generate PostgreSQL migration from scratch
-        run: pnpm db:generate
-      - name: Upload clean PostgreSQL migration
-        uses: actions/upload-artifact@v4
-        with:
-          name: postgres-migration-clean
-          path: drizzle/
-          if-no-files-found: error
+      - name: Regenerate PostgreSQL migration
+        if: steps.dialect.outputs.current != 'true'
+        run: |
+          rm -rf drizzle
+          pnpm db:generate
+      - name: Commit clean PostgreSQL migration
+        if: steps.dialect.outputs.current != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A drizzle/
+          git commit -m "build: regenerate PostgreSQL migration metadata"
+          git push origin HEAD:${{ github.head_ref }}
