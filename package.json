@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker": "node --experimental-strip-types worker/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=1 --experimental-strip-types tests/*.test.mjs tests/*.test.ts",
     "smoke:foundation": "node tests/foundation-smoke.mjs",
