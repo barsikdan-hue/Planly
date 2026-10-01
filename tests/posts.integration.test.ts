@@ -2,7 +2,7 @@ import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
-import { mediaAssets, postMedia, posts, postTargets, socialAccounts, users } from '../db/schema.ts';
+import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
 import { createPost, deletePost, listPlannerPosts, updatePost } from '../lib/server/posts.ts';
 
 const ownerA = 'test-owner-a';
@@ -10,6 +10,7 @@ const ownerB = 'test-owner-b';
 
 async function reset() {
   const db = getDb();
+  await db.delete(publications);
   await db.delete(postMedia);
   await db.delete(postTargets);
   await db.delete(posts);
@@ -75,16 +76,19 @@ test('foreign-owner media is rejected and transaction leaves no post behind', as
   assert.equal((await listPlannerPosts(ownerA)).length, 0);
 });
 
-test('updating a post does not create duplicate targets', async () => {
+test('updating a post preserves target identity for the same social account', async () => {
   const created = await createPost(ownerA, {
     baseText: 'one', status: 'READY', mediaIds: [],
     targets: [{ provider: 'telegram', textOverride: null, scheduledAt: null }],
   });
-  await updatePost(ownerA, created.id, {
+  const originalTargetId = created.targets[0]!.id;
+  const updated = await updatePost(ownerA, created.id, {
     baseText: 'two', status: 'READY', mediaIds: [],
     targets: [{ provider: 'telegram', textOverride: 'override', scheduledAt: null }],
   });
+  assert.equal(updated.targets[0]!.id, originalTargetId);
   const db = getDb();
   const rows = await db.select().from(postTargets).where(eq(postTargets.postId, created.id));
   assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.id, originalTargetId);
 });

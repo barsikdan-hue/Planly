@@ -25,6 +25,7 @@ test('schema preserves independent targets, ordered media, sessions and idempote
   has(/email[^\n]+unique\(\)/, 'owner email must be unique');
   has(/textOverride/, 'PostTarget text override missing');
   has(/scheduledAt/, 'PostTarget scheduledAt missing');
+  has(/active:\s*boolean\(['"]active['"]\)[^\n]*default\(true\)/, 'PostTarget active marker missing');
   has(/position/, 'ordered post-media position missing');
   has(/idempotencyKey[^\n]+unique\(\)/, 'publication idempotency key must be unique');
   has(/providerRemoteId/, 'provider remote ID missing');
