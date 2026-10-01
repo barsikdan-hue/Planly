@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { posts, postTargets, publications, socialAccounts } from '../../../db/schema.ts';
+import { resolveConnector as resolveRegisteredConnector } from '../connectors/registry.ts';
 import type { ConnectorResolver, PublicationErrorType, PublishInput } from '../connectors/types.ts';
 
 export type ProcessPublicationResult = {
@@ -45,7 +46,7 @@ async function markFailure(
 
 export async function processPublication(
   publicationId: string,
-  resolveConnector: ConnectorResolver,
+  resolveConnector: ConnectorResolver = resolveRegisteredConnector,
 ): Promise<ProcessPublicationResult> {
   const initial = await readPublication(publicationId);
 
