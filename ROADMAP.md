@@ -1,7 +1,7 @@
 # Personal SMM Planner / Planly
 
-CURRENT PHASE: 3 — Scheduler and self-host build verification.
-CURRENT GOAL: a transferable tested build for the owner's server without paid Render resources.
+CURRENT PHASE: 4 — Telegram production slice.
+CURRENT GOAL: continue Telegram implementation and verify real test-channel publication online before handing off the final build for the owner's server. No paid Render resources.
 
 DONE
 - Next.js UI, owner auth/session, PostgreSQL/Drizzle Foundation and Content Core.
@@ -27,5 +27,8 @@ TECH DEBT
 - Historical baseline files describe earlier checkpoints; current code/CI supersede their runtime statements.
 
 BLOCKER for real publishing: Telegram implementation and real test-channel verification.
-NEXT MILESTONE: Phase 4 — Telegram validation, text/media delivery and end-to-end verification.
+ACTIVE MILESTONE: Phase 4 — Telegram validation, text/media delivery and end-to-end verification.
+USER DECISION (2026-10-01): resume the roadmap at Telegram publication tests; online verification precedes downloading the final working build. Packaging is not a substitute for completing this phase.
+IMPLEMENTATION PLAN: docs/superpowers/plans/2026-10-01-telegram-publication.md.
+CURRENT CHECKPOINT: scheduler verified; Telegram registry is still a placeholder, so real Telegram delivery is not yet tested.
 NEXT PHASE: MAX after Telegram stability; AI after reliable publication.
