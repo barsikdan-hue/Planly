@@ -42,7 +42,7 @@ test('self-host setup writes private credentials, a usable password hash and lit
 });
 
 test('invalid email or weak password cannot create a configuration file', async () => {
-  for (const [email, input] of [['invalid', password], ['owner@example.test', 'short']]) {
+  for (const [email, input] of [['invalid', password], ['owner@example.test', 'short'], ['owner@example.test\\', password]]) {
     const cwd = await mkdtemp(join(tmpdir(), 'planly-init-'));
     try {
       const result = run(cwd, email, input);

@@ -13,8 +13,8 @@ DONE
 TESTED
 - Upstream main 37b1b418: standard CI passed.
 - GitHub standard CI on 8503e4f: 78 PASS, migrations/typecheck/lint/build passed. Local dependency limitations were not reproduced on the runner.
-- Docker images built successfully. First runtime probe found a non-root mc configuration-directory permission error; bucket initialization now uses /tmp/planly-mc. Full runtime smoke is pending the fix verification.
-- A build artifact is emitted only after container smoke passes; no verified self-host build artifact exists yet.
+- Self-host CI on 26fe369e passed: real Docker images, migrations, web/worker boot, authenticated HTTP and private media, full stack recreation with persistent data, Redis-loss reconciliation and honest unsupported-provider failure. Bucket initialization uses writable /tmp/planly-mc for its non-root client.
+- Verified source + compiled Next.js build artifact was emitted after the successful container smoke. Latest branch CI artifacts provide the exact tested commit. Initialization also rejects malformed emails containing backslashes to preserve dotenv quoting.
 
 KNOWN ISSUES
 - Telegram/MAX remain unimplemented; no real delivery is claimed.

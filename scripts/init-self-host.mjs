@@ -5,7 +5,7 @@ import { hashOwnerPassword } from '../lib/server/auth/password.ts';
 
 try {
   const args = process.argv.slice(2);
-  if (args.length !== 2 || args[0] !== '--email' || !/^[^\s'@]+@[^\s'@]+\.[^\s'@]+$/.test(args[1]) || args[1].length > 320) {
+  if (args.length !== 2 || args[0] !== '--email' || !/^[^\s'@\\]+@[^\s'@\\]+\.[^\s'@\\]+$/.test(args[1]) || args[1].length > 320) {
     throw new Error('Usage: node scripts/init-self-host.mjs --email owner@example.com; supply password on stdin.');
   }
   let password = '';
