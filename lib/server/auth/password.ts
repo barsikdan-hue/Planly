@@ -1,7 +1,5 @@
-import { promisify } from 'node:util';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 
-const scrypt = promisify(scryptCallback);
 const VERSION = '1';
 const N = 16_384;
 const R = 8;
@@ -9,10 +7,19 @@ const P = 1;
 const KEY_LENGTH = 64;
 const MAX_MEMORY = 64 * 1024 * 1024;
 
+function deriveKey(password: string, salt: Buffer, length: number, options: { N: number; r: number; p: number }): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCallback(password, salt, length, { ...options, maxmem: MAX_MEMORY }, (error, derived) => {
+      if (error) reject(error);
+      else resolve(derived);
+    });
+  });
+}
+
 export async function hashOwnerPassword(password: string): Promise<string> {
   if (!password) throw new Error('Password must not be empty.');
   const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, KEY_LENGTH, { N, r: R, p: P, maxmem: MAX_MEMORY }) as Buffer;
+  const derived = await deriveKey(password, salt, KEY_LENGTH, { N, r: R, p: P });
   return ['scrypt', VERSION, String(N), String(R), String(P), salt.toString('base64url'), derived.toString('base64url')].join('$');
 }
 
@@ -29,7 +36,7 @@ export async function verifyOwnerPassword(password: string, encodedHash: string)
     const expected = Buffer.from(hashText, 'base64url');
     if (salt.length !== 16 || expected.length !== KEY_LENGTH) return false;
 
-    const actual = await scrypt(password, salt, expected.length, { N: n, r, p, maxmem: MAX_MEMORY }) as Buffer;
+    const actual = await deriveKey(password, salt, expected.length, { N: n, r, p });
     return timingSafeEqual(actual, expected);
   } catch {
     return false;
