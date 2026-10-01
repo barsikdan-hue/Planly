@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
 import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
 import { createPost, deletePost, listPlannerPosts, updatePost } from '../lib/server/posts.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 
 const ownerA = 'test-owner-a';
 const ownerB = 'test-owner-b';
@@ -36,7 +38,11 @@ async function reset() {
 
 before(async () => { await reset(); });
 beforeEach(reset);
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeRedisConnection();
+  await closeDb();
+});
 
 test('create/update preserves per-provider text, schedule and media order', async () => {
   const created = await createPost(ownerA, {
