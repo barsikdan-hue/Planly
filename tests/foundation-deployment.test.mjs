@@ -15,6 +15,7 @@ const requiredEnv = [
   'S3_BUCKET',
   'S3_ACCESS_KEY_ID',
   'S3_SECRET_ACCESS_KEY',
+  'REDIS_URL',
   'NODE_ENV',
 ];
 
@@ -46,5 +47,5 @@ test('client code does not read server secret environment variables', async () =
     'lib/client/planly-api.ts',
   ];
   const source = (await Promise.all(paths.map(read))).join('\n');
-  assert.doesNotMatch(source, /process\.env\.(DATABASE_URL|OWNER_PASSWORD_HASH|SESSION_SECRET|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY)/);
+  assert.doesNotMatch(source, /process\.env\.(DATABASE_URL|OWNER_PASSWORD_HASH|SESSION_SECRET|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|REDIS_URL)/);
 });
