@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { destroyOwnerSession } from '../../../../lib/server/auth/session.ts';
+import { destroyOwnerSession } from '../../../../lib/server/auth/next-session.ts';
 
 export async function POST() {
   await destroyOwnerSession();
