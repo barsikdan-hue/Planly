@@ -64,7 +64,7 @@ services:
     environment:
       MC_HOST_local: http://${S3_ACCESS_KEY_ID}:${S3_SECRET_ACCESS_KEY}@storage:9000
       S3_BUCKET: ${S3_BUCKET:-planly-media}
-    command: [sh, -ec, 'mc mb --ignore-existing "local/$$S3_BUCKET"']
+    command: [sh, -ec, 'mc --config-dir /tmp/planly-mc mb --ignore-existing "local/$$S3_BUCKET"']
     depends_on:
       storage:
         condition: service_healthy

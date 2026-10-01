@@ -12,8 +12,8 @@ DONE
 
 TESTED
 - Upstream main 37b1b418: standard CI passed.
-- Local pnpm test: 35 PASS; 13 suites fail at import because drizzle-orm/bullmq installation is incomplete in the restricted workspace. No regression conclusion can be drawn from these import failures.
-- Full self-host CI and real Docker smoke are pending: Docker is absent here, and automatic approval review blocked the GitHub write needed to start the new workflow.
+- GitHub standard CI on 8503e4f: 78 PASS, migrations/typecheck/lint/build passed. Local dependency limitations were not reproduced on the runner.
+- Docker images built successfully. First runtime probe found a non-root mc configuration-directory permission error; bucket initialization now uses /tmp/planly-mc. Full runtime smoke is pending the fix verification.
 - A build artifact is emitted only after container smoke passes; no verified self-host build artifact exists yet.
 
 KNOWN ISSUES
