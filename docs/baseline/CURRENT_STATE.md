@@ -34,6 +34,7 @@ MAX follows only after Telegram is stable.
 - PostgreSQL + Drizzle are the production data layer.
 - Migration-backed schema exists for users, sessions, social accounts, posts, post targets, media, publications and supporting auth state.
 - GitHub Actions starts a clean PostgreSQL service and applies migrations before verification.
+- CI regenerates Drizzle metadata and fails on migration drift without write access to the repository.
 - `/api/health` performs a real database query and exposes no connection details.
 
 ### Owner auth
@@ -92,6 +93,7 @@ MAX follows only after Telegram is stable.
 
 Current CI verifies, on Linux with a clean PostgreSQL container:
 
+- migration drift check;
 - migrations on an empty database;
 - TypeScript typecheck;
 - ESLint;
@@ -109,7 +111,17 @@ Current CI verifies, on Linux with a clean PostgreSQL container:
 - Render/env deployment contract;
 - database-backed health endpoint.
 
-The latest pre-report branch run at commit `fab9925a00602b19229653885b79bf5d3e18d4f5` completed successfully. A fresh final CI run is still required after this report commit before merge/completion claims.
+Fresh branch evidence before this final report commit:
+
+- CI run `172` on commit `ba28787aa717585a182055ae63573fca2ba270f2` completed successfully;
+- Drizzle reported `No schema changes, nothing to migrate` during drift verification;
+- migrations applied successfully to a clean PostgreSQL 17 container;
+- typecheck passed;
+- lint passed with `0 errors` and `7` non-blocking warnings;
+- Node test suite: **50/50 PASS**, 0 failed;
+- `next build` compiled successfully and emitted the expected app/API routes.
+
+A fresh CI run on this report commit is still required before any merge/completion claim, because documentation is part of the branch state.
 
 ## KNOWN ISSUES / BLOCKERS
 
@@ -133,6 +145,7 @@ The latest pre-report branch run at commit `fab9925a00602b19229653885b79bf5d3e18
 - API errors are normalized and tests reject stack/database-detail leakage for expected request failures.
 - `.env.example` contains names only.
 - Provider API tokens are not part of Milestone 1 frontend or repository configuration.
+- CI migration verification is read-only with respect to repository contents; no PR workflow has `contents: write` merely to regenerate migrations.
 
 ## NEXT PHASE
 
@@ -180,7 +193,7 @@ Only after that gate:
 - [x] private media-storage boundary implemented;
 - [x] browser-only persistence removed from production planner flow;
 - [x] fake publication success removed;
-- [x] GitHub Actions verification implemented and green before final report update;
+- [x] GitHub Actions verification implemented and green on the final code baseline before report-only update;
 - [x] Render blueprint + DB health endpoint implemented;
 - [x] deployed smoke script implemented;
 - [ ] real Render health check verified;
