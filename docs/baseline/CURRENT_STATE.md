@@ -1,176 +1,190 @@
 # Planly Current State
 
-**Date:** 2026-09-30
-**Milestone:** MVP v1 / Milestone 0 — verified baseline
-**Baseline commit:** `e53e3b3a1950c2561a153983700d1b57bafecbbb`
+**Date:** 2026-10-01  
+**Milestone:** MVP v1 / Milestone 1 — Foundation + Content Core  
+**Branch:** `feat/foundation-content-core`
 
 ## Status
 
-**Milestone 0: PASS WITH ENVIRONMENT LIMITATION**
+**CODE COMPLETE / DEPLOYMENT SMOKE PENDING**
 
-The authoritative source has been identified and consolidated in GitHub. No local folder is required for future development.
+The selected light Planly UI is now backed by a real server persistence boundary. PostgreSQL is authoritative for owner/content state, media has a private object-storage boundary, and the production runtime is standard Next.js for Render.
 
-A full fresh dependency install/build could not be executed inside the current sandbox because outbound DNS/network access to GitHub/package registries is blocked. That limitation is recorded as environment-related rather than silently converted into a project failure.
+Milestone 1 is not being called fully production-verified until a real Render web service + PostgreSQL + S3-compatible object store pass the deployed smoke flow and restart-persistence check.
 
-## Current phase
+## CURRENT PHASE
 
-- **CURRENT PHASE:** Phase 1 UI Prototype completed enough to serve as the product baseline.
-- **CURRENT GOAL:** start production Foundation/Content Core without redesigning the selected UI.
-- **BLOCKERS:** production PostgreSQL, owner auth outside Sites-host assumptions, media object storage, server persistence, queue/worker, provider connectors.
-- **NEXT MILESTONE:** Milestone 1 — Foundation + Content Core.
+Transition from Phase 2 Content Core into Phase 3 Scheduler preparation.
 
-## Fresh verification performed in this session
+The codebase now has the persistence/auth/media foundations required before introducing Redis, BullMQ or provider workers.
 
-### Current GitHub core logic
+## CURRENT GOAL
 
-The exact current `main` versions of `lib/planner.ts` and `tests/planner.test.mjs` were fetched from GitHub and run with Node type stripping in a clean scratch directory.
+Finish external deployment verification for Foundation, then start Milestone 2:
 
-Result: **5/5 PASS**.
+`Post → PostTarget → BullMQ Job → Worker → TelegramConnector`
 
-Covered behaviors:
+MAX follows only after Telegram is stable.
 
-1. empty post / missing target validation;
-2. invalid and past scheduling time rejection;
-3. future Moscow time conversion;
-4. rescheduling preserves independent target state;
-5. drafts may omit network/schedule but still require content.
+## DONE
 
-### GitHub checkout attempt
+### Runtime and database
 
-A clean `git clone` was attempted from the sandbox. It failed before repository access because the sandbox cannot resolve `github.com`.
+- Standard Next.js runtime: `next dev`, `next build`, `next start`.
+- PostgreSQL + Drizzle are the production data layer.
+- Migration-backed schema exists for users, sessions, social accounts, posts, post targets, media, publications and supporting auth state.
+- GitHub Actions starts a clean PostgreSQL service and applies migrations before verification.
+- `/api/health` performs a real database query and exposes no connection details.
 
-Therefore no claim is made that a fresh install/build was executed here.
+### Owner auth
 
-### Existing repository evidence
+- Single-owner email/password login.
+- Password verification uses scrypt hashes from server environment configuration.
+- Session cookie uses an opaque token while PostgreSQL stores only the token hash.
+- Expired, forged and invalidated sessions are rejected.
+- Persistent login throttling is covered by tests.
+- Protected API ownership is derived server-side; client-supplied ownership is not trusted.
 
-`ROADMAP.md` records prior checks of TypeScript, core unit tests, eight screen render smoke checks, and production build for the imported light prototype. `docs/PROJECT_BASELINE.md` also records 5/5 light-prototype unit tests at import time.
+### Content Core
 
-Those historical checks are retained as evidence but are not relabeled as fresh session results.
-
-## What actually works today
-
-### UI
-
-The selected light Planly UI exists in modular components and covers the intended Phase 1 screens.
-
-### Browser content workflow
-
-The app can model:
-
-- posts;
-- per-network targets/statuses;
-- per-network text overrides;
-- drafts/scheduled/demo-published/demo-failed states;
-- media selection;
-- calendar movement;
-- search/filtering;
-- social-account demo toggles.
-
-### Persistence
-
-Current `main` persists workspace state to IndexedDB through `lib/browser-store.ts`.
-
-This is **not production persistence**. Browser cleanup, another device, server restart semantics, and background workers cannot rely on it.
+- `Post` persistence is server-authoritative.
+- Each post has independent Telegram/MAX `PostTarget` records.
+- Per-network text overrides and schedule intent are persisted.
+- Create/update/delete operations are transactional where related records must move together.
+- Cross-owner read/update/delete attempts are rejected.
+- Repeated updates do not create duplicate targets.
+- PostgreSQL reload persistence is integration-tested through route handlers.
 
 ### Media
 
-Current media is read into browser Data URLs and stored with the browser workspace. Client-side checks include MIME/type, size and basic file signatures.
+- Browser Data URL / IndexedDB media is no longer the production persistence path.
+- Server validates allowed MIME types, size, magic bytes and image dimensions.
+- Private S3-compatible object storage is used behind a server-only boundary.
+- Storage keys are generated independently of the user-supplied filename.
+- Metadata includes checksum and relevant dimensions.
+- Preview access uses temporary signed URLs.
+- Failed DB persistence compensates by deleting an already-uploaded object.
+- Cross-owner and attached-media deletion constraints are tested.
 
-This is useful prototype validation but is not server-side object storage.
+### UI
 
-### Authentication
+- Existing light Planly layout is preserved rather than redesigned.
+- Production planner state loads from the server API instead of IndexedDB.
+- UI mutations update local state only after server success.
+- Failed saves do not silently discard the user's draft text.
+- Active MVP networks are Telegram and MAX only.
+- VK/Instagram production controls were removed from the current MVP flow.
+- Fake `Опубликовать (демо)` success paths were removed.
+- Scheduling stores intent only; background delivery is explicitly deferred to Milestone 2.
+- Social accounts remain `DISCONNECTED` until real provider connectors exist.
 
-`app/chatgpt-auth.ts` contains Sites/dispatch ChatGPT-auth helpers, while the current client planner itself is still prototype-oriented.
+### Deployment configuration
 
-The production Render version must not assume Sites dispatch headers exist. Milestone 1 must provide the approved owner-only server auth/session model or another explicitly approved equivalent for the production host.
+- `.env.example` contains required variable names with blank values only.
+- `render.yaml` defines exactly one web service + one PostgreSQL database.
+- Redis and worker resources are intentionally absent from Milestone 1.
+- Render health check points to `/api/health`.
+- Sensitive owner/S3 variables are marked for external secret configuration rather than committed values.
+- A deployed Foundation smoke script exists as `pnpm smoke:foundation`.
+- The smoke script has separate `seed-restart` and `verify-restart` phases to prove PostgreSQL survives a service restart/redeploy.
 
-## What is NOT working production functionality
+## TESTED
 
-- PostgreSQL application schema and persistence;
-- Redis/BullMQ queue;
-- independent publication worker on Render;
-- real Telegram publication from current `main`;
-- real MAX publication;
-- scheduled publication with browser closed;
-- production object storage;
-- OpenAI research/draft/image generation;
-- persisted AI source provenance;
-- provider remote-ID persistence in current `main`;
-- bounded retry/recovery in current `main`;
-- production analytics.
+Current CI verifies, on Linux with a clean PostgreSQL container:
 
-Frontend labels and demo statuses must never be counted as proof of remote publication.
+- migrations on an empty database;
+- TypeScript typecheck;
+- ESLint;
+- full Node test suite;
+- production `next build`;
+- auth/session/rate-limit behavior;
+- owner isolation;
+- database constraints;
+- Post/PostTarget transactional persistence;
+- reload/create/edit/delete persistence through API routes;
+- media validation and object-storage boundary behavior;
+- UI/server contract;
+- Telegram/MAX-only MVP surface;
+- absence of fake publication state;
+- Render/env deployment contract;
+- database-backed health endpoint.
 
-## Reusable code from `reference/dark-mvp`
+The latest pre-report branch run at commit `fab9925a00602b19229653885b79bf5d3e18d4f5` completed successfully. A fresh final CI run is still required after this report commit before merge/completion claims.
 
-The early backend branch is not the production architecture, but the following concepts are worth porting through tests rather than rewriting blindly:
+## KNOWN ISSUES / BLOCKERS
 
-- ownership checks around every mutation;
-- independent per-network delivery state;
-- provider remote IDs;
-- claim-before-send behavior;
-- uncertain/unknown state after an interrupted write where remote acceptance is possible;
-- preventing blind duplicate retry;
-- validation before scheduling;
-- Telegram `getMe/getChat/getChatMember` connection verification;
-- Telegram `sendMessage/sendPhoto/sendVideo` publishing path;
-- safe provider-error normalization;
-- server-side media signature validation;
-- no secret/token exposure to frontend.
+1. **Real Render deployment smoke is not yet executed.** Repository config is ready, but a real Planly Render web service/database have not been counted as verified in this report.
+2. **S3-compatible production storage credentials are not configured in this repository.** They must be supplied as Render secrets; they must not be committed or pasted into frontend code.
+3. **No real social publishing exists yet.** Telegram/MAX UI state is not remote publication proof.
+4. **No background scheduler exists yet.** A saved schedule remains intent only while the browser may be closed.
+5. **No OpenAI content research/generation exists yet.** It remains after trustworthy provider delivery.
 
-Do **not** directly port:
+## TECH DEBT
 
-- D1-specific SQL/runtime wiring;
-- Cloudflare Worker cron as the scheduler architecture;
-- R2 binding assumptions without deciding the production object store;
-- VK/Instagram scope into MVP v1;
-- the old combined provider helper as the final SocialConnector interface.
+- Imported ChatGPT Sites/Vinext/Cloudflare files and dependencies still exist in the repository even though the production path is Next.js + PostgreSQL. They are intentionally not deleted in this milestone to avoid mixing a broad cleanup refactor with Foundation work.
+- ESLint currently reports non-blocking warnings around legacy `<img>` usage and internal navigation via `window.location.assign`. They do not fail CI but should be cleaned during a dedicated UI polish task.
+- The package name still reflects the imported starter and can be renamed in a separate housekeeping change.
+- Analytics remains demo-only and must not be interpreted as provider metrics.
 
-## Archive ruling
+## SECURITY CHECKPOINT
 
-The uploaded `SMM Planer.7z` is older than current GitHub `main` and is no longer a development dependency.
+- No database URL, owner password/hash, session secret or S3 credentials are intentionally exposed through `NEXT_PUBLIC_*`.
+- Client planner modules do not read server secret environment variables.
+- API errors are normalized and tests reject stack/database-detail leakage for expected request failures.
+- `.env.example` contains names only.
+- Provider API tokens are not part of Milestone 1 frontend or repository configuration.
 
-No further user action with local Planly folders is required for source management.
+## NEXT PHASE
 
-## Definition of Milestone 0 done
+### External completion gate for Milestone 1
 
-- [x] authoritative source identified;
-- [x] current source tree inspected;
-- [x] package/runtime metadata inspected;
-- [x] current persistence implementation identified;
-- [x] current DB scaffold inspected;
-- [x] existing tests identified;
-- [x] fresh current core test run completed, 5/5 PASS;
-- [x] selected Site/main relationship documented;
-- [x] older archive prevented from overwriting newer code;
-- [x] reusable earlier backend implementation identified;
-- [x] `main` left untouched by failed archive import;
-- [ ] fresh full install/lint/build in this sandbox — BLOCKED by outbound network/DNS policy, must be proven in CI/Render during Foundation work.
+Before merging as fully production-verified:
 
-## Required handoff into Milestone 1
+1. provision/attach one Render PostgreSQL instance and one Planly web service;
+2. configure owner auth secrets and S3-compatible object-storage secrets in Render;
+3. deploy the branch/release;
+4. verify `/api/health` is green;
+5. run `pnpm smoke:foundation` against the deployment;
+6. run `seed-restart`, restart/redeploy the service, then run `verify-restart` with the returned post id;
+7. confirm PostgreSQL persistence and signed media preview after restart.
 
-Milestone 1 must start from the actual current files:
+### Milestone 2 — Scheduler + Telegram
 
-- `package.json`
-- `components/planner/*`
-- `lib/planner.ts`
-- `lib/browser-store.ts`
-- `db/index.ts`
-- `db/schema.ts`
-- `app/chatgpt-auth.ts`
-- `tests/planner.test.mjs`
-- `tests/render-check.tsx`
+Only after that gate:
 
-It must preserve the selected light UI while replacing browser-only state behind a server persistence boundary.
+- add Redis + BullMQ;
+- create publication jobs per `PostTarget`;
+- separate web scheduling from worker delivery;
+- implement idempotency and duplicate protection;
+- bounded retry with TEMPORARY / AUTH / VALIDATION / PERMANENT classes;
+- restart recovery;
+- TelegramConnector using official Bot API;
+- persist real remote `message_id` before showing `PUBLISHED`;
+- test partial success where Telegram succeeds and another target fails without republishing Telegram.
 
-The first production slice should establish:
+### Later
 
-1. server/runtime target for Render;
-2. PostgreSQL schema + migrations;
-3. owner-only auth/session suitable for that runtime;
-4. Post/PostTarget/SocialAccount/MediaAsset/Publication persistence;
-5. server-side media storage boundary;
-6. CI/build/test verification on Linux;
-7. only after those are green, Redis/BullMQ scheduler planning.
+- MAX connector after Telegram stability;
+- OpenAI Responses API research/text generation and image generation into drafts;
+- persisted source provenance for researched posts;
+- real provider analytics;
+- smart automation only after publication/analytics are trustworthy.
 
-Do not start Telegram/MAX/OpenAI implementation before Foundation/Content Core establishes the persistence and publication boundaries they depend on.
+## Milestone 1 definition-of-done checklist
+
+- [x] production Next.js runtime established;
+- [x] PostgreSQL schema/migrations implemented;
+- [x] owner-only auth/session implemented;
+- [x] server-authoritative content CRUD implemented;
+- [x] Telegram/MAX PostTarget persistence implemented;
+- [x] private media-storage boundary implemented;
+- [x] browser-only persistence removed from production planner flow;
+- [x] fake publication success removed;
+- [x] GitHub Actions verification implemented and green before final report update;
+- [x] Render blueprint + DB health endpoint implemented;
+- [x] deployed smoke script implemented;
+- [ ] real Render health check verified;
+- [ ] real deployed Foundation smoke verified;
+- [ ] restart/redeploy persistence smoke verified.
+
+Until the final three items are green, Milestone 1 is code-complete but not fully deployment-verified.
