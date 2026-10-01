@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
 import { posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
 import { createPost, updatePost } from '../lib/server/posts.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 
 const ownerId = 'publication-owner';
 
@@ -20,7 +22,11 @@ async function reset() {
 
 before(reset);
 beforeEach(reset);
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeRedisConnection();
+  await closeDb();
+});
 
 test('scheduled target has one durable open publication and repeated save stays idempotent', async () => {
   const created = await createPost(ownerId, {
