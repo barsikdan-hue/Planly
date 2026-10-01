@@ -14,13 +14,23 @@ const ownerAuthEnvSchema = z.object({
   OWNER_PASSWORD_HASH: z.string().startsWith('scrypt$1$'),
 });
 
+const storageEnvSchema = z.object({
+  S3_ENDPOINT: z.string().url(),
+  S3_REGION: z.string().min(1),
+  S3_BUCKET: z.string().min(1),
+  S3_ACCESS_KEY_ID: z.string().min(1),
+  S3_SECRET_ACCESS_KEY: z.string().min(1),
+});
+
 export type ServerEnv = z.infer<typeof baseServerEnvSchema>;
 export type SessionEnv = z.infer<typeof sessionEnvSchema>;
 export type OwnerAuthEnv = z.infer<typeof ownerAuthEnvSchema>;
+export type StorageEnv = z.infer<typeof storageEnvSchema>;
 
 let cachedServerEnv: ServerEnv | undefined;
 let cachedSessionEnv: SessionEnv | undefined;
 let cachedOwnerAuthEnv: OwnerAuthEnv | undefined;
+let cachedStorageEnv: StorageEnv | undefined;
 
 export function getServerEnv(): ServerEnv {
   cachedServerEnv ??= baseServerEnvSchema.parse({
@@ -45,8 +55,20 @@ export function getOwnerAuthEnv(): OwnerAuthEnv {
   return cachedOwnerAuthEnv;
 }
 
+export function getStorageEnv(): StorageEnv {
+  cachedStorageEnv ??= storageEnvSchema.parse({
+    S3_ENDPOINT: process.env.S3_ENDPOINT,
+    S3_REGION: process.env.S3_REGION,
+    S3_BUCKET: process.env.S3_BUCKET,
+    S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
+    S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+  });
+  return cachedStorageEnv;
+}
+
 export function resetServerEnvForTests() {
   cachedServerEnv = undefined;
   cachedSessionEnv = undefined;
   cachedOwnerAuthEnv = undefined;
+  cachedStorageEnv = undefined;
 }
