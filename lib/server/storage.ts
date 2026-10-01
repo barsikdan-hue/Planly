@@ -31,6 +31,11 @@ function objectUrl(config: StorageEnv, key: string): URL {
   base.hash = '';
   return base;
 }
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
 
 function authorization(
   config: StorageEnv,
@@ -62,7 +67,11 @@ async function signedMutation(config: StorageEnv, method: 'PUT' | 'DELETE', key:
     'x-amz-date': auth.amzDate,
   });
   if (contentType) headers.set('content-type', contentType);
-  const response = await fetch(url, { method, headers, body: method === 'PUT' ? bytes : undefined });
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: method === 'PUT' ? toArrayBuffer(bytes) : undefined,
+  });
   if (!response.ok) throw new Error(`Object storage ${method} failed with status ${response.status}`);
 }
 
