@@ -7,8 +7,9 @@ after(closeDb);
 
 test('health endpoint proves database connectivity without exposing configuration', async () => {
   const response = await GET();
+  const copy = response.clone();
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok' });
-  const text = await response.clone().text().catch(() => '');
+  const text = await copy.text();
   assert.doesNotMatch(text, /DATABASE_URL|postgresql:\/\/|password|secret/i);
 });
