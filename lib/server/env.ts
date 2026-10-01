@@ -5,18 +5,48 @@ const baseServerEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 
-export type ServerEnv = z.infer<typeof baseServerEnvSchema>;
+const sessionEnvSchema = z.object({
+  SESSION_SECRET: z.string().min(32),
+});
 
-let cached: ServerEnv | undefined;
+const ownerAuthEnvSchema = z.object({
+  OWNER_EMAIL: z.string().email().transform((value) => value.trim().toLowerCase()),
+  OWNER_PASSWORD_HASH: z.string().startsWith('scrypt$1$'),
+});
+
+export type ServerEnv = z.infer<typeof baseServerEnvSchema>;
+export type SessionEnv = z.infer<typeof sessionEnvSchema>;
+export type OwnerAuthEnv = z.infer<typeof ownerAuthEnvSchema>;
+
+let cachedServerEnv: ServerEnv | undefined;
+let cachedSessionEnv: SessionEnv | undefined;
+let cachedOwnerAuthEnv: OwnerAuthEnv | undefined;
 
 export function getServerEnv(): ServerEnv {
-  cached ??= baseServerEnvSchema.parse({
+  cachedServerEnv ??= baseServerEnvSchema.parse({
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
   });
-  return cached;
+  return cachedServerEnv;
+}
+
+export function getSessionEnv(): SessionEnv {
+  cachedSessionEnv ??= sessionEnvSchema.parse({
+    SESSION_SECRET: process.env.SESSION_SECRET,
+  });
+  return cachedSessionEnv;
+}
+
+export function getOwnerAuthEnv(): OwnerAuthEnv {
+  cachedOwnerAuthEnv ??= ownerAuthEnvSchema.parse({
+    OWNER_EMAIL: process.env.OWNER_EMAIL,
+    OWNER_PASSWORD_HASH: process.env.OWNER_PASSWORD_HASH,
+  });
+  return cachedOwnerAuthEnv;
 }
 
 export function resetServerEnvForTests() {
-  cached = undefined;
+  cachedServerEnv = undefined;
+  cachedSessionEnv = undefined;
+  cachedOwnerAuthEnv = undefined;
 }
