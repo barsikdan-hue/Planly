@@ -4,35 +4,26 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   generate:
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
       - name: Install pnpm
         run: npm install --global pnpm@11.25.0
-      - name: Refresh lockfile
-        run: pnpm install --no-frozen-lockfile
-      - name: Generate PostgreSQL migration
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Clean stale migration metadata
+        run: rm -rf drizzle
+      - name: Generate PostgreSQL migration from scratch
         run: pnpm db:generate
-      - name: Commit generated files
-        run: |
-          if git diff --quiet -- pnpm-lock.yaml drizzle/; then
-            echo "Generated files are already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml drizzle/
-          git commit -m "build: refresh foundation lockfile and migrations"
-          git push origin HEAD:${{ github.head_ref }}
+      - name: Upload clean PostgreSQL migration
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-clean
+          path: drizzle/
+          if-no-files-found: error
