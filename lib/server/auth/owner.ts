@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { users } from '../../../db/schema.ts';
+import { ensureOwnerSocialAccounts } from '../social-accounts.ts';
 import { getOwnerAuthEnv } from '../env.ts';
 import { verifyOwnerPassword } from './password.ts';
 import {
@@ -28,20 +29,21 @@ export async function ensureOwner(): Promise<Owner> {
     .from(users)
     .where(eq(users.email, OWNER_EMAIL))
     .limit(1);
-  if (owner) return owner;
+  if (!owner) {
+    await getDb().insert(users).values({
+      id: randomUUID(),
+      email: OWNER_EMAIL,
+      displayName: OWNER_EMAIL.split('@')[0] || 'Owner',
+    }).onConflictDoNothing({ target: users.email });
 
-  await getDb().insert(users).values({
-    id: randomUUID(),
-    email: OWNER_EMAIL,
-    displayName: OWNER_EMAIL.split('@')[0] || 'Owner',
-  }).onConflictDoNothing({ target: users.email });
-
-  [owner] = await getDb()
-    .select({ id: users.id, email: users.email, displayName: users.displayName })
-    .from(users)
-    .where(eq(users.email, OWNER_EMAIL))
-    .limit(1);
+    [owner] = await getDb()
+      .select({ id: users.id, email: users.email, displayName: users.displayName })
+      .from(users)
+      .where(eq(users.email, OWNER_EMAIL))
+      .limit(1);
+  }
   if (!owner) throw new Error('Owner bootstrap failed.');
+  await ensureOwnerSocialAccounts(owner.id);
   return owner;
 }
 
