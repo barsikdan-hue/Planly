@@ -16,13 +16,14 @@ export type PlannerSnapshot = {
 };
 
 export class PlanlyApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly body?: unknown,
-  ) {
+  readonly status: number;
+  readonly body?: unknown;
+
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.name = 'PlanlyApiError';
+    this.status = status;
+    this.body = body;
   }
 }
 
