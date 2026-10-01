@@ -9,9 +9,25 @@ import {
   type PostDto,
   type SavePostInput,
 } from '../contracts/planner.ts';
-import { reconcilePostPublicationsInTx } from './publications.ts';
+import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
+import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
+
+type PostPersistenceOptions = {
+  mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
+};
+
+async function mirrorQueueBestEffort(
+  changes: PublicationQueueChange[],
+  options: PostPersistenceOptions,
+): Promise<void> {
+  try {
+    await (options.mirrorQueue ?? applyPublicationQueueChanges)(changes);
+  } catch (error) {
+    console.error('Publication queue mirror failed', error instanceof Error ? error.message : 'unknown error');
+  }
+}
 
 async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
   const db = getDb();
@@ -81,12 +97,16 @@ export async function listPlannerPosts(userId: string): Promise<PostDto[]> {
   return Promise.all(rows.map(row => readOwnedPost(userId, row.id)));
 }
 
-export async function createPost(userId: string, rawInput: SavePostInput): Promise<PostDto> {
+export async function createPost(
+  userId: string,
+  rawInput: SavePostInput,
+  options: PostPersistenceOptions = {},
+): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
   const postId = randomUUID();
   const db = getDb();
 
-  await db.transaction(async tx => {
+  const changes = await db.transaction(async tx => {
     const accounts = await validateRelations(tx, userId, input);
     const now = new Date();
     await tx.insert(posts).values({
@@ -116,9 +136,10 @@ export async function createPost(userId: string, rawInput: SavePostInput): Promi
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    await reconcilePostPublicationsInTx(tx, userId, postId);
+    return reconcilePostPublicationsInTx(tx, userId, postId);
   });
 
+  await mirrorQueueBestEffort(changes, options);
   return readOwnedPost(userId, postId);
 }
 
@@ -126,11 +147,12 @@ export async function updatePost(
   userId: string,
   postId: string,
   rawInput: SavePostInput,
+  options: PostPersistenceOptions = {},
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
   const db = getDb();
 
-  await db.transaction(async tx => {
+  const changes = await db.transaction(async tx => {
     const accounts = await validateRelations(tx, userId, input);
     const [owned] = await tx.update(posts)
       .set({
@@ -187,9 +209,10 @@ export async function updatePost(
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    await reconcilePostPublicationsInTx(tx, userId, postId);
+    return reconcilePostPublicationsInTx(tx, userId, postId);
   });
 
+  await mirrorQueueBestEffort(changes, options);
   return readOwnedPost(userId, postId);
 }
 
