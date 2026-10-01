@@ -4,6 +4,8 @@ import { closeDb, getDb } from '../db/index.ts';
 import { mediaAssets, postMedia, posts, postTargets, publications, sessions, socialAccounts, users } from '../db/schema.ts';
 import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
 import { ensureOwnerSocialAccounts } from '../lib/server/social-accounts.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
 import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { PATCH as postPATCH, DELETE as postDELETE } from '../app/api/posts/[id]/route.ts';
@@ -32,7 +34,11 @@ beforeEach(async () => {
   await ensureOwnerSocialAccounts(ownerId);
   token = await createOwnerSession(ownerId);
 });
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeRedisConnection();
+  await closeDb();
+});
 
 test('create, reload, edit targets, reload, delete and reload are PostgreSQL authoritative', async () => {
   const createdResponse = await postsPOST(request('/api/posts', {
