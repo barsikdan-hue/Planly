@@ -57,7 +57,13 @@ function authorization(
   };
 }
 
-async function signedMutation(config: StorageEnv, method: 'PUT' | 'DELETE', key: string, bytes = new Uint8Array(), contentType?: string) {
+async function signedMutation(
+  config: StorageEnv,
+  method: 'PUT' | 'DELETE',
+  key: string,
+  bytes: Uint8Array = new Uint8Array(),
+  contentType?: string,
+) {
   const url = objectUrl(config, key);
   const payloadHash = sha256(bytes);
   const auth = authorization(config, method, url, payloadHash, new Date());
