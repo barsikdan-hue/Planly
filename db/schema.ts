@@ -120,7 +120,7 @@ export const mediaAssets = pgTable('media_assets', {
 
 export const postMedia = pgTable('post_media', {
   postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
-  mediaId: text('media_id').notNull().references(() => mediaAssets.id),
+  mediaId: text('media_id').notNull().references(() => mediaAssets.id, { onDelete: 'cascade' }),
   position: integer('position').notNull(),
 }, (table) => [
   primaryKey({ columns: [table.postId, table.mediaId] }),
