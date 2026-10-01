@@ -18,7 +18,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
-          cache: pnpm
 
       - name: Enable pnpm
         run: corepack enable && corepack prepare pnpm@11.25.0 --activate
