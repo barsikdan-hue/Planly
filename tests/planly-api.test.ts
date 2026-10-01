@@ -12,7 +12,7 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
 function mockFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
-  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => handler(String(input), init);
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => handler(String(input), init);
 }
 
 test('bootstrap reads the authenticated server snapshot without browser persistence', async () => {
