@@ -1,13 +1,13 @@
 'use client';
 import type { ReactNode } from 'react';
-import { Send, Camera as Instagram, Check, Clock, FileText, AlertCircle, ImageIcon } from 'lucide-react';
+import { Send, Check, Clock, FileText, AlertCircle, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Post, Network, Status, Media } from '@/lib/planner';
 import { networkNames, statusNames } from '@/lib/planner';
 export function SocialIcon({ network, small = false }: {
     network: Network;
     small?: boolean;
-}) { return <span className={`social-icon ${network} ${small ? 'small' : ''}`} aria-label={networkNames[network]}>{network === 'telegram' ? <Send size={small ? 13 : 18}/> : network === 'instagram' ? <Instagram size={small ? 14 : 19}/> : <b>vk</b>}</span>; }
+}) { return <span className={`social-icon ${network} ${small ? 'small' : ''}`} aria-label={networkNames[network]}>{network === 'telegram' ? <Send size={small ? 13 : 18}/> : <b>MAX</b>}</span>; }
 export function Socials({ networks }: {
     networks: Network[];
 }) { return <span className="social-stack">{networks.map(n => <SocialIcon key={n} network={n} small/>)}</span>; }
