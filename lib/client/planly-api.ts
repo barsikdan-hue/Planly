@@ -27,6 +27,10 @@ export class PlanlyApiError extends Error {
   }
 }
 
+function redirectUnauthorized(): void {
+  if (typeof window !== 'undefined') window.location.assign('/login');
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (response.status === 204) return undefined as T;
@@ -36,6 +40,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   try { body = text ? JSON.parse(text) : undefined; } catch { body = text; }
 
   if (!response.ok) {
+    if (response.status === 401) redirectUnauthorized();
     const message = body && typeof body === 'object' && 'error' in body && typeof (body as {error?:unknown}).error === 'string'
       ? (body as {error:string}).error
       : `Request failed with status ${response.status}`;
