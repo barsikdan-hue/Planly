@@ -9,6 +9,7 @@ import {
   type PostDto,
   type SavePostInput,
 } from '../contracts/planner.ts';
+import { reconcilePostPublicationsInTx } from './publications.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
@@ -22,7 +23,11 @@ async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
   const targetRows = await db.select({ target: postTargets, account: socialAccounts })
     .from(postTargets)
     .innerJoin(socialAccounts, eq(postTargets.socialAccountId, socialAccounts.id))
-    .where(and(eq(postTargets.postId, postId), eq(socialAccounts.userId, userId)));
+    .where(and(
+      eq(postTargets.postId, postId),
+      eq(postTargets.active, true),
+      eq(socialAccounts.userId, userId),
+    ));
 
   const mediaRows = await db.select({ mediaId: postMedia.mediaId, position: postMedia.position })
     .from(postMedia)
@@ -101,6 +106,7 @@ export async function createPost(userId: string, rawInput: SavePostInput): Promi
         socialAccountId: accounts.get(toDbProvider(target.provider))!,
         textOverride: target.textOverride,
         scheduledAt: target.scheduledAt ? new Date(target.scheduledAt) : null,
+        active: true,
         createdAt: now,
         updatedAt: now,
       })));
@@ -109,6 +115,8 @@ export async function createPost(userId: string, rawInput: SavePostInput): Promi
     if (input.mediaIds.length) {
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
+
+    await reconcilePostPublicationsInTx(tx, userId, postId);
   });
 
   return readOwnedPost(userId, postId);
@@ -135,25 +143,51 @@ export async function updatePost(
       .returning({ id: posts.id });
     if (!owned) throw new Error('Post not found');
 
-    await tx.delete(postTargets).where(eq(postTargets.postId, postId));
-    await tx.delete(postMedia).where(eq(postMedia.postId, postId));
     const now = new Date();
+    const existingTargets = await tx.select().from(postTargets).where(eq(postTargets.postId, postId));
+    const desiredByAccount = new Map(input.targets.map(target => [
+      accounts.get(toDbProvider(target.provider))!,
+      target,
+    ]));
 
-    if (input.targets.length) {
-      await tx.insert(postTargets).values(input.targets.map(target => ({
-        id: randomUUID(),
-        postId,
-        socialAccountId: accounts.get(toDbProvider(target.provider))!,
-        textOverride: target.textOverride,
-        scheduledAt: target.scheduledAt ? new Date(target.scheduledAt) : null,
-        createdAt: now,
-        updatedAt: now,
-      })));
+    for (const existing of existingTargets) {
+      const desired = desiredByAccount.get(existing.socialAccountId);
+      if (desired) {
+        await tx.update(postTargets)
+          .set({
+            textOverride: desired.textOverride,
+            scheduledAt: desired.scheduledAt ? new Date(desired.scheduledAt) : null,
+            active: true,
+            updatedAt: now,
+          })
+          .where(eq(postTargets.id, existing.id));
+        desiredByAccount.delete(existing.socialAccountId);
+      } else if (existing.active) {
+        await tx.update(postTargets)
+          .set({ active: false, updatedAt: now })
+          .where(eq(postTargets.id, existing.id));
+      }
     }
 
+    for (const [socialAccountId, target] of desiredByAccount) {
+      await tx.insert(postTargets).values({
+        id: randomUUID(),
+        postId,
+        socialAccountId,
+        textOverride: target.textOverride,
+        scheduledAt: target.scheduledAt ? new Date(target.scheduledAt) : null,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await tx.delete(postMedia).where(eq(postMedia.postId, postId));
     if (input.mediaIds.length) {
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
+
+    await reconcilePostPublicationsInTx(tx, userId, postId);
   });
 
   return readOwnedPost(userId, postId);

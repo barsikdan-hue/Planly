@@ -93,6 +93,7 @@ export const postTargets = pgTable('post_targets', {
   socialAccountId: text('social_account_id').notNull().references(() => socialAccounts.id),
   textOverride: text('text_override'),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'date' }),
+  active: boolean('active').notNull().default(true),
   createdAt,
   updatedAt,
 }, (table) => [
