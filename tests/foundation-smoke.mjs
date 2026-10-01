@@ -124,6 +124,12 @@ async function full() {
   const mediaList = await json(await api('/api/media', cookie));
   const uploaded = mediaList.find(item => item.id === mediaCreated.id);
   assert.match(uploaded?.previewUrl ?? '', /^https?:\/\//);
+  const preview = await fetch(uploaded.previewUrl);
+  assert.equal(preview.status, 200, 'signed preview must be readable outside the web container');
+  assert.deepEqual(Buffer.from(await preview.arrayBuffer()), png);
+  const privateUrl = new URL(uploaded.previewUrl);
+  privateUrl.search = '';
+  assert.ok([401, 403].includes((await fetch(privateUrl)).status), 'unsigned media must remain private');
 
   const deletePost = await api(`/api/posts/${encodeURIComponent(post.id)}`, cookie, { method: 'DELETE' });
   assert.equal(deletePost.status, 204);

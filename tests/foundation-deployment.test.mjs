@@ -11,6 +11,7 @@ const requiredEnv = [
   'OWNER_PASSWORD_HASH',
   'SESSION_SECRET',
   'S3_ENDPOINT',
+  'S3_PUBLIC_ENDPOINT',
   'S3_REGION',
   'S3_BUCKET',
   'S3_ACCESS_KEY_ID',

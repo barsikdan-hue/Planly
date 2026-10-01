@@ -85,7 +85,7 @@ function presignedGet(config: StorageEnv, key: string, expiresSeconds: number): 
   const now = new Date();
   const { amzDate, date } = stamp(now);
   const scope = `${date}/${config.S3_REGION}/s3/aws4_request`;
-  const url = objectUrl(config, key);
+  const url = objectUrl({ ...config, S3_ENDPOINT: config.S3_PUBLIC_ENDPOINT ?? config.S3_ENDPOINT }, key);
   const params: Array<[string, string]> = [
     ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
     ['X-Amz-Credential', `${config.S3_ACCESS_KEY_ID}/${scope}`],

@@ -1,0 +1,56 @@
+name: Self-host build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feat/self-host-build]
+
+permissions:
+  contents: read
+
+jobs:
+  docker-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PLANLY_BASE_URL: http://localhost:3000
+      PLANLY_OWNER_EMAIL: owner@example.test
+      PLANLY_OWNER_PASSWORD: isolated-ci-owner-password-2026
+      PLANLY_SELF_HOST_TEST: isolated-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Initialize isolated test credentials
+        run: printf '%s' "$PLANLY_OWNER_PASSWORD" | node --experimental-strip-types scripts/init-self-host.mjs --email "$PLANLY_OWNER_EMAIL"
+      - name: Validate Compose
+        run: docker compose --env-file .env.self-host config --quiet
+      - name: Build application and private object storage
+        run: docker compose --env-file .env.self-host build
+      - name: Start migrated web and publication worker
+        run: docker compose --env-file .env.self-host up -d --wait --wait-timeout 120
+      - name: Verify HTTP, media, persistence and scheduler recovery
+        run: node tests/self-host-smoke.mjs
+      - name: Package verified Next.js build with source
+        run: |
+          mkdir -p artifacts/release
+          git archive HEAD | tar -x -C artifacts/release
+          build_container=$(docker create planly:local)
+          docker cp "$build_container:/app/.next" artifacts/release/.next
+          docker rm "$build_container"
+          tar --exclude='.next/cache' -czf artifacts/planly-build.tgz -C artifacts/release .
+      - name: Upload verified build
+        uses: actions/upload-artifact@v4
+        with:
+          name: planly-build-${{ github.sha }}
+          path: artifacts/planly-build.tgz
+          retention-days: 3
+          if-no-files-found: error
+      - name: Diagnostics on failure
+        if: failure()
+        run: docker compose --env-file .env.self-host ps -a && docker compose --env-file .env.self-host logs --no-color --tail 80
+      - name: Stop isolated stack
+        if: always()
+        run: docker compose --env-file .env.self-host down --volumes --remove-orphans

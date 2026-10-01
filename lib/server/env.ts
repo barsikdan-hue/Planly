@@ -16,6 +16,7 @@ const ownerAuthEnvSchema = z.object({
 
 const storageEnvSchema = z.object({
   S3_ENDPOINT: z.string().url(),
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   S3_ACCESS_KEY_ID: z.string().min(1),
@@ -64,6 +65,7 @@ export function getOwnerAuthEnv(): OwnerAuthEnv {
 export function getStorageEnv(): StorageEnv {
   cachedStorageEnv ??= storageEnvSchema.parse({
     S3_ENDPOINT: process.env.S3_ENDPOINT,
+    S3_PUBLIC_ENDPOINT: process.env.S3_PUBLIC_ENDPOINT || undefined,
     S3_REGION: process.env.S3_REGION,
     S3_BUCKET: process.env.S3_BUCKET,
     S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,

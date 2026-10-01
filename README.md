@@ -6,11 +6,11 @@ Main flow:
 
 `Создать контент → выбрать Telegram/MAX → выбрать время → сохранить → позже опубликовать через worker`
 
-This repository is the authoritative Planly source. The current production path is Next.js + PostgreSQL on Render. Legacy ChatGPT Sites / Vinext / Cloudflare files may still exist in the tree for historical compatibility, but they are not the Milestone 1 production runtime.
+This repository is the authoritative Planly source. Target runtime: the owner's server with Next.js, PostgreSQL, Redis and a standalone worker. See [self-host launch and verification](docs/SELF_HOST.md). Render remains optional; legacy Sites/Vinext files are not the production runtime.
 
 ## Current milestone
 
-**MVP v1 / Milestone 1 — Foundation + Content Core**
+**MVP v1 / Phase 3 — Scheduler runtime and self-host build**
 
 Implemented in this milestone:
 
@@ -24,14 +24,14 @@ Implemented in this milestone:
 - real API persistence instead of IndexedDB;
 - database-backed `/api/health`;
 - GitHub Actions verification;
-- Render web + PostgreSQL deployment blueprint.
+- Render web + PostgreSQL deployment blueprint;
+- Redis/BullMQ queue, worker, bounded retry and reconciliation;
+- Docker Compose for web, worker, migrations, PostgreSQL, Redis and private media storage.
 
 Not implemented yet:
 
-- Redis/BullMQ scheduler and worker;
 - real Telegram delivery;
 - real MAX delivery;
-- provider retries/idempotent publication processing;
 - OpenAI research/text/image generation;
 - production analytics.
 
@@ -55,15 +55,17 @@ Required server variables:
 - `OWNER_PASSWORD_HASH`
 - `SESSION_SECRET`
 - `S3_ENDPOINT`
+- `S3_PUBLIC_ENDPOINT` (optional browser endpoint when storage is inside Docker)
 - `S3_REGION`
 - `S3_BUCKET`
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
 - `NODE_ENV`
+- `REDIS_URL`
 
 Never expose these through `NEXT_PUBLIC_*` or client code.
 
-`OWNER_PASSWORD_HASH` is a scrypt hash, not a plaintext password. Provider tokens are intentionally absent from Milestone 1.
+`OWNER_PASSWORD_HASH` is a scrypt hash, not a plaintext password. Provider tokens remain absent until real connectors are implemented.
 
 ## Local setup
 
@@ -183,7 +185,7 @@ Do not put smoke-test plaintext credentials into committed files or CI logs.
 - one web service;
 - one PostgreSQL database.
 
-Redis and a publication worker are intentionally excluded until Milestone 2.
+The legacy Render blueprint does not provision Scheduler. The owner's-server target uses compose.yaml; no paid Render worker is required.
 
 The web service uses `/api/health`, which returns `200 {"status":"ok"}` only when PostgreSQL responds. Configuration details are not returned to the client.
 
@@ -195,7 +197,7 @@ Next production milestone:
 
 `Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
 
-Milestone 2 adds Redis + BullMQ, idempotency, bounded retry, restart recovery and independent per-network publication state. Telegram becomes the first real provider. MAX follows only after Telegram is stable.
+Queue/processor/worker are implemented. Self-host verification checks the actual container runtime. Telegram is the next provider; MAX follows after Telegram stability.
 
 OpenAI content research/generation remains a later milestone after publication is trustworthy.
 

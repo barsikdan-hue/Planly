@@ -1,33 +1,31 @@
-# Personal SMM Planner
+# Personal SMM Planner / Planly
 
-CURRENT PHASE: 1 — UI PROTOTYPE, по прямому запросу владельца.
-CURRENT GOAL: проверить интерфейс персонального центра управления контентом.
+CURRENT PHASE: 3 — Scheduler and self-host build verification.
+CURRENT GOAL: a transferable tested build for the owner's server without paid Render resources.
 
 DONE
-- Dashboard, Create Post, Calendar (day/week/month), Content, Media, Social Accounts, Analytics demo, Settings.
-- Общий state публикаций, отдельные PostTarget и тексты под соцсети.
-- Создание, редактирование, копирование, удаление с подтверждением, живой preview.
-- Drag/drop запланированных постов; перенос через редактор на телефоне.
-- Локальная медиатека в IndexedDB; MIME/signature/size проверки, 20 MB/file, 80 MB total.
-- Сохранение постов, медиа, аккаунтов и имени в этом браузере; очередь записей, баннер ошибки сохранения.
-- Поиск, статусы, фильтр по площадкам. Адаптивное меню.
+- Next.js UI, owner auth/session, PostgreSQL/Drizzle Foundation and Content Core.
+- Server-authoritative posts/targets, private S3 media and real API persistence.
+- BullMQ worker, bounded retry, duplicate protection and restart reconciliation.
+- Docker Compose: web + worker + PostgreSQL + Redis + private media, migrations and bucket setup.
+- Optional public S3 preview endpoint; existing S3/R2 behavior is preserved.
 
 TESTED
-- TypeScript compiler.
-- Core unit tests (5): empty text / missing targets, valid future Moscow time, invalid/past date-time, rescheduling without lost targets, draft rules.
-- Eight screen render smoke checks.
-- Production build.
+- Upstream main 37b1b418: standard CI passed.
+- Local pnpm test: 35 PASS; 13 suites fail at import because drizzle-orm/bullmq installation is incomplete in the restricted workspace. No regression conclusion can be drawn from these import failures.
+- Full self-host CI and real Docker smoke are pending: Docker is absent here, and automatic approval review blocked the GitHub write needed to start the new workflow.
+- A build artifact is emitted only after container smoke passes; no verified self-host build artifact exists yet.
 
-KNOWN ISSUES / LIMITATIONS
-- Нет реальных публикаций, backend content storage, AI или реальной аналитики. Расписание не отправляет посты автоматически.
-- Демо хранится только в браузере; очистка browser data удаляет его. Нет синхронизации между устройствами/вкладками.
-- Браузерный UI/E2E и WebMCP вызовы не проверены: требуемый инструмент control-browser в доступном наборе отсутствует. SSR checks не заменяют UI QA.
-- Phase 0 production foundation (PostgreSQL/auth/logging/Docker) не реализован этим прототипом. Hosting owner-only access обеспечивает платформенный доступ к демо, а не backend авторизацию будущего приложения.
+KNOWN ISSUES
+- Telegram/MAX remain unimplemented; no real delivery is claimed.
+- AI and real analytics remain later phases.
+- Owner-server DNS/TLS and backups have not yet been deployed.
 
 TECH DEBT
-- Заменить локальную демобазу на backend + PostgreSQL в Phase 2.
-- Проверить UI сценарии в браузере перед использованием как основы production.
+- Historical Sites/Vinext dependencies increase image size; removal is outside this task.
+- Ambiguous provider-handoff delivery requires review, never blind resend.
+- Historical baseline files describe earlier checkpoints; current code/CI supersede their runtime statements.
 
-BLOCKERS для production: фундамент Phase 0, Content Core, Scheduler.
-NEXT MILESTONE: review UX прототипа владельцем; затем Phase 0 production foundation и Phase 2.
-NEXT PHASE: Content Core только после готового production foundation.
+BLOCKER for real publishing: Telegram implementation and real test-channel verification.
+NEXT MILESTONE: Phase 4 — Telegram validation, text/media delivery and end-to-end verification.
+NEXT PHASE: MAX after Telegram stability; AI after reliable publication.
