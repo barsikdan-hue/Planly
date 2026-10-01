@@ -31,14 +31,16 @@ export async function listMediaAssets(userId: string): Promise<MediaAssetDto[]> 
 
 export async function listMediaAssetsWithPreview(
   userId: string,
-  storage: ObjectStorage = getObjectStorage(),
+  storage?: ObjectStorage,
 ): Promise<MediaWithPreview[]> {
   const rows = await getDb().select().from(mediaAssets)
     .where(eq(mediaAssets.userId, userId))
     .orderBy(asc(mediaAssets.createdAt));
+  if (!rows.length) return [];
+  const objectStorage = storage ?? getObjectStorage();
   return Promise.all(rows.map(async row => ({
     ...toDto(row),
-    previewUrl: await storage.signedGetUrl(row.storageKey, 300),
+    previewUrl: await objectStorage.signedGetUrl(row.storageKey, 300),
   })));
 }
 
