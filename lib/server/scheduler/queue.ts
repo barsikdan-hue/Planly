@@ -26,12 +26,27 @@ export function getPublicationQueue(): Queue<PublicationJob> {
   return publicationQueue;
 }
 
-export async function enqueuePublication(publicationId: string, runAt: Date): Promise<void> {
-  await getPublicationQueue().add(
+export async function ensurePublicationJob(publicationId: string, runAt: Date): Promise<boolean> {
+  const queue = getPublicationQueue();
+  const existing = await queue.getJob(publicationId);
+  const desiredRunAt = runAt.getTime();
+
+  if (existing) {
+    const currentRunAt = existing.timestamp + Number(existing.opts.delay ?? 0);
+    if (currentRunAt === desiredRunAt) return false;
+    await existing.remove();
+  }
+
+  await queue.add(
     'publish',
     { publicationId },
     buildPublicationJobOptions(publicationId, runAt),
   );
+  return true;
+}
+
+export async function enqueuePublication(publicationId: string, runAt: Date): Promise<void> {
+  await ensurePublicationJob(publicationId, runAt);
 }
 
 export async function removePublicationJob(publicationId: string): Promise<void> {
