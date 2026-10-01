@@ -1,13 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { redirect } from 'next/navigation';
 import { getDb } from '../../../db/index.ts';
 import { users } from '../../../db/schema.ts';
 import { getOwnerAuthEnv } from '../env.ts';
 import { verifyOwnerPassword } from './password.ts';
 import {
   getOwnerBySessionToken,
-  getOwnerFromSession,
   SESSION_COOKIE_NAME,
   type Owner,
 } from './session.ts';
@@ -54,12 +52,6 @@ export async function authenticateOwner(email: string, password: string): Promis
   return ensureOwner();
 }
 
-export async function requireOwner(): Promise<Owner> {
-  const owner = await getOwnerFromSession();
-  if (!owner) redirect('/login');
-  return owner;
-}
-
 function requestCookie(request: Request, name: string): string | undefined {
   const raw = request.headers.get('cookie');
   if (!raw) return undefined;
@@ -77,10 +69,8 @@ function requestCookie(request: Request, name: string): string | undefined {
   return undefined;
 }
 
-export async function requireApiOwner(request?: Request): Promise<Owner> {
-  const owner = request
-    ? await getOwnerBySessionToken(requestCookie(request, SESSION_COOKIE_NAME) ?? '')
-    : await getOwnerFromSession();
+export async function requireApiOwner(request: Request): Promise<Owner> {
+  const owner = await getOwnerBySessionToken(requestCookie(request, SESSION_COOKIE_NAME) ?? '');
   if (!owner) throw new UnauthorizedError();
   return owner;
 }
