@@ -6,11 +6,12 @@ export type PublishInput = {
   provider: SocialProvider;
   destinationId: string | null;
   text: string;
+  media?: Array<{ name: string; mimeType: string; bytes: Uint8Array; width?: number | null; height?: number | null }>;
 };
 
 export type PublishResult =
   | { ok: true; remoteId: string; remoteUrl?: string | null }
-  | { ok: false; errorType: PublicationErrorType; code?: string | null; message: string };
+  | { ok: false; errorType: PublicationErrorType; code?: string | null; message: string; retryAfterMs?: number };
 
 export interface SocialConnector {
   provider: SocialProvider;
