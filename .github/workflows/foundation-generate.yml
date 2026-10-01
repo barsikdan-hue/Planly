@@ -1,0 +1,29 @@
+name: Foundation Generate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Install pnpm
+        run: npm install --global pnpm@11.25.0
+      - name: Refresh lockfile
+        run: pnpm install --no-frozen-lockfile
+      - name: Generate PostgreSQL migration
+        run: pnpm db:generate
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-generated
+          path: |
+            pnpm-lock.yaml
+            drizzle/
+          if-no-files-found: error
