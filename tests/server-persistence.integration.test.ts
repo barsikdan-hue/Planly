@@ -28,7 +28,7 @@ beforeEach(async () => {
   const db = getDb();
   await db.delete(publications); await db.delete(postMedia); await db.delete(postTargets); await db.delete(posts);
   await db.delete(mediaAssets); await db.delete(sessions); await db.delete(socialAccounts); await db.delete(users);
-  await db.insert(users).values({ id: ownerId, email: 'reload@example.test', displayName: 'Reload Owner' });
+  await db.insert(users).values({ id: ownerId, email: 'owner@example.test', displayName: 'Reload Owner' });
   await ensureOwnerSocialAccounts(ownerId);
   token = await createOwnerSession(ownerId);
 });
