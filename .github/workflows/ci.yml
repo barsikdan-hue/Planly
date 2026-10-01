@@ -27,6 +27,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/planly_test
       NODE_ENV: test
+      OWNER_EMAIL: owner@example.test
+      OWNER_PASSWORD_HASH: scrypt$1$16384$8$1$MRKHWrP9j2HsWqyI1-1eWg$HUYq2oQbrO3ToeGuVS_BBUCpewsP5WFCjbUfrYLSAoVUHoRe6zgujxITVbc1yH51FbjZdjoQ_08y-lnl0bgcUA
+      SESSION_SECRET: ci-session-secret-not-for-production-0000000001
     steps:
       - name: Checkout
         uses: actions/checkout@v4
