@@ -1,0 +1,69 @@
+import { z } from 'zod';
+
+export const providerSchema = z.enum(['telegram', 'max']);
+export type Provider = z.infer<typeof providerSchema>;
+
+export const postStatusSchema = z.enum(['DRAFT', 'READY', 'ARCHIVED']);
+export type PostStatus = z.infer<typeof postStatusSchema>;
+
+export const savePostInputSchema = z.object({
+  title: z.string().trim().max(200).nullable().optional(),
+  baseText: z.string().trim().min(1).max(20_000),
+  status: postStatusSchema,
+  targets: z.array(z.object({
+    provider: providerSchema,
+    textOverride: z.string().max(20_000).nullable().default(null),
+    scheduledAt: z.string().datetime({ offset: true }).nullable().default(null),
+  })).max(2).refine(
+    targets => new Set(targets.map(target => target.provider)).size === targets.length,
+    'Duplicate provider target',
+  ),
+  mediaIds: z.array(z.string().min(1)).max(20).refine(
+    ids => new Set(ids).size === ids.length,
+    'Duplicate media id',
+  ),
+});
+export type SavePostInput = z.infer<typeof savePostInputSchema>;
+
+export type PostTargetDto = {
+  id: string;
+  socialAccountId: string;
+  provider: Provider;
+  textOverride: string | null;
+  scheduledAt: string | null;
+};
+
+export type PostDto = {
+  id: string;
+  title: string | null;
+  baseText: string;
+  status: PostStatus;
+  targets: PostTargetDto[];
+  mediaIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SocialConnectionStatus = 'DISCONNECTED' | 'CONNECTED' | 'ERROR';
+export type SocialAccountDto = {
+  id: string;
+  provider: Provider;
+  providerAccountId: string | null;
+  displayName: string;
+  enabled: boolean;
+  connectionStatus: SocialConnectionStatus;
+};
+
+export const updateProfileInputSchema = z.object({
+  displayName: z.string().trim().min(1).max(40),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileInputSchema>;
+export type ProfileDto = { id: string; email: string; displayName: string };
+
+export function toDbProvider(provider: Provider): 'TELEGRAM' | 'MAX' {
+  return provider === 'telegram' ? 'TELEGRAM' : 'MAX';
+}
+
+export function fromDbProvider(provider: 'TELEGRAM' | 'MAX'): Provider {
+  return provider === 'TELEGRAM' ? 'telegram' : 'max';
+}
