@@ -1,7 +1,7 @@
 import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { closeDb, getDb } from '../db/index.ts';
-import { socialAccounts, users } from '../db/schema.ts';
+import { mediaAssets, postMedia, posts, postTargets, publications, sessions, socialAccounts, users } from '../db/schema.ts';
 import { ensureOwnerSocialAccounts, listSocialAccounts, setSocialAccountEnabled } from '../lib/server/social-accounts.ts';
 
 const ownerA = 'social-owner-a';
@@ -9,6 +9,12 @@ const ownerB = 'social-owner-b';
 
 beforeEach(async () => {
   const db = getDb();
+  await db.delete(publications);
+  await db.delete(postMedia);
+  await db.delete(postTargets);
+  await db.delete(posts);
+  await db.delete(mediaAssets);
+  await db.delete(sessions);
   await db.delete(socialAccounts);
   await db.delete(users);
   await db.insert(users).values([
