@@ -1,4 +1,4 @@
-import test, { after } from 'node:test';
+import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -15,6 +15,10 @@ import {
   clearLoginFailures,
   recordLoginFailure,
 } from '../lib/server/auth/rate-limit.ts';
+
+beforeEach(async () => {
+  await getDb().delete(sessions);
+});
 
 after(async () => {
   await closeDb();
