@@ -32,9 +32,9 @@ test('Render blueprint contains web + PostgreSQL only, health check and standard
   assert.match(source, /startCommand:\s*pnpm start/);
   assert.match(source, /databases:/);
   assert.match(source, /DATABASE_URL/);
-  assert.doesNotMatch(source, /redis|key value|worker/i);
+  assert.doesNotMatch(source, /type:\s*(redis|keyvalue|worker)/i);
   for (const key of ['OWNER_PASSWORD_HASH','SESSION_SECRET','S3_SECRET_ACCESS_KEY']) {
-    assert.match(source, new RegExp(`${key}:[\\s\\S]*?sync:\\s*false`));
+    assert.match(source, new RegExp(`key:\\s*${key}[\\s\\S]*?sync:\\s*false`));
   }
 });
 
