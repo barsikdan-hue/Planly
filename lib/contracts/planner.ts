@@ -44,6 +44,18 @@ export type PostDto = {
   updatedAt: string;
 };
 
+export type MediaAssetDto = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  source: 'UPLOAD' | 'AI_GENERATED';
+  createdAt: string;
+};
+
 export type SocialConnectionStatus = 'DISCONNECTED' | 'CONNECTED' | 'ERROR';
 export type SocialAccountDto = {
   id: string;
