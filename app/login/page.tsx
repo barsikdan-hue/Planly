@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import './login.css';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
