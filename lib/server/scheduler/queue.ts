@@ -2,6 +2,7 @@ import { Queue, type JobsOptions } from 'bullmq';
 import { getRedisConnection } from './redis.ts';
 
 export const PUBLICATION_QUEUE_NAME = 'planly-publications';
+export const PUBLICATION_MAX_ATTEMPTS = 5;
 export type PublicationJob = { publicationId: string };
 
 let publicationQueue: Queue<PublicationJob> | undefined;
@@ -14,6 +15,8 @@ export function buildPublicationJobOptions(
   return {
     jobId: publicationId,
     delay: Math.max(0, runAt.getTime() - now),
+    attempts: PUBLICATION_MAX_ATTEMPTS,
+    backoff: { type: 'custom', delay: 0 },
     removeOnComplete: true,
     removeOnFail: false,
   };
