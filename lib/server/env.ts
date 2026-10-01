@@ -22,15 +22,21 @@ const storageEnvSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1),
 });
 
+const redisEnvSchema = z.object({
+  REDIS_URL: z.string().url(),
+});
+
 export type ServerEnv = z.infer<typeof baseServerEnvSchema>;
 export type SessionEnv = z.infer<typeof sessionEnvSchema>;
 export type OwnerAuthEnv = z.infer<typeof ownerAuthEnvSchema>;
 export type StorageEnv = z.infer<typeof storageEnvSchema>;
+export type RedisEnv = z.infer<typeof redisEnvSchema>;
 
 let cachedServerEnv: ServerEnv | undefined;
 let cachedSessionEnv: SessionEnv | undefined;
 let cachedOwnerAuthEnv: OwnerAuthEnv | undefined;
 let cachedStorageEnv: StorageEnv | undefined;
+let cachedRedisEnv: RedisEnv | undefined;
 
 export function getServerEnv(): ServerEnv {
   cachedServerEnv ??= baseServerEnvSchema.parse({
@@ -66,9 +72,18 @@ export function getStorageEnv(): StorageEnv {
   return cachedStorageEnv;
 }
 
+export function getRedisEnv(): RedisEnv {
+  if (cachedRedisEnv) return cachedRedisEnv;
+  const parsed = redisEnvSchema.safeParse({ REDIS_URL: process.env.REDIS_URL });
+  if (!parsed.success) throw new Error('Invalid REDIS_URL configuration');
+  cachedRedisEnv = parsed.data;
+  return cachedRedisEnv;
+}
+
 export function resetServerEnvForTests() {
   cachedServerEnv = undefined;
   cachedSessionEnv = undefined;
   cachedOwnerAuthEnv = undefined;
   cachedStorageEnv = undefined;
+  cachedRedisEnv = undefined;
 }
