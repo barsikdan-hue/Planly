@@ -1,9 +1,9 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 import { cookies } from 'next/headers';
-import { getDb } from '../../../db/index';
-import { sessions, users } from '../../../db/schema';
-import { getServerEnv, getSessionEnv } from '../env';
+import { getDb } from '../../../db/index.ts';
+import { sessions, users } from '../../../db/schema.ts';
+import { getServerEnv, getSessionEnv } from '../env.ts';
 
 export const SESSION_COOKIE_NAME = 'planly_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
