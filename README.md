@@ -1,126 +1,206 @@
-# vinext-starter
+# Planly
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+Personal SMM Planner for one owner.
 
-## Prerequisites
+Main flow:
+
+`Создать контент → выбрать Telegram/MAX → выбрать время → сохранить → позже опубликовать через worker`
+
+This repository is the authoritative Planly source. The current production path is Next.js + PostgreSQL on Render. Legacy ChatGPT Sites / Vinext / Cloudflare files may still exist in the tree for historical compatibility, but they are not the Milestone 1 production runtime.
+
+## Current milestone
+
+**MVP v1 / Milestone 1 — Foundation + Content Core**
+
+Implemented in this milestone:
+
+- Next.js production runtime;
+- PostgreSQL + Drizzle migrations;
+- owner-only authentication and hashed server sessions;
+- server-authoritative Post/PostTarget/SocialAccount/MediaAsset/Publication data model;
+- Telegram and MAX only in the active MVP UI;
+- per-network text and schedule intent;
+- private S3-compatible media storage with server validation and signed previews;
+- real API persistence instead of IndexedDB;
+- database-backed `/api/health`;
+- GitHub Actions verification;
+- Render web + PostgreSQL deployment blueprint.
+
+Not implemented yet:
+
+- Redis/BullMQ scheduler and worker;
+- real Telegram delivery;
+- real MAX delivery;
+- provider retries/idempotent publication processing;
+- OpenAI research/text/image generation;
+- production analytics.
+
+A UI state is never treated as proof that a social network actually published a post. Real publication starts in the next milestone.
+
+## Requirements
 
 - Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+- pnpm `11.25.0`
+- PostgreSQL 17-compatible server
+- private S3-compatible object storage for media
 
-## Sites Lifecycle
+## Environment
 
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
+Copy `.env.example` to your local environment file and supply real values outside Git.
 
-Run `node <plugin-root>/scripts/configure-execution-profile.mjs` only when the profile is unknown for the current checkout and environment. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
+Required server variables:
 
-This starter does not use `wrangler.jsonc`.
+- `DATABASE_URL`
+- `OWNER_EMAIL`
+- `OWNER_PASSWORD_HASH`
+- `SESSION_SECRET`
+- `S3_ENDPOINT`
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+- `NODE_ENV`
 
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
+Never expose these through `NEXT_PUBLIC_*` or client code.
 
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
+`OWNER_PASSWORD_HASH` is a scrypt hash, not a plaintext password. Provider tokens are intentionally absent from Milestone 1.
 
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
+## Local setup
 
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+pnpm install --frozen-lockfile
+pnpm db:migrate
+pnpm dev
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Production-style build:
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
-
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm start
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+## Database
 
-## Diagnostic Commands
+PostgreSQL is the source of truth.
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+Core tables cover:
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+- users / sessions;
+- social accounts;
+- posts;
+- post targets;
+- media assets and post-media ordering;
+- publications;
+- persistent login-rate-limit state.
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+Run migrations with:
 
-## Learn More
+```bash
+pnpm db:migrate
+```
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Schema changes must be migration-backed. Do not edit production tables manually as an application workflow.
+
+## Media
+
+Media is not stored in browser state.
+
+The server validates:
+
+- supported MIME types;
+- file size;
+- file signature / magic bytes;
+- image dimensions;
+- ownership and attachment constraints.
+
+Objects are written to private S3-compatible storage under generated keys. The UI receives temporary signed preview URLs, never storage credentials.
+
+## Authentication
+
+Planly is currently a single-owner application.
+
+- Login endpoint: `/api/auth/login`
+- Logout endpoint: `/api/auth/logout`
+- Session cookie stores an opaque token; the database stores only its hash.
+- Protected API routes derive ownership from the server session.
+- There are no roles, teams or multi-tenant permissions in MVP v1.
+
+## API / UI boundary
+
+The frontend reads a server snapshot and performs mutations through Next.js route handlers.
+
+IndexedDB is no longer authoritative for production planner data. UI state changes only after the server confirms the mutation, so a network error cannot silently pretend a draft was saved.
+
+Active social networks in this milestone are exactly:
+
+- Telegram
+- MAX
+
+They remain `DISCONNECTED` until their real connectors are implemented.
+
+## Verification
+
+Main verification commands:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+The test suite includes ownership, auth/session invalidation, validation, PostgreSQL persistence, media safety, UI/server contract, deployment config and health checks.
+
+For a deployed Foundation smoke test:
+
+```bash
+PLANLY_BASE_URL=https://your-planly.example \
+PLANLY_OWNER_EMAIL=owner@example.com \
+PLANLY_OWNER_PASSWORD='your-plaintext-login-password' \
+pnpm smoke:foundation
+```
+
+The smoke flow checks login, create/read/update/delete persistence, Telegram/MAX per-network text, valid and invalid media, signed preview and logout invalidation.
+
+Restart persistence is split deliberately into two phases:
+
+```bash
+PLANLY_SMOKE_PHASE=seed-restart ... pnpm smoke:foundation
+# restart/redeploy the web service, keep the returned post id
+PLANLY_SMOKE_PHASE=verify-restart PLANLY_RESTART_POST_ID=<id> ... pnpm smoke:foundation
+```
+
+Do not put smoke-test plaintext credentials into committed files or CI logs.
+
+## Render
+
+`render.yaml` defines only:
+
+- one web service;
+- one PostgreSQL database.
+
+Redis and a publication worker are intentionally excluded until Milestone 2.
+
+The web service uses `/api/health`, which returns `200 {"status":"ok"}` only when PostgreSQL responds. Configuration details are not returned to the client.
+
+Before the first real deployment, set the owner credentials/session secret and S3-compatible storage variables in Render secret environment settings.
+
+## Roadmap
+
+Next production milestone:
+
+`Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
+
+Milestone 2 adds Redis + BullMQ, idempotency, bounded retry, restart recovery and independent per-network publication state. Telegram becomes the first real provider. MAX follows only after Telegram is stable.
+
+OpenAI content research/generation remains a later milestone after publication is trustworthy.
+
+## Project docs
+
+- `docs/baseline/CURRENT_STATE.md` — verified current state and known gaps.
+- `docs/superpowers/specs/2026-09-30-planly-mvp-v1-design.md` — approved MVP v1 architecture.
+- `docs/superpowers/plans/2026-10-01-foundation-content-core.md` — Milestone 1 implementation plan.
