@@ -11,7 +11,9 @@ async function api(path){
 const me=await api('/me');
 if(me.is_bot!==true||me.username!=='se14310498_bot')throw new Error('MAX did not confirm the designated test bot.');
 console.log('PASS designated MAX bot identity');
-const snapshot=await api('/updates?types=bot_added,bot_started&timeout=0&limit=100');
+const subscriptions=await api('/subscriptions');
+console.log(JSON.stringify({webhookCount:(subscriptions.subscriptions??[]).length}));
+const snapshot=await api('/updates?timeout=0&limit=100');
 console.log(JSON.stringify({updateCount:(snapshot.updates??[]).length,types:[...new Set((snapshot.updates??[]).map(u=>u.update_type))]}));
 const ids=new Set();
 for(const update of snapshot.updates??[]){for(const id of[update.chat_id,update.chat?.chat_id,update.message?.recipient?.chat_id])if(Number.isSafeInteger(id)&&id!==0)ids.add(String(id));}
