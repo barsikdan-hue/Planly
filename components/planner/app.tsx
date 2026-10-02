@@ -22,7 +22,7 @@ import {
     removePost as removePostApi,
     saveProfile as saveProfileApi,
     setAccountEnabled as setAccountEnabledApi,
-    connectTelegramAccount as connectTelegramAccountApi,
+    connectSocialAccount as connectSocialAccountApi,
     uploadMedia as uploadMediaApi,
     removeMedia as removeMediaApi,
     type MediaAssetWithPreview,
@@ -107,7 +107,7 @@ export default function PlannerApp() {
 
     const connectTelegram = async(id:string,destinationId:string)=>{
         try {
-            const account=await connectTelegramAccountApi(id,destinationId);
+            const account=await connectSocialAccountApi(id,destinationId);
             setData(current=>({...current,socialAccounts:current.socialAccounts.map(item=>item.id===id ? account : item)}));
             toast.success('Telegram подключён: права публикации подтверждены');
         } catch(error) {toast.error(errorMessage(error,'Не удалось подключить Telegram.'));}

@@ -102,12 +102,12 @@ export async function processPublication(
 
   let handedOff = false;
   try {
-    if (resolveConnector === resolveRegisteredConnector && row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN &&
+    if (resolveConnector === resolveRegisteredConnector && ((row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN) || (row.publication.provider === 'MAX' && process.env.MAX_BOT_TOKEN)) &&
       (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
-      return markFailure(publicationId,'AUTH','TELEGRAM_DISCONNECTED','Reconnect and enable the Telegram channel before publishing.');
+      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.');
     }
-    // MAX remains unsupported and must not fetch media unnecessarily.
-    if (row.publication.provider === 'TELEGRAM') {
+    // Only implemented providers prepare media; an unconfigured MAX remains an honest unsupported result.
+    if (row.publication.provider === 'TELEGRAM' || (row.publication.provider === 'MAX' && (process.env.MAX_BOT_TOKEN || resolveConnector !== resolveRegisteredConnector))) {
       const mediaRows = await getDb().select({asset:mediaAssets}).from(postMedia)
         .innerJoin(mediaAssets,eq(postMedia.mediaId,mediaAssets.id))
         .where(and(eq(postMedia.postId,row.post.id),eq(mediaAssets.userId,row.publication.userId)))

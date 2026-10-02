@@ -98,6 +98,8 @@ export function removeMedia(id: string): Promise<void> {
 }
 
 
-export function connectTelegramAccount(id: string, destinationId: string): Promise<SocialAccountDto> {
+export function connectSocialAccount(id: string, destinationId: string): Promise<SocialAccountDto> {
   return request(`/api/social-accounts/${encodeURIComponent(id)}`,jsonRequest('PATCH',{destinationId}));
 }
+
+export const connectTelegramAccount = connectSocialAccount;

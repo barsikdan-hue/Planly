@@ -4,7 +4,7 @@ if(!token)throw new Error('Configure the private MAX_BOT_TOKEN Actions secret.')
 const expectedLink='https://max.ru/channel_danil_sochi_realty';
 async function api(path){
  let response;
- try{response=await fetch('https://platform-api2.max.ru'+path,{headers:{authorization:token},redirect:'error',signal:AbortSignal.timeout(30000)});}catch{throw new Error('MAX HTTPS connection failed; TLS verification remains enabled.');}
+ try{response=await fetch('https://platform-api2.max.ru'+path,{headers:{authorization:token},redirect:'error',signal:AbortSignal.timeout(30000)});}catch(error){const allowed=new Set(['UNABLE_TO_GET_ISSUER_CERT_LOCALLY','UNABLE_TO_VERIFY_LEAF_SIGNATURE','SELF_SIGNED_CERT_IN_CHAIN','CERT_HAS_EXPIRED','ENOTFOUND','ECONNREFUSED','ECONNRESET','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT']);const code=error?.cause?.code;throw new Error(`MAX HTTPS connection failed (${allowed.has(code)?code:'UNKNOWN_TRANSPORT'}); TLS verification remains enabled.`);}
  if(!response.ok)throw new Error(`MAX read-only check failed with HTTP${response.status}.`);
  return response.json();
 }

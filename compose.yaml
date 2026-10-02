@@ -12,6 +12,7 @@ x-runtime-env: &runtime-env
   DATABASE_URL: postgresql://planly:${POSTGRES_PASSWORD:?Initialize .env.self-host first}@postgres:5432/planly
   REDIS_URL: redis://redis:6379
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
 
 services:
   postgres:
