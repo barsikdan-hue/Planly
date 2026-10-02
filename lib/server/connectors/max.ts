@@ -63,7 +63,7 @@ export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,t
   },
   async publish(input){
    const media=input.media??[];
-   if(input.provider!=='MAX'||!validId(input.destinationId)||!input.text.trim()||input.text.length>4000||media.length>12)return failure('VALIDATION','MAX_CONTENT','MAX requires a numeric destination, text up to4000 characters and up to12 media attachments.');
+   if(input.provider!=='MAX'||!validId(input.destinationId)||(!input.text.trim()&&!media.length)||input.text.length>4000||media.length>12)return failure('VALIDATION','MAX_CONTENT','MAX requires a numeric destination, text up to4000 characters and up to12 media attachments.');
    for(const asset of media)if(!['image/png','image/jpeg','video/mp4'].includes(asset.mimeType)||!asset.bytes.length||asset.bytes.length>20*1024*1024||(asset.mimeType!=='video/mp4'&&((asset.width??0)>7680||(asset.height??0)>7680)))return failure('VALIDATION','MAX_MEDIA','Planly supports MAX JPEG/PNG and MP4 up to20MiB per file.');
    const attachments:Array<{type:'image'|'video',payload:{token:string}}>=[];
    for(const asset of media){const uploaded=await upload(asset);if(!uploaded.ok)return uploaded;attachments.push({type:uploaded.type,payload:{token:uploaded.token}});}

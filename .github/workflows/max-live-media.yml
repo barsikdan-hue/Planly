@@ -1,0 +1,41 @@
+name: MAX live media test
+on:
+  push:
+    branches: [feat/self-host-build]
+permissions:
+  contents: read
+jobs:
+  max-live-media:
+    if: github.run_attempt == 1 && contains(github.event.head_commit.message, '[max-live-media]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+      PLANLY_MAX_LIVE_TEST: confirmed-owner-channel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Fetch official Russian trusted root with verified HTTPS
+        run: |
+          mkdir -p /tmp/max-ca
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/max-ca/root.pem
+          openssl x509 -in /tmp/max-ca/root.pem -noout -subject -issuer -dates -fingerprint -sha256
+      - name: Generate test photo and video
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p artifacts/max-fixtures
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=640x480:d=2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/max-fixtures/video.mp4
+          ffmpeg -hide_banner -loglevel error -i artifacts/max-fixtures/video.mp4 -frames:v 1 artifacts/max-fixtures/photo.png
+      - name: Validate owner destination and publish owner requested media tests
+        env:
+          NODE_EXTRA_CA_CERTS: /tmp/max-ca/root.pem
+        run: node --experimental-strip-types scripts/max-live-media.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: max-official-public-ca
+          path: /tmp/max-ca/root.pem
+          retention-days: 7

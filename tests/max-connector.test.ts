@@ -42,3 +42,5 @@ test('MAX transport exceptions before upload and after message handoff have diff
 test('MAX confirmed ID does not invent a group URL or accept an unsafe provider link',async()=>{
  for(const url of['https://evil.test/post','http://max.ru/post','https://user:pass@max.ru/post'])await wire(async c=>{assert.deepEqual(await c.publish(input),{ok:true,remoteId:'mid.test_42',remoteUrl:null});},()=>({body:{message:{...message.message,url}}}));
 });
+
+test('MAX permits image without caption',async()=>{await wire(async(c,rs)=>{assert.equal((await c.publish({...input,text:'',media:[{name:'photo',mimeType:'image/png',bytes:new Uint8Array([1])}]})).ok,true);assert.equal((rs.at(-1)!.body as {text:string}).text,'');},r=>r.url.pathname==='/uploads'?{body:{url:'https://iu.oneme.ru/uploadImage'}}:r.url.pathname==='/uploadImage'?{body:{photos:{one:{token:'image-token'}}}}:{body:message});});
