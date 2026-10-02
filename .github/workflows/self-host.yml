@@ -76,6 +76,8 @@ jobs:
         run: node -e "if (!process.env.TELEGRAM_BOT_TOKEN) {console.error('Configure TELEGRAM_BOT_TOKEN in repository Actions secrets.'); process.exit(1)}"
       - name: Initialize isolated credentials
         run: printf '%s' "$PLANLY_OWNER_PASSWORD" | node --experimental-strip-types scripts/init-self-host.mjs --email "$PLANLY_OWNER_EMAIL"
+      - name: Install video fixture generator
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Generate disposable photo and video fixtures
         run: |
           mkdir -p artifacts/telegram-fixtures
