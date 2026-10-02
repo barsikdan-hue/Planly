@@ -105,15 +105,13 @@ test('stale PUBLISHING is never blindly sent again', async () => {
 
 test('processor passes ordered private media bytes to Telegram and stores confirmed ID', async () => {
   const { createServer } = await import('node:http');
-  const { once } = await import('node:events');
   const { resetServerEnvForTests } = await import('../lib/server/env.ts');
   const requests: string[] = [];
   const server = createServer((request, response) => {
     requests.push(request.url!.split('?')[0]);
     response.end(request.url!.includes('second') ? Buffer.from([2, 3]) : Buffer.from([1]));
   });
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   Object.assign(process.env, {S3_ENDPOINT:`http://127.0.0.1:${address.port}`, S3_REGION:'us-east-1', S3_BUCKET:'private', S3_ACCESS_KEY_ID:'test', S3_SECRET_ACCESS_KEY:'test'});
