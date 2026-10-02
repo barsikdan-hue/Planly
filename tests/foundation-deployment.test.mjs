@@ -18,6 +18,7 @@ const requiredEnv = [
   'S3_SECRET_ACCESS_KEY',
   'REDIS_URL',
   'NODE_ENV', 'TELEGRAM_BOT_TOKEN', 'MAX_BOT_TOKEN',
+  'SCHEDULER_TICK_SECRET',
 ];
 
 test('.env.example lists required server variables with blank values only', async () => {
@@ -35,7 +36,7 @@ test('Render blueprint contains web + PostgreSQL only, health check and standard
   assert.match(source, /databases:/);
   assert.match(source, /DATABASE_URL/);
   assert.doesNotMatch(source, /type:\s*(redis|keyvalue|worker)/i);
-  for (const key of ['OWNER_PASSWORD_HASH','SESSION_SECRET','S3_SECRET_ACCESS_KEY']) {
+  for (const key of ['OWNER_PASSWORD_HASH','SESSION_SECRET','S3_SECRET_ACCESS_KEY','SCHEDULER_TICK_SECRET']) {
     assert.match(source, new RegExp(`key:\\s*${key}[\\s\\S]*?sync:\\s*false`));
   }
 });
@@ -48,7 +49,19 @@ test('client code does not read server secret environment variables', async () =
     'lib/client/planly-api.ts',
   ];
   const source = (await Promise.all(paths.map(read))).join('\n');
-  assert.doesNotMatch(source, /process\.env\.(DATABASE_URL|OWNER_PASSWORD_HASH|SESSION_SECRET|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|REDIS_URL)/);
+  assert.doesNotMatch(source, /process\.env\.(DATABASE_URL|OWNER_PASSWORD_HASH|SESSION_SECRET|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|REDIS_URL|SCHEDULER_TICK_SECRET)/);
+});
+
+test('free production scheduler uses GitHub Actions ping, not paid Render worker', async () => {
+  const workflow = await read('.github/workflows/scheduler-tick.yml');
+  const route = await read('app/api/scheduler/tick/route.ts');
+
+  assert.match(workflow, /cron:\s*'\*\/5 \* \* \* \*'/);
+  assert.match(workflow, /https:\/\/planly-m4zq\.onrender\.com\/api\/scheduler\/tick/);
+  assert.match(workflow, /secrets\.SCHEDULER_TICK_SECRET/);
+  assert.match(workflow, /curl[\s\S]*Authorization: Bearer/);
+  assert.match(route, /timingSafeEqual/);
+  assert.match(route, /runDuePublications/);
 });
 
 test('MAX live E2E proof goes through Planly API, private storage, queue and worker', async () => {

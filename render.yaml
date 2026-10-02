@@ -33,6 +33,8 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      - key: SCHEDULER_TICK_SECRET
+        sync: false
 
 databases:
   - name: planly-db
