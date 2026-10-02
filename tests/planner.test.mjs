@@ -47,3 +47,12 @@ test('publish now creates READY targets at the supplied time for the same queue 
  assert.deepEqual(input.targets,[{provider:'telegram',textOverride:'specific',scheduledAt:'2030-01-01T09:12:34.000Z'}]);
  assert.deepEqual(input.mediaIds,['photo']);
 });
+
+test('mixed failed and waiting targets keep status polling active until each target settles', async()=>{
+ const planner=await import('../lib/planner.ts');
+ assert.equal(typeof planner.hasPendingPublications,'function');
+ const posts=[{status:'failed',targets:[{network:'telegram',status:'scheduled'},{network:'max',status:'failed'}]}];
+ assert.equal(planner.hasPendingPublications(posts),true);
+ posts[0].targets[0].status='published';
+ assert.equal(planner.hasPendingPublications(posts),false);
+});

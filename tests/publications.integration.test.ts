@@ -91,3 +91,13 @@ test('removing a target preserves its row and cancels its unexecuted publication
   assert.equal(publicationRows.length, 1);
   assert.equal(publicationRows[0]!.status, 'CANCELLED');
 });
+
+test('ordinary save cannot recreate a publication after ambiguous provider delivery', async()=>{
+  const input={baseText:'possibly delivered',status:'READY' as const,mediaIds:[],targets:[{provider:'telegram' as const,textOverride:null,scheduledAt:'2030-01-01T09:00:00.000Z'}]};
+  const created=await createPost(ownerId,input);
+  await getDb().update(publications).set({status:'FAILED',providerErrorCode:'AMBIGUOUS_DELIVERY',normalizedErrorType:'PERMANENT'}).where(eq(publications.postId,created.id));
+  await updatePost(ownerId,created.id,input);
+  const rows=await getDb().select().from(publications).where(eq(publications.postId,created.id));
+  assert.equal(rows.length,1,'a normal save must not create another send after an unknown delivery outcome');
+  assert.equal(rows[0].status,'FAILED');
+});

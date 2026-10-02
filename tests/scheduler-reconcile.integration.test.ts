@@ -110,3 +110,13 @@ test('cancelled publications are removed and never re-enqueued by reconciliation
   assert.deepEqual(result, { scanned: 0, enqueued: 0 });
   assert.equal(jobs.size, 0);
 });
+
+test('Redis queue reconstruction respects future provider retry deadline', async()=>{
+  const created=await createPost(ownerId,{baseText:'rate limited',status:'READY',mediaIds:[],targets:[{provider:'telegram',textOverride:null,scheduledAt:new Date(Date.now()-10_000).toISOString()}]}, {mirrorQueue:async()=>{}});
+  const [publication]=await getDb().select().from(publications).where(eq(publications.postId,created.id));
+  const retryAt=new Date(Date.now()+60_000);
+  await getDb().update(publications).set({status:'QUEUED',nextRetryAt:retryAt,attemptCount:1,providerErrorCode:'TELEGRAM_429'}).where(eq(publications.id,publication.id));
+  const jobs: FakeQueue = new Map(); // Models an empty Redis queue after loss.
+  await reconcileScheduledJobs(new Date(),fakeQueueOperations(jobs));
+  assert.equal(jobs.get(publication.id),retryAt.getTime(),'recovered job must not bypass retry_after');
+});
