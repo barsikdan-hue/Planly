@@ -26,3 +26,15 @@ test('invalid dates and times cannot silently roll into another day',()=>{
 test('drafts may omit social networks and schedule, but still require content',()=>{
  assert.equal(validatePost({text:'a draft',networks:[],date:'',time:''},'draft'),null);
 });
+
+test('confirmed Telegram publication and failed MAX remain independent in UI', async () => {
+ const {fromServerPost}=await import('../lib/planner.ts');
+ const post=fromServerPost({id:'real',title:null,baseText:'hello',status:'READY',mediaIds:[],createdAt:'2030-01-01T00:00:00Z',updatedAt:'2030-01-01T00:00:00Z',targets:[
+  {id:'tg',socialAccountId:'a',provider:'telegram',textOverride:null,scheduledAt:'2030-01-01T09:00:00Z',publication:{status:'PUBLISHED',remoteId:'71',remoteUrl:'https://t.me/planly_test/71',error:null}},
+  {id:'max',socialAccountId:'b',provider:'max',textOverride:null,scheduledAt:'2030-01-01T09:00:00Z',publication:{status:'FAILED',remoteId:null,remoteUrl:null,error:'Provider unavailable'}},
+ ]});
+ assert.deepEqual(post.targets.map(t=>[t.network,t.status]),[['telegram','published'],['max','failed']]);
+ assert.equal(post.targets[0].remoteUrl,'https://t.me/planly_test/71');
+ assert.equal(post.targets[1].error,'Provider unavailable');
+ assert.equal(post.status,'failed');
+});

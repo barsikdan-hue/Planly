@@ -2,7 +2,7 @@ import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
-import { posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
+import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
 import { processPublication } from '../lib/server/scheduler/processor.ts';
 import type { ConnectorResolver, PublishResult, SocialConnector } from '../lib/server/connectors/types.ts';
 
@@ -24,6 +24,8 @@ async function reset(status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED'
   const db = getDb();
   await db.delete(publications);
   await db.delete(postTargets);
+  await db.delete(postMedia);
+  await db.delete(mediaAssets);
   await db.delete(posts);
   await db.delete(socialAccounts);
   await db.delete(users);
@@ -98,4 +100,36 @@ test('stale PUBLISHING is never blindly sent again', async () => {
   assert.equal(result.status, 'FAILED');
   assert.equal(row?.normalizedErrorType, 'PERMANENT');
   assert.equal(row?.providerErrorCode, 'AMBIGUOUS_DELIVERY');
+});
+
+
+test('processor passes ordered private media bytes to Telegram and stores confirmed ID', async () => {
+  const { createServer } = await import('node:http');
+  const { once } = await import('node:events');
+  const { resetServerEnvForTests } = await import('../lib/server/env.ts');
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url!.split('?')[0]);
+    response.end(request.url!.includes('second') ? Buffer.from([2, 3]) : Buffer.from([1]));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  Object.assign(process.env, {S3_ENDPOINT:`http://127.0.0.1:${address.port}`, S3_REGION:'us-east-1', S3_BUCKET:'private', S3_ACCESS_KEY_ID:'test', S3_SECRET_ACCESS_KEY:'test'});
+  resetServerEnvForTests();
+  try {
+    await getDb().insert(mediaAssets).values([
+      {id:'processor-first',userId:ownerId,storageKey:'first',originalName:'first.png',mimeType:'image/png',byteSize:1,checksum:'a',source:'UPLOAD'},
+      {id:'processor-second',userId:ownerId,storageKey:'second',originalName:'second.mp4',mimeType:'video/mp4',byteSize:2,checksum:'b',source:'UPLOAD'},
+    ]);
+    await getDb().insert(postMedia).values([{postId:'processor-post',mediaId:'processor-second',position:1},{postId:'processor-post',mediaId:'processor-first',position:0}]);
+    let received: import('../lib/server/connectors/types.ts').PublishInput | undefined;
+    const result = await processPublication(publicationId, () => ({provider:'TELEGRAM',async publish(input) {received=input; return {ok:true,remoteId:'101,102'};}}));
+    assert.equal(result.status,'PUBLISHED');
+    assert.deepEqual(received?.media?.map(m=>[m.mimeType,[...m.bytes]]),[['image/png',[1]],['video/mp4',[2,3]]]);
+    assert.deepEqual(requests,['/private/first','/private/second']);
+    const [stored] = await getDb().select().from(publications).where(eq(publications.id,publicationId));
+    assert.equal(stored.providerRemoteId,'101,102');
+  } finally {server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve())); resetServerEnvForTests();}
 });
