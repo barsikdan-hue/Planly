@@ -47,6 +47,7 @@ test('Render blueprint contains web + PostgreSQL only, health check and standard
   ]) {
     assert.match(source, new RegExp(`key:\\s*${key}[\\s\\S]*?sync:\\s*false`));
   }
+  assert.match(source, /key:\s*NODE_EXTRA_CA_CERTS[\s\S]*?value:\s*certs\/russian_trusted_root_ca_pem\.crt/);
 });
 
 test('client code does not read server secret environment variables', async () => {
