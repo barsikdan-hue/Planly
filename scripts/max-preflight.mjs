@@ -12,9 +12,10 @@ const me=await api('/me');
 if(me.is_bot!==true||me.username!=='se14310498_bot')throw new Error('MAX did not confirm the designated test bot.');
 console.log('PASS designated MAX bot identity');
 const snapshot=await api('/updates?types=bot_added,bot_started&timeout=0&limit=100');
+console.log(JSON.stringify({updateCount:(snapshot.updates??[]).length,types:[...new Set((snapshot.updates??[]).map(u=>u.update_type))]}));
 const ids=new Set();
 for(const update of snapshot.updates??[]){for(const id of[update.chat_id,update.chat?.chat_id,update.message?.recipient?.chat_id])if(Number.isSafeInteger(id)&&id!==0)ids.add(String(id));}
 let destination=null;
-for(const id of ids){const chat=await api(`/chats/${id}`);if(chat.link?.replace(/\/$/,'')===expectedLink){destination=id;console.log(JSON.stringify({chatId:id,title:chat.title,type:chat.type,status:chat.status,link:chat.link}));}}
+for(const id of ids){const chat=await api(`/chats/${id}`);console.log(JSON.stringify({candidateId:id,title:chat.title,type:chat.type,status:chat.status,publicLink:typeof chat.link==='string'&&chat.link.startsWith('https://max.ru/')?chat.link:null}));if(chat.link?.replace(/\/$/,'')===expectedLink){destination=id;console.log(JSON.stringify({chatId:id,title:chat.title,type:chat.type,status:chat.status,link:chat.link}));}}
 if(!destination)throw new Error('No update confirmed the supplied MAX destination link. A numeric chat_id or a fresh bot_added event is needed; no chat was guessed.');
 console.log(`MAX_TEST_CHAT_ID=${destination}`);
