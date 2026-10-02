@@ -36,7 +36,10 @@ const video=await upload('video.mp4','video/mp4');
 const second=await upload('photo2.png','image/png');
 const runLabel=`Planly test ${new Date().toISOString()}`;
 const evidence=[];
+const selected=(process.env.PLANLY_TELEGRAM_TEST_CASES ?? 'text,photo,video,album').split(',');
+await mkdir('artifacts',{recursive:true});
 for (const [label,mediaIds,delay] of [['text',[],0],['photo',[photo],0],['video',[video],0],['album',[photo,second],15_000]]) {
+  if (!selected.includes(label)) continue;
   const created=await api('/api/posts','POST',{baseText:`[ТЕСТ PLANLY] ${label}\n${runLabel}`,status:'READY',targets:[{provider:'telegram',textOverride:null,scheduledAt:new Date(Date.now()+delay).toISOString()}],mediaIds});
   const deadline=Date.now()+120_000;
   let post;
@@ -45,7 +48,7 @@ for (const [label,mediaIds,delay] of [['text',[],0],['photo',[photo],0],['video'
     post=snapshot.posts.find(p=>p.id===created.id);
     const state=post?.targets[0]?.publication?.status;
     if (state==='PUBLISHED') break;
-    if (state==='FAILED' || state==='REQUIRES_RECONNECT') throw new Error(`Live Telegram ${label} failed; inspect the publication's safe diagnostic in Planly.`);
+    if (state==='FAILED' || state==='REQUIRES_RECONNECT') throw new Error(`Live Telegram ${label} failed; ${state}; diagnostic: ${post?.targets[0]?.publication?.error === 'Private media could not be prepared for publication.' ? 'MEDIA_PREPARATION_FAILED' : post?.targets[0]?.publication?.error === 'Telegram rejected the destination, text or media. Check channel and provider limits.' ? 'TELEGRAM_400' : 'inspect safe database error code'}.`);
     await new Promise(resolve=>setTimeout(resolve,1000));
   }
   const publication=post?.targets[0]?.publication;
@@ -54,6 +57,7 @@ for (const [label,mediaIds,delay] of [['text',[],0],['photo',[photo],0],['video'
   assert.equal(fromServerPost(post).targets[0].status,'published');
   evidence.push({label,postId:post.id,remoteId:publication.remoteId,remoteUrl:publication.remoteUrl});
   console.log(`PASS Telegram ${label}: provider confirmation, stored ID and UI status`);
+  await writeFile('artifacts/telegram-live-evidence.json',JSON.stringify({commit:process.env.GITHUB_SHA,destination,canonicalChatId:connected.providerAccountId,evidence},null,2));
 }
 await mkdir('artifacts',{recursive:true});
 await writeFile('artifacts/telegram-live-evidence.json',JSON.stringify({commit:process.env.GITHUB_SHA,destination,canonicalChatId:connected.providerAccountId,evidence},null,2));

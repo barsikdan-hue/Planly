@@ -64,6 +64,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       PLANLY_TELEGRAM_TEST_CHANNEL: '@danil_sochi_realty'
       PLANLY_TELEGRAM_LIVE_TEST: confirmed-test-channel
+      PLANLY_TELEGRAM_TEST_CASES: video,album
       PLANLY_BASE_URL: http://localhost:3000
       PLANLY_OWNER_EMAIL: owner@example.test
       PLANLY_OWNER_PASSWORD: isolated-ci-owner-password-2026
@@ -108,7 +109,11 @@ jobs:
         run: docker compose --env-file .env.self-host up -d --build --wait --wait-timeout 120
       - name: Publish marked test messages through Planly API and worker
         run: node --experimental-strip-types tests/telegram-live-smoke.mjs
+      - name: Safe publication state diagnostics
+        if: failure()
+        run: docker compose --env-file .env.self-host exec -T postgres psql -U planly -d planly -c "SELECT status, normalized_error_type, provider_error_code, provider_remote_id FROM publications ORDER BY created_at;"
       - name: Save safe publication evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: telegram-live-${{ github.sha }}
