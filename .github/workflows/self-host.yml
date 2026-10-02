@@ -64,7 +64,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       PLANLY_TELEGRAM_TEST_CHANNEL: '@danil_sochi_realty'
       PLANLY_TELEGRAM_LIVE_TEST: confirmed-test-channel
-      PLANLY_TELEGRAM_TEST_CASES: video,album
+      PLANLY_TELEGRAM_TEST_CASES: photo,video,album
       PLANLY_BASE_URL: http://localhost:3000
       PLANLY_OWNER_EMAIL: owner@example.test
       PLANLY_OWNER_PASSWORD: isolated-ci-owner-password-2026

@@ -61,6 +61,19 @@ const upload = await api('/api/media', { method: 'POST', body: form });
 assert.equal(upload.status, 201);
 const media = await upload.json();
 
+function workerMediaBytes(mediaId) {
+  const code = `import { eq } from 'drizzle-orm';
+    import { getDb, closeDb } from './db/index.ts';
+    import { mediaAssets } from './db/schema.ts';
+    import { readMediaObjectBytes } from './lib/server/storage.ts';
+    const [asset] = await getDb().select().from(mediaAssets).where(eq(mediaAssets.id, ${JSON.stringify(mediaId)}));
+    console.log(Buffer.from(await readMediaObjectBytes(asset.storageKey, asset.byteSize)).toString('base64'));
+    await closeDb();`;
+  return Buffer.from(compose('exec', '-T', 'worker', 'node', '--experimental-strip-types', '--input-type=module', '-e', code).trim(), 'base64');
+}
+assert.deepEqual(workerMediaBytes(media.id), png, 'worker must read the actual private media bytes before provider handoff');
+console.log('PASS actual worker reads private object bytes');
+
 compose('stop', 'worker');
 assert.equal(compose('exec', '-T', 'redis', 'redis-cli', 'FLUSHDB').trim(), 'OK');
 compose('down'); // Named volumes intentionally preserved.
@@ -71,6 +84,7 @@ const snapshot = await (await api('/api/bootstrap')).json();
 assert.ok(snapshot.posts.some(post => post.id === future.id), 'schedule must survive full stack recreation');
 const restoredMedia = snapshot.media.find(item => item.id === media.id);
 assert.ok(restoredMedia, 'media metadata must survive');
+assert.deepEqual(workerMediaBytes(media.id), png, 'worker private media access must survive stack recreation');
 assert.deepEqual(Buffer.from(await (await fetch(restoredMedia.previewUrl)).arrayBuffer()), png, 'media bytes must survive');
 const recovered = publication(future.id);
 assert.equal(recovered.id, before.id);

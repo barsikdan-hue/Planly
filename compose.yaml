@@ -115,12 +115,19 @@ services:
     <<: *app
     environment:
       <<: *runtime-env
+      S3_ENDPOINT: http://storage:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-planly-media}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
     command: [node, --experimental-strip-types, worker/index.ts]
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     stop_grace_period: 60s
     restart: unless-stopped
 
