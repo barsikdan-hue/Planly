@@ -1,6 +1,6 @@
 # Planly: self-host build
 
-The existing Next.js server and standalone BullMQ worker run with PostgreSQL, Redis and private MinIO storage in Docker Compose. No Render worker or GitHub timer is required at runtime. **Telegram publication is implemented; real test-channel verification is tracked in docs/TELEGRAM_TEST.md.** Configure the bot token privately on web and worker and verify a channel through the UI. Without a token the registry keeps its explicit unsupported state. MAX remains unimplemented.
+The existing Next.js server and standalone BullMQ worker run with PostgreSQL, Redis and private MinIO storage in Docker Compose. No Render worker or GitHub timer is required at runtime. **Telegram publication is implemented; real group text/photo/video/album verification passed and is tracked in docs/TELEGRAM_TEST.md.** Configure the bot token privately on web and worker and verify a channel or administrator group through the UI. Without a token the registry keeps its explicit unsupported state. MAX remains unimplemented.
 
 ## First local launch
 
@@ -56,4 +56,4 @@ Successful runs upload `planly-build-<commit>` with `planly-build.tgz`: source a
 
 `tests/self-host-smoke.mjs` requires `PLANLY_SELF_HOST_TEST=isolated-ci` and localhost because it clears Redis and recreates containers. Never run it against personal data. Ordinary HTTP smoke: `tests/foundation-smoke.mjs`.
 
-Known limitations: the app image includes dev dependencies for migrations and historical Sites/Vinext packages; image-size cleanup is deferred. DNS/TLS/backups on the owner's server remain unverified until it is available. Telegram live test-channel delivery is the current gate, then MAX and AI.
+Known limitations: the app image includes dev dependencies for migrations and historical Sites/Vinext packages; image-size cleanup is deferred. DNS/TLS/backups on the owner's server remain unverified until it is available. Telegram live delivery passed; browser acceptance of the current interface remains before final build handoff, then MAX and AI.

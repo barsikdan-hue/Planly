@@ -1,0 +1,25 @@
+{
+  "commit": "b931a7a4dbe00ea19f333b3a9d03a5cd54dbf919",
+  "destination": "@danil_sochi_realty",
+  "canonicalChatId": "-1004390954741",
+  "evidence": [
+    {
+      "label": "photo",
+      "postId": "475cba28-ba5a-4446-bb37-4534f303c178",
+      "remoteId": "23",
+      "remoteUrl": "https://t.me/danil_sochi_realty/23"
+    },
+    {
+      "label": "video",
+      "postId": "8f49cdbc-0073-41f6-9b6d-d83e5cf59999",
+      "remoteId": "24",
+      "remoteUrl": "https://t.me/danil_sochi_realty/24"
+    },
+    {
+      "label": "album",
+      "postId": "a1873e55-7883-42a7-b481-80e30d882647",
+      "remoteId": "25,26",
+      "remoteUrl": "https://t.me/danil_sochi_realty/25"
+    }
+  ]
+}
