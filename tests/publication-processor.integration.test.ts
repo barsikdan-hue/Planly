@@ -131,3 +131,11 @@ test('processor passes ordered private media bytes to Telegram and stores confir
     assert.equal(stored.providerRemoteId,'101,102');
   } finally {server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve())); resetServerEnvForTests();}
 });
+
+test('unexpected connector exception after handoff is not eligible for a blind retry', async () => {
+  const result=await processPublication(publicationId,()=>({provider:'TELEGRAM',async publish(){throw new Error('token-bearing transport diagnostic');}}));
+  assert.equal(result.errorType,'PERMANENT');
+  const [row]=await getDb().select().from(publications).where(eq(publications.id,publicationId));
+  assert.equal(row.providerErrorCode,'AMBIGUOUS_DELIVERY');
+  assert.ok(!row.providerErrorMessage?.includes('token-bearing'));
+});
