@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
+import {createMaxConnector} from '../lib/server/connectors/max.ts';
 import {resolveConnector} from '../lib/server/connectors/registry.ts';
 import type {SocialConnector,PublishInput,PublishResult} from '../lib/server/connectors/types.ts';
 const token='MAX_TEST_ONLY_secret';
@@ -24,3 +25,20 @@ test('MAX invalid content is rejected before requests',async()=>{await wire(asyn
 for(const[status,errorType]of[[401,'AUTH'],[403,'AUTH'],[429,'TEMPORARY']] as const){test(`MAX HTTP${status} is safely normalized`,async()=>{await wire(async c=>{const r=await c.publish(input);assert.equal(r.ok,false);if(!r.ok)assert.equal(r.errorType,errorType);assert.ok(!JSON.stringify(r).includes(token));},()=>({status,body:{code:'error',message:token}}));});}
 test('MAX explicit attachment.not.ready is retryable, lost confirmation is ambiguous',async()=>{await wire(async c=>{const r=await c.publish(input);assert.equal(r.ok,false);if(!r.ok){assert.equal(r.errorType,'TEMPORARY');assert.equal(r.retryAfterMs,60000);}},()=>({status:400,body:{code:'attachment.not.ready',message:token}}));await wire(async c=>{const r=await c.publish(input);assert.equal(r.ok,false);if(!r.ok){assert.equal(r.code,'AMBIGUOUS_DELIVERY');assert.equal(r.errorType,'PERMANENT');}},()=>({body:{message:{...message.message,recipient:{chat_id:-999,chat_type:'chat'}}}}));});
 test('MAX unsafe upload URLs never receive private bytes or credentials',async()=>{for(const url of['http://iu.oneme.ru/uploadImage','https://127.0.0.1/uploadImage','https://iu.oneme.ru.evil.test/uploadImage','https://iu.oneme.ru:444/uploadImage','https://user:pass@iu.oneme.ru/uploadImage'])await wire(async(c,rs)=>{const r=await c.publish({...input,media:[{name:'x',mimeType:'image/png',bytes:new Uint8Array([1])}]});assert.equal(r.ok,false);assert.equal(rs.length,1);},()=>({body:{url}}));});
+
+test('MAX rejects private, inactive, unsafe ID and non-admin destination without fake connection',async()=>{
+ for(const change of[{type:'dialog'},{status:'left'},{chat_id:9007199254740992},{is_admin:false}])await wire(async c=>{
+  assert.equal(typeof c.validate,'function');const result=await c.validate!('-12345');assert.equal(result.ok,false);
+ },r=>{const response=validReply(r);if(r.url.pathname==='/chats/-12345')return {body:{...(response.body as object),...('is_admin' in change?{}:change)}};if(r.url.pathname.endsWith('/members/me')&&'is_admin' in change)return {body:{...(response.body as object),...change}};return response;});
+});
+
+test('MAX transport exceptions before upload and after message handoff have different retry outcomes',async()=>{
+ for(const media of[[],[{name:'p',mimeType:'image/png',bytes:new Uint8Array([1])}]])await wire(async c=>{
+  const isolated=createMaxConnector({token,fetcher:async()=>{throw new Error(`transport ${token}`);}});const result=await isolated.publish({...input,media});assert.equal(result.ok,false);
+  if(!result.ok)assert.equal(result.errorType,media.length?'TEMPORARY':'PERMANENT');assert.ok(!JSON.stringify(result).includes(token));
+ });
+});
+
+test('MAX confirmed ID does not invent a group URL or accept an unsafe provider link',async()=>{
+ for(const url of['https://evil.test/post','http://max.ru/post','https://user:pass@max.ru/post'])await wire(async c=>{assert.deepEqual(await c.publish(input),{ok:true,remoteId:'mid.test_42',remoteUrl:null});},()=>({body:{message:{...message.message,url}}}));
+});
