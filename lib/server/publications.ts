@@ -76,7 +76,8 @@ export async function reconcilePostPublicationsInTx(
     }
 
     const hasUnsafeTerminalHistory = targetPublications.some(row =>
-      row.status === 'PUBLISHING' || row.status === 'PUBLISHED' || row.status === 'REQUIRES_RECONNECT',
+      row.status === 'PUBLISHING' || row.status === 'PUBLISHED' || row.status === 'REQUIRES_RECONNECT' ||
+      (row.status === 'FAILED' && row.providerErrorCode === 'AMBIGUOUS_DELIVERY'),
     );
     if (hasUnsafeTerminalHistory) continue;
 

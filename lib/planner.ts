@@ -164,3 +164,7 @@ export function toPublishNowInput(post: Pick<Post,'text' | 'networks' | 'mediaId
   return {baseText:post.text,status:'READY',targets:post.networks.map(provider=>({provider,textOverride:post.overrides[provider] ?? null,
     scheduledAt:new Date(now).toISOString()})),mediaIds:[...post.mediaIds]};
 }
+
+export function hasPendingPublications(posts: Pick<Post,'targets'>[]): boolean {
+  return posts.some(post=>post.targets.some(target=>target.status === 'scheduled'));
+}

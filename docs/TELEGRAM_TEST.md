@@ -10,7 +10,7 @@ Supported: plain text (4096 UTF-16 units), PNG/JPEG photos (10 MiB), MP4 video (
 
 ## Authorized live test target
 
-Owner supplied `@danil_sochi_realty` on 2026-10-02. The isolated live job publishes explicitly marked `[ТЕСТ PLANLY]` text/photo/video/album messages only to this destination. Ordinary CI does not call Telegram; the live job runs only on a push whose commit message contains `[telegram-live]`. Do not use that label unintentionally.
+Owner supplied `@danil_sochi_realty` on 2026-10-02. The isolated live job publishes explicitly marked `[ТЕСТ PLANLY]` text/photo/video/album messages only to this destination. Ordinary CI does not call Telegram; the live job runs only on the first attempt of a push whose commit message contains `[telegram-live]`. Workflow reruns do not publish; another deliberate run requires a new explicit trigger commit. Do not use that label unintentionally.
 
 Before the live run, add the bot token to GitHub repository **Settings → Secrets and variables → Actions → New repository secret**, name `TELEGRAM_BOT_TOKEN`, and give the bot channel posting permission. An operator then creates the explicit live-test trigger commit on the approved branch. No main merge, paid Render worker or scheduled GitHub timer is needed: the actual Docker worker runs inside the disposable runner for this test.
 

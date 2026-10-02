@@ -14,7 +14,7 @@ import { Calendar } from './calendar';
 import { Content, MediaLibrary } from './library';
 import { SocialAccounts, Settings, Analytics } from './settings';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
-import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
+import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type Post, type Media, type Network, type Status } from '@/lib/planner';
 import type { SocialAccountDto } from '@/lib/contracts/planner';
 import {
     loadPlanner,
@@ -87,7 +87,7 @@ export default function PlannerApp() {
     useEffect(() => { const sync = () => { const hash = window.location.hash.slice(1); setView(navigation.some(n => n.id === hash) ? hash : 'dashboard'); }; sync(); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
     const navigate = useCallback((v: string) => { if (!navigation.some(n => n.id === v)) return; setView(v); window.location.hash = v; window.scrollTo({ top: 0, behavior: 'instant' }); }, []);
 
-    const hasScheduledPosts = data.posts.some(post=>post.status === 'scheduled');
+    const hasScheduledPosts = hasPendingPublications(data.posts);
     useEffect(()=>{
         if (!ready || !hasScheduledPosts) return;
         let active=true;

@@ -35,13 +35,15 @@ export async function reconcileScheduledJobs(
   const rows = await getDb().select({
     id: publications.id,
     scheduledAt: publications.scheduledAt,
+    nextRetryAt: publications.nextRetryAt,
   }).from(publications)
     .where(inArray(publications.status, ['SCHEDULED', 'QUEUED']));
 
   let enqueued = 0;
   for (const row of rows) {
     if (!row.scheduledAt) continue;
-    if (await operations.ensurePublicationJob(row.id, row.scheduledAt)) enqueued += 1;
+    const runAt = row.nextRetryAt && row.nextRetryAt > row.scheduledAt ? row.nextRetryAt : row.scheduledAt;
+    if (await operations.ensurePublicationJob(row.id, runAt)) enqueued += 1;
   }
 
   return { scanned: rows.filter(row => row.scheduledAt !== null).length, enqueued };
