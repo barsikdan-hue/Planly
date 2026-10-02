@@ -111,7 +111,7 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
       if (messages.length !== Math.max(1, media.length)) return ambiguous();
       const parsed = messages.map(value => ({ value: record(value), chat: record(record(value)?.chat) }));
       if (parsed.some(({ value, chat }) => !Number.isSafeInteger(value?.message_id) || Number(value?.message_id) <= 0 || !['channel', 'supergroup', 'group'].includes(String(chat?.type)) || !Number.isSafeInteger(chat?.id) || Number(chat?.id) >= 0 ||
-        (input.destinationId!.startsWith('@') ? `@${String(chat.username).toLowerCase()}` !== input.destinationId!.toLowerCase() : String(chat?.id) !== input.destinationId))) return ambiguous();
+        (input.destinationId!.startsWith('@') ? `@${String(chat?.username).toLowerCase()}` !== input.destinationId!.toLowerCase() : String(chat?.id) !== input.destinationId))) return ambiguous();
       const ids = parsed.map(({ value }) => String(value!.message_id));
       if (new Set(ids).size !== ids.length) return ambiguous();
       const chat = parsed[0].chat!;
