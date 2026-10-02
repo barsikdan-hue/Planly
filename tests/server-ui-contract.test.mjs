@@ -28,3 +28,14 @@ test('social and calendar surfaces contain MAX instead of VK or Instagram', asyn
   assert.doesNotMatch(`${settings}\n${calendar}`, /Instagram|\bVK\b|instagram|\bvk\b/);
   assert.match(`${settings}\n${calendar}`, /MAX/);
 });
+
+test('planner UI no longer describes provider publishing as Telegram-only or future-only', async () => {
+  const app = await read('components/planner/app.tsx');
+  const composer = await read('components/planner/composer.tsx');
+  const settings = await read('components/planner/settings.tsx');
+  const source = `${app}\n${composer}\n${settings}`;
+
+  assert.doesNotMatch(source, /Ждём подтверждения Telegram|Открыть в Telegram/);
+  assert.doesNotMatch(source, /отправку подключим следующим milestone|Реальная отправка в соцсети будет подключена следующим этапом/);
+  assert.match(source, /Telegram и MAX/);
+});
