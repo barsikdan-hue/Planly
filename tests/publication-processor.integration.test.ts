@@ -103,7 +103,11 @@ test('stale PUBLISHING is never blindly sent again', async () => {
 });
 
 
-test('processor passes ordered private media bytes to Telegram and stores confirmed ID', async () => {
+for (const provider of ['TELEGRAM','MAX'] as const) test(`processor passes ordered private media bytes to ${provider} and stores confirmed ID`, async () => {
+  if (provider === 'MAX') {
+    await getDb().update(socialAccounts).set({provider:'MAX'}).where(eq(socialAccounts.id,'processor-tg'));
+    await getDb().update(publications).set({provider:'MAX'}).where(eq(publications.id,publicationId));
+  }
   const { createServer } = await import('node:http');
   const { resetServerEnvForTests } = await import('../lib/server/env.ts');
   const requests: string[] = [];
@@ -123,7 +127,7 @@ test('processor passes ordered private media bytes to Telegram and stores confir
     ]);
     await getDb().insert(postMedia).values([{postId:'processor-post',mediaId:'processor-second',position:1},{postId:'processor-post',mediaId:'processor-first',position:0}]);
     let received: import('../lib/server/connectors/types.ts').PublishInput | undefined;
-    const result = await processPublication(publicationId, () => ({provider:'TELEGRAM',async publish(input) {received=input; return {ok:true,remoteId:'101,102'};}}));
+    const result = await processPublication(publicationId, () => ({provider,async publish(input) {received=input; return {ok:true,remoteId:'101,102'};}}));
     assert.equal(result.status,'PUBLISHED');
     assert.deepEqual(received?.media?.map(m=>[m.mimeType,[...m.bytes]]),[['image/png',[1]],['video/mp4',[2,3]]]);
     assert.deepEqual(requests,['/private/first','/private/second']);
