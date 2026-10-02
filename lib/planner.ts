@@ -47,8 +47,9 @@ export function validatePost(p: {
   networks: unknown[];
   date: string;
   time: string;
+  mediaIds?: string[];
 }, status: string, now = Date.now()): string | null {
-  if (!p.text.trim()) return 'Добавь текст публикации.';
+  if (!p.text.trim() && !p.mediaIds?.length) return 'Добавь текст публикации или медиа.';
   if (status === 'draft') return null;
   if (!p.networks.length) return 'Выбери хотя бы одну соцсеть.';
   if (status === 'scheduled') {

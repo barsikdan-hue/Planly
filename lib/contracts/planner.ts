@@ -8,7 +8,7 @@ export type PostStatus = z.infer<typeof postStatusSchema>;
 
 export const savePostInputSchema = z.object({
   title: z.string().trim().max(200).nullable().optional(),
-  baseText: z.string().trim().min(1).max(20_000),
+  baseText: z.string().trim().max(20_000),
   status: postStatusSchema,
   targets: z.array(z.object({
     provider: providerSchema,
@@ -22,6 +22,9 @@ export const savePostInputSchema = z.object({
     ids => new Set(ids).size === ids.length,
     'Duplicate media id',
   ),
+}).refine(input => input.baseText.length > 0 || input.mediaIds.length > 0, {
+  message: 'Add text or media to the post',
+  path: ['baseText'],
 });
 export type SavePostInput = z.infer<typeof savePostInputSchema>;
 

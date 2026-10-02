@@ -27,6 +27,26 @@ test('drafts may omit social networks and schedule, but still require content',(
  assert.equal(validatePost({text:'a draft',networks:[],date:'',time:''},'draft'),null);
 });
 
+test('media-only posts can be saved, published now and scheduled without a caption', async()=>{
+ const {toSavePostInput,toPublishNowInput}=await import('../lib/planner.ts');
+ const photo={text:'',networks:['telegram','max'],date:'2030-01-01',time:'12:00',mediaIds:['photo'],overrides:{}};
+ for(const status of ['draft','scheduled']) assert.equal(validatePost(photo,status,0),null);
+ assert.deepEqual(toSavePostInput(photo,'draft').mediaIds,['photo']);
+ const now=toPublishNowInput(photo,0);
+ assert.equal(now.baseText,'');
+ assert.deepEqual(now.targets.map(t=>t.provider),['telegram','max']);
+ assert.deepEqual(now.mediaIds,['photo']);
+});
+
+test('removing the last attachment still rejects a blank post and media does not bypass scheduling rules',()=>{
+ const photo={text:' \n ',networks:['telegram'],date:'2030-01-01',time:'12:00',mediaIds:['photo']};
+ assert.equal(validatePost(photo,'scheduled',0),null);
+ assert.ok(validatePost({...photo,mediaIds:[]},'draft',0));
+ assert.ok(validatePost({...photo,networks:[]},'scheduled',0));
+ assert.ok(validatePost({...photo,date:'2030-02-31'},'scheduled',0));
+ assert.ok(validatePost(photo,'scheduled',Date.parse('2031-01-01')));
+});
+
 test('confirmed Telegram publication and failed MAX remain independent in UI', async () => {
  const {fromServerPost}=await import('../lib/planner.ts');
  const post=fromServerPost({id:'real',title:null,baseText:'hello',status:'READY',mediaIds:[],createdAt:'2030-01-01T00:00:00Z',updatedAt:'2030-01-01T00:00:00Z',targets:[

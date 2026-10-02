@@ -103,7 +103,8 @@ test('stale PUBLISHING is never blindly sent again', async () => {
 });
 
 
-for (const provider of ['TELEGRAM','MAX'] as const) test(`processor passes ordered private media bytes to ${provider} and stores confirmed ID`, async () => {
+for (const provider of ['TELEGRAM','MAX'] as const) test(`processor passes captionless ordered private media bytes to ${provider} and stores confirmed ID`, async () => {
+  await getDb().update(posts).set({baseText:''}).where(eq(posts.id,'processor-post'));
   if (provider === 'MAX') {
     await getDb().update(socialAccounts).set({provider:'MAX'}).where(eq(socialAccounts.id,'processor-tg'));
     await getDb().update(publications).set({provider:'MAX'}).where(eq(publications.id,publicationId));
@@ -129,6 +130,7 @@ for (const provider of ['TELEGRAM','MAX'] as const) test(`processor passes order
     let received: import('../lib/server/connectors/types.ts').PublishInput | undefined;
     const result = await processPublication(publicationId, () => ({provider,async publish(input) {received=input; return {ok:true,remoteId:'101,102'};}}));
     assert.equal(result.status,'PUBLISHED');
+    assert.equal(received?.text,'');
     assert.deepEqual(received?.media?.map(m=>[m.mimeType,[...m.bytes]]),[['image/png',[1]],['video/mp4',[2,3]]]);
     assert.deepEqual(requests,['/private/first','/private/second']);
     const [stored] = await getDb().select().from(publications).where(eq(publications.id,publicationId));

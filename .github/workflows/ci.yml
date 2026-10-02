@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat/foundation-content-core, feat/scheduler, feat/self-host-build]
+    branches: [main, feat/foundation-content-core, feat/scheduler, feat/self-host-build, feat/telegram-max-ui-validation]
 
 jobs:
   verify:

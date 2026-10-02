@@ -7,6 +7,10 @@ import { ensureOwnerSocialAccounts } from '../lib/server/social-accounts.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
 import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { PATCH as postPATCH } from '../app/api/posts/[id]/route.ts';
+import { GET as postGET } from '../app/api/posts/route.ts';
+import { eq } from 'drizzle-orm';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 
 const ownerId = 'api-owner';
 let token = '';
@@ -31,7 +35,11 @@ beforeEach(async () => {
   await ensureOwnerSocialAccounts(ownerId);
   token = await createOwnerSession(ownerId);
 });
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeRedisConnection();
+  await closeDb();
+});
 
 test('bootstrap rejects unauthenticated requests and returns owner snapshot when authenticated', async () => {
   token = '';
@@ -77,6 +85,55 @@ test('unknown post is 404 and response does not expose stack or database interna
   assert.equal(response.status, 404);
   const text = await response.text();
   assert.doesNotMatch(text, /stack|postgres|select |update /i);
+});
+
+test('owner API saves captionless media, preserves it after reload and schedules independent targets', async () => {
+  await getDb().insert(mediaAssets).values({
+    id: 'api-photo', userId: ownerId, storageKey: 'owner/photo.png', originalName: 'photo.png',
+    mimeType: 'image/png', byteSize: 24, checksum: 'test-photo',
+  });
+  const input = { baseText: '', status: 'DRAFT', targets: [], mediaIds: ['api-photo'] };
+  const create = await postsPOST(request('/api/posts', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+  }));
+  assert.equal(create.status, 201);
+  const created = await create.json();
+  const ready = { ...input, status: 'READY', targets: ['telegram', 'max'].map(provider => ({
+    provider, textOverride: null, scheduledAt: '2030-01-01T09:00:00.000Z',
+  })) };
+  const update = await postPATCH(request(`/api/posts/${created.id}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ready),
+  }), { params: Promise.resolve({ id: created.id }) });
+  assert.equal(update.status, 200);
+  const snapshot = await (await postGET(request('/api/posts'))).json();
+  assert.equal(snapshot.length, 1);
+  assert.equal(snapshot[0].baseText, '');
+  assert.deepEqual(snapshot[0].mediaIds, ['api-photo']);
+  assert.deepEqual(snapshot[0].targets.map((t: { provider: string }) => t.provider), ['telegram', 'max']);
+  const queued = await getDb().select().from(publications).where(eq(publications.postId, created.id));
+  assert.deepEqual(queued.map(p => p.provider).sort(), ['MAX', 'TELEGRAM']);
+  assert.ok(queued.every(p => p.status === 'SCHEDULED'));
+  const removeLast = await postPATCH(request(`/api/posts/${created.id}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...input, mediaIds: [] }),
+  }), { params: Promise.resolve({ id: created.id }) });
+  assert.equal(removeLast.status, 422);
+  assert.deepEqual((await (await postGET(request('/api/posts'))).json())[0].mediaIds, ['api-photo']);
+});
+
+test('captionless media cannot bypass ownership or refer to missing assets', async () => {
+  await getDb().insert(users).values({ id: 'other-api-owner', email: 'other@example.test', displayName: 'Other' });
+  await getDb().insert(mediaAssets).values({
+    id: 'foreign-api-photo', userId: 'other-api-owner', storageKey: 'other/photo.png', originalName: 'photo.png',
+    mimeType: 'image/png', byteSize: 24, checksum: 'foreign-photo',
+  });
+  for (const id of ['foreign-api-photo', 'missing-photo']) {
+    const response = await postsPOST(request('/api/posts', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseText: '', status: 'DRAFT', targets: [], mediaIds: [id] }),
+    }));
+    assert.equal(response.status, 404);
+  }
+  assert.deepEqual(await (await postGET(request('/api/posts'))).json(), []);
 });
 
 test('Telegram connection verifies channel posting permissions before exposing CONNECTED', async () => {

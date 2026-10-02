@@ -82,6 +82,36 @@ test('Telegram mixed album preserves attachment order, first caption and all rem
   }, () => ({ body: { ok: true, result: [message(42), message(43)] } }));
 });
 
+for (const [method, media] of [
+  ['sendPhoto', [{ name: 'photo.png', mimeType: 'image/png', bytes: new Uint8Array([1]) }]],
+  ['sendVideo', [{ name: 'video.mp4', mimeType: 'video/mp4', bytes: new Uint8Array([2]) }]],
+  ['sendMediaGroup', [
+    { name: 'first.png', mimeType: 'image/png', bytes: new Uint8Array([1]) },
+    { name: 'second.png', mimeType: 'image/png', bytes: new Uint8Array([2]) },
+  ]],
+] as const) {
+  test(`Telegram ${method} sends media without a caption and confirms delivery`, async () => {
+    await wire(async (connector, requests) => {
+      const result = await connector.publish({ ...input, text: '', media: [...media] });
+      assert.equal(result.ok, true);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].method, method);
+      const form = requests[0].body as FormData;
+      assert.equal(form.get('chat_id'), '-100123');
+      if (method === 'sendMediaGroup') {
+        assert.deepEqual(JSON.parse(String(form.get('media'))), [
+          { type: 'photo', media: 'attach://media0', caption: '' },
+          { type: 'photo', media: 'attach://media1' },
+        ]);
+      } else {
+        assert.equal(form.get('caption'), '');
+        assert.deepEqual([...new Uint8Array(await (form.get(method === 'sendPhoto' ? 'photo' : 'video') as File).arrayBuffer())], method === 'sendPhoto' ? [1] : [2]);
+      }
+      if (result.ok) assert.equal(result.remoteId, media.length === 2 ? '42,43' : '42');
+    }, () => ({ body: { ok: true, result: media.length === 2 ? [message(42), message(43)] : message(42) } }));
+  });
+}
+
 test('Telegram invalid destination, limits and unsupported media reject before any provider request', async () => {
   await wire(async (connector, requests) => {
     const cases: PublishInput[] = [

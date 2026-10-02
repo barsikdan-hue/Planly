@@ -73,7 +73,7 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
     async publish(input: PublishInput): Promise<PublishResult> {
       if (input.provider !== 'TELEGRAM' || !validDestination(input.destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a valid connected Telegram channel or group.');
       const media = input.media ?? [];
-      if (media.length > 10 || !input.text.trim() || input.text.length > (media.length ? 1024 : 4096)) {
+      if (media.length > 10 || (!media.length && !input.text.trim()) || input.text.length > (media.length ? 1024 : 4096)) {
         return failure('VALIDATION', 'TELEGRAM_CONTENT_LIMIT', 'Telegram supports text up to 4096 characters, media captions up to 1024 and albums up to 10 items.');
       }
       for (const asset of media) {
