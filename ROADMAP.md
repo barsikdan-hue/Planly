@@ -17,7 +17,7 @@ TESTED
 - Verified source + compiled Next.js build artifact was emitted after the successful container smoke. Latest branch CI artifacts provide the exact tested commit. Initialization also rejects malformed emails containing backslashes to preserve dotenv quoting.
 
 KNOWN ISSUES
-- Telegram/MAX remain unimplemented; no real delivery is claimed.
+- Telegram text/photo/video/album connector is implemented and wired to the existing queue and UI; real test-channel verification is still pending. MAX remains unimplemented.
 - AI and real analytics remain later phases.
 - Owner-server DNS/TLS and backups have not yet been deployed.
 
@@ -26,9 +26,10 @@ TECH DEBT
 - Ambiguous provider-handoff delivery requires review, never blind resend.
 - Historical baseline files describe earlier checkpoints; current code/CI supersede their runtime statements.
 
-BLOCKER for real publishing: Telegram implementation and real test-channel verification.
+BLOCKER for Phase 4 completion: privately configured bot token, verified channel posting rights and real test-channel end-to-end confirmation.
 ACTIVE MILESTONE: Phase 4 — Telegram validation, text/media delivery and end-to-end verification.
 USER DECISION (2026-10-01): resume the roadmap at Telegram publication tests; online verification precedes downloading the final working build. Packaging is not a substitute for completing this phase.
 IMPLEMENTATION PLAN: docs/superpowers/plans/2026-10-01-telegram-publication.md.
-CURRENT CHECKPOINT: scheduler verified; Telegram registry is still a placeholder, so real Telegram delivery is not yet tested.
+CURRENT CHECKPOINT: Telegram connector has 13 wire tests; integration regressions for media/permissions/retry delay/UI were reproduced and implemented. Full final CI and live Telegram gate remain to verify.
+LIVE TARGET: @danil_sochi_realty (owner-supplied); instructions: docs/TELEGRAM_TEST.md.
 NEXT PHASE: MAX after Telegram stability; AI after reliable publication.

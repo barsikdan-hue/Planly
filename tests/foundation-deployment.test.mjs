@@ -17,7 +17,7 @@ const requiredEnv = [
   'S3_ACCESS_KEY_ID',
   'S3_SECRET_ACCESS_KEY',
   'REDIS_URL',
-  'NODE_ENV',
+  'NODE_ENV', 'TELEGRAM_BOT_TOKEN',
 ];
 
 test('.env.example lists required server variables with blank values only', async () => {

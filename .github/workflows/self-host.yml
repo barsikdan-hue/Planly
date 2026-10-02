@@ -54,3 +54,51 @@ jobs:
       - name: Stop isolated stack
         if: always()
         run: docker compose --env-file .env.self-host down --volumes --remove-orphans
+
+  telegram-live:
+    # An explicit commit label is the one-time trigger. Ordinary CI never publishes.
+    if: contains(github.event.head_commit.message, '[telegram-live]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PLANLY_TELEGRAM_TEST_CHANNEL: '@danil_sochi_realty'
+      PLANLY_TELEGRAM_LIVE_TEST: confirmed-test-channel
+      PLANLY_BASE_URL: http://localhost:3000
+      PLANLY_OWNER_EMAIL: owner@example.test
+      PLANLY_OWNER_PASSWORD: isolated-ci-owner-password-2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Require privately configured bot token
+        run: node -e "if (!process.env.TELEGRAM_BOT_TOKEN) {console.error('Configure TELEGRAM_BOT_TOKEN in repository Actions secrets.'); process.exit(1)}"
+      - name: Initialize isolated credentials
+        run: printf '%s' "$PLANLY_OWNER_PASSWORD" | node --experimental-strip-types scripts/init-self-host.mjs --email "$PLANLY_OWNER_EMAIL"
+      - name: Generate disposable photo and video fixtures
+        run: |
+          mkdir -p artifacts/telegram-fixtures
+          python - <<'PYTHON'
+          import struct,zlib,pathlib
+          def chunk(kind,data):
+              return struct.pack('!I',len(data))+kind+data+struct.pack('!I',zlib.crc32(kind+data)&0xffffffff)
+          for name,color in [('photo.png',(30,130,200)),('photo2.png',(100,60,170))]:
+              pixels=(b'\0'+bytes(color)*640)*640
+              data=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!IIBBBBB',640,640,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(pixels))+chunk(b'IEND',b'')
+              pathlib.Path('artifacts/telegram-fixtures/'+name).write_bytes(data)
+          PYTHON
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=640x480:d=2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/telegram-fixtures/video.mp4
+      - name: Build and start the actual worker stack
+        run: docker compose --env-file .env.self-host up -d --build --wait --wait-timeout 120
+      - name: Publish marked test messages through Planly API and worker
+        run: node --experimental-strip-types tests/telegram-live-smoke.mjs
+      - name: Save safe publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-live-${{ github.sha }}
+          path: artifacts/telegram-live-evidence.json
+          retention-days: 3
+      - name: Stop disposable stack
+        if: always()
+        run: docker compose --env-file .env.self-host down --volumes --remove-orphans

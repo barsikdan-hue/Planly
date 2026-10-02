@@ -10,3 +10,5 @@ work
 artifacts
 tsconfig.tsbuildinfo
 *.log
+
+.superpowers
