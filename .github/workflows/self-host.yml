@@ -74,6 +74,17 @@ jobs:
           node-version: 22.13.0
       - name: Require privately configured bot token
         run: node -e "if (!process.env.TELEGRAM_BOT_TOKEN) {console.error('Configure TELEGRAM_BOT_TOKEN in repository Actions secrets.'); process.exit(1)}"
+      - name: Validate bot and test channel before building
+        run: |
+          node --experimental-strip-types --input-type=module <<'JAVASCRIPT'
+          import { createTelegramConnector } from './lib/server/connectors/telegram.ts';
+          const result = await createTelegramConnector({token:process.env.TELEGRAM_BOT_TOKEN ?? ''}).validate(process.env.PLANLY_TELEGRAM_TEST_CHANNEL);
+          if (!result.ok) {
+            console.error(`Telegram preflight: ${result.code} — ${result.message}`);
+            process.exit(1);
+          }
+          console.log('PASS Telegram bot identity, channel type and posting permission');
+          JAVASCRIPT
       - name: Initialize isolated credentials
         run: printf '%s' "$PLANLY_OWNER_PASSWORD" | node --experimental-strip-types scripts/init-self-host.mjs --email "$PLANLY_OWNER_EMAIL"
       - name: Install video fixture generator
