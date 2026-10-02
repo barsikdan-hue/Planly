@@ -50,3 +50,17 @@ test('client code does not read server secret environment variables', async () =
   const source = (await Promise.all(paths.map(read))).join('\n');
   assert.doesNotMatch(source, /process\.env\.(DATABASE_URL|OWNER_PASSWORD_HASH|SESSION_SECRET|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY|REDIS_URL)/);
 });
+
+test('MAX live E2E proof goes through Planly API, private storage, queue and worker', async () => {
+  const workflow = await read('.github/workflows/max-live-media.yml');
+  const script = await read('scripts/max-live-planly-e2e.mjs');
+
+  assert.match(workflow, /max-live-planly-e2e\.mjs/);
+  assert.match(workflow, /\[max-live-planly-e2e\]/);
+  assert.match(script, /app\/api\/media\/route\.ts/);
+  assert.match(script, /app\/api\/posts\/route\.ts/);
+  assert.match(script, /startPublicationWorker/);
+  assert.match(script, /getPublicationQueue\(\)\.obliterate/);
+  assert.match(script, /remoteId/);
+  assert.doesNotMatch(script, /connector\.publish\(/);
+});
