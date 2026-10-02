@@ -15,9 +15,12 @@ const subscriptions=await api('/subscriptions');
 console.log(JSON.stringify({webhookCount:(subscriptions.subscriptions??[]).length}));
 const snapshot=await api('/updates?timeout=0&limit=100');
 console.log(JSON.stringify({updateCount:(snapshot.updates??[]).length,types:[...new Set((snapshot.updates??[]).map(u=>u.update_type))]}));
-const ids=new Set();
+// Candidate supplied by owner screenshot; still require exact destination link confirmation.
+const ids=new Set(['-78857616977254']);
 for(const update of snapshot.updates??[]){for(const id of[update.chat_id,update.chat?.chat_id,update.message?.recipient?.chat_id])if(Number.isSafeInteger(id)&&id!==0)ids.add(String(id));}
 let destination=null;
 for(const id of ids){const chat=await api(`/chats/${id}`);console.log(JSON.stringify({candidateId:id,title:chat.title,type:chat.type,status:chat.status,publicLink:typeof chat.link==='string'&&chat.link.startsWith('https://max.ru/')?chat.link:null}));if(chat.link?.replace(/\/$/,'')===expectedLink){destination=id;console.log(JSON.stringify({chatId:id,title:chat.title,type:chat.type,status:chat.status,link:chat.link}));}}
 if(!destination)throw new Error('No update confirmed the supplied MAX destination link. A numeric chat_id or a fresh bot_added event is needed; no chat was guessed.');
+const member=await api(`/chats/${destination}/members/me`);
+console.log(JSON.stringify({memberMatchesBot:member.user_id===me.user_id,isBot:member.is_bot,isAdmin:member.is_admin,isOwner:member.is_owner,permissions:member.permissions}));
 console.log(`MAX_TEST_CHAT_ID=${destination}`);
