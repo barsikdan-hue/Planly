@@ -42,3 +42,15 @@ test('another owner cannot toggle a guessed social account id', async () => {
   const unchanged = (await listSocialAccounts(ownerA)).find(x => x.id === accountA.id);
   assert.equal(unchanged?.enabled, false);
 });
+
+test('MAX owner connection validates remote bot and chat before persisting canonical destination', async()=>{
+ const {connectTelegramAccount}=await import('../lib/server/social-accounts.ts');
+ await ensureOwnerSocialAccounts(ownerA);const account=(await listSocialAccounts(ownerA)).find(x=>x.provider==='max')!;
+ const original=globalThis.fetch;const previous=process.env.MAX_BOT_TOKEN;process.env.MAX_BOT_TOKEN='MAX_test_only';let calls=0;
+ globalThis.fetch=async url=>{calls++;const path=new URL(String(url)).pathname;return Response.json(path==='/me'?{user_id:7,is_bot:true,username:'test_bot'}:path.endsWith('/members/me')?{user_id:7,is_bot:true,is_admin:true,permissions:['write']}:{chat_id:-12345,type:'chat',status:'active',title:'MAX test'});};
+ try{
+  const result=await connectTelegramAccount(ownerA,account.id,'-12345');
+  assert.ok(!('ok' in result));if(!('ok' in result)){assert.equal(result.connectionStatus,'CONNECTED');assert.equal(result.providerAccountId,'-12345');}
+  assert.equal(calls,3);await assert.rejects(()=>connectTelegramAccount(ownerB,account.id,'-12345'),/not found/i);assert.equal(calls,3);
+ }finally{globalThis.fetch=original;if(previous===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=previous;}
+});

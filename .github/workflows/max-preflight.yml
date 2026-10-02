@@ -1,0 +1,20 @@
+name: MAX read-only preflight
+on:
+  push:
+    branches: [feat/self-host-build]
+permissions:
+  contents: read
+jobs:
+  max-preflight:
+    if: github.run_attempt == 1 && contains(github.event.head_commit.message, '[max-preflight]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Read bot identity and match destination update
+        run: node scripts/max-preflight.mjs
