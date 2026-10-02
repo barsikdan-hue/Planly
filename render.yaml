@@ -25,6 +25,8 @@ services:
         sync: false
       - key: S3_ENDPOINT
         sync: false
+      - key: S3_PUBLIC_ENDPOINT
+        sync: false
       - key: S3_REGION
         sync: false
       - key: S3_BUCKET
@@ -32,6 +34,10 @@ services:
       - key: S3_ACCESS_KEY_ID
         sync: false
       - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: MAX_BOT_TOKEN
         sync: false
       - key: SCHEDULER_TICK_SECRET
         sync: false
