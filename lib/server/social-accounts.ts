@@ -1,6 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
+import { createTelegramConnector } from './connectors/telegram.ts';
 import { socialAccounts } from '../../db/schema.ts';
 import { fromDbProvider, type SocialAccountDto } from '../contracts/planner.ts';
 
@@ -57,4 +58,18 @@ export async function setSocialAccountEnabled(
     .returning();
   if (!row) throw new Error('Social account not found');
   return toDto(row);
+}
+
+
+export async function connectTelegramAccount(userId: string, accountId: string, destinationId: string): Promise<SocialAccountDto | {ok:false;message:string}> {
+  const db = getDb();
+  const [account] = await db.select().from(socialAccounts).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,userId))).limit(1);
+  if (!account) throw new Error('Social account not found');
+  if (account.provider !== 'TELEGRAM') return {ok:false,message:'MAX connection is not implemented yet.'};
+  const result = await createTelegramConnector({token:process.env.TELEGRAM_BOT_TOKEN ?? ''}).validate(destinationId);
+  if (!result.ok) return {ok:false,message:result.message};
+  const [updated] = await db.update(socialAccounts).set({providerAccountId:result.destinationId,displayName:result.displayName,
+    connectionStatus:'CONNECTED',enabled:true,updatedAt:new Date()}).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,userId))).returning();
+  if (!updated) throw new Error('Social account not found');
+  return toDto(updated);
 }

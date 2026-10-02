@@ -117,3 +117,26 @@ export function getObjectStorage(): ObjectStorage {
   storage ??= createS3Storage();
   return storage;
 }
+
+
+// Worker reads the internal endpoint; browser/public preview URLs are never followed.
+export async function readMediaObjectBytes(key: string, expectedSize: number): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(expectedSize) || expectedSize < 1 || expectedSize > 20 * 1024 * 1024) throw new Error('Invalid stored media size');
+  const config = getStorageEnv();
+  const url = presignedGet({...config, S3_PUBLIC_ENDPOINT: undefined}, key, 60);
+  const response = await fetch(url, {redirect:'error', signal:AbortSignal.timeout(30_000)});
+  if (!response.ok || !response.body) throw new Error('Private media is unavailable');
+  const reader = response.body.getReader();
+  const result = new Uint8Array(expectedSize);
+  let offset = 0;
+  try {
+    while (true) {
+      const {done,value} = await reader.read();
+      if (done) break;
+      if (offset + value.length > expectedSize) throw new Error('Stored media size mismatch');
+      result.set(value,offset); offset += value.length;
+    }
+    if (offset !== expectedSize) throw new Error('Stored media size mismatch');
+    return result;
+  } finally {await reader.cancel().catch(()=>{}); reader.releaseLock();}
+}

@@ -25,14 +25,14 @@ const socialAccounts: SocialAccountDto[] = [
     { id: 'max', provider: 'max', providerAccountId: null, displayName: 'MAX', enabled: false, connectionStatus: 'DISCONNECTED' },
 ];
 const noop = () => { };
-const composer = { draft: blankPost(), setDraft: noop, media: [], upload: async () => [], save: noop, accounts };
+const composer = { draft: blankPost(), setDraft: noop, media: [], upload: async () => [], save: noop, publishNow: noop, accounts };
 const screens = [
     ['Главная', <Dashboard key="dashboard" posts={posts} media={[]} accounts={accounts} navigate={noop} openPost={noop} composer={composer} name="Данил"/>, 'Хорошего дня, Данил!'],
     ['Редактор', <Composer key="composer" {...composer}/>, 'Предпросмотр'],
     ['Календарь', <Calendar key="calendar" posts={posts} openPost={noop} createPost={noop} reschedule={noop}/>, 'Календарь'],
     ['Контент', <Content key="content" posts={posts} media={[]} query="" setQuery={noop} openPost={noop} editPost={noop} deletePost={noop} duplicatePost={noop} create={noop}/>, '3 ошибки при покупке'],
     ['Медиа', <MediaLibrary key="media" media={[]} upload={async () => []} remove={noop} useMedia={noop}/>, 'Медиатека'],
-    ['Соцсети', <SocialAccounts key="socials" accounts={socialAccounts} toggle={noop}/>, 'Не подключено'],
+    ['Соцсети', <SocialAccounts key="socials" accounts={socialAccounts} toggle={noop} connect={async()=>{}}/>, 'Не подключено'],
     ['Аналитика', <Analytics key="analytics" posts={posts}/>, 'Демонстрационные цифры'],
     ['Настройки', <Settings key="settings" name="Данил" saveName={noop}/>, 'Как к тебе обращаться'],
 ] as const;

@@ -1,3 +1,4 @@
+import { createTelegramConnector } from './telegram.ts';
 import type { SocialConnector, SocialProvider } from './types.ts';
 
 function notImplementedConnector(provider: SocialProvider): SocialConnector {
@@ -15,5 +16,6 @@ function notImplementedConnector(provider: SocialProvider): SocialConnector {
 }
 
 export function resolveConnector(provider: SocialProvider): SocialConnector {
+  if (provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN) return createTelegramConnector({token:process.env.TELEGRAM_BOT_TOKEN});
   return notImplementedConnector(provider);
 }

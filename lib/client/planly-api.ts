@@ -96,3 +96,8 @@ export async function uploadMedia(file: File): Promise<MediaAssetWithPreview> {
 export function removeMedia(id: string): Promise<void> {
   return request(`/api/media/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+
+export function connectTelegramAccount(id: string, destinationId: string): Promise<SocialAccountDto> {
+  return request(`/api/social-accounts/${encodeURIComponent(id)}`,jsonRequest('PATCH',{destinationId}));
+}

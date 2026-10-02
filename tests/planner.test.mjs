@@ -38,3 +38,12 @@ test('confirmed Telegram publication and failed MAX remain independent in UI', a
  assert.equal(post.targets[1].error,'Provider unavailable');
  assert.equal(post.status,'failed');
 });
+
+test('publish now creates READY targets at the supplied time for the same queue path', async()=>{
+ const planner=await import('../lib/planner.ts');
+ assert.equal(typeof planner.toPublishNowInput,'function');
+ const input=planner.toPublishNowInput({text:'now',networks:['telegram'],mediaIds:['photo'],overrides:{telegram:'specific'}},Date.parse('2030-01-01T09:12:34Z'));
+ assert.equal(input.status,'READY');
+ assert.deepEqual(input.targets,[{provider:'telegram',textOverride:'specific',scheduledAt:'2030-01-01T09:12:34.000Z'}]);
+ assert.deepEqual(input.mediaIds,['photo']);
+});

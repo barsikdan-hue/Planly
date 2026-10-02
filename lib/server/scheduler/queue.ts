@@ -3,7 +3,7 @@ import { getRedisConnection } from './redis.ts';
 
 export const PUBLICATION_QUEUE_NAME = 'planly-publications';
 export const PUBLICATION_MAX_ATTEMPTS = 5;
-export type PublicationJob = { publicationId: string };
+export type PublicationJob = { publicationId: string; retryDelayMs?: number };
 
 let publicationQueue: Queue<PublicationJob> | undefined;
 

@@ -19,6 +19,8 @@ export type Post = {
   targets: {
     network: Network;
     status: Status;
+    remoteUrl?: string | null;
+    error?: string | null;
   }[];
   mediaIds: string[];
   overrides: Partial<Record<Network, string>>;
@@ -111,7 +113,17 @@ export function fromServerPost(input: PostDto): Post {
   const firstSchedule = input.targets.map(target => target.scheduledAt).find(Boolean) ?? null;
   const schedule = moscowParts(firstSchedule) ?? { date: day(1), time: '10:00' };
   const networks = input.targets.map(target => target.provider);
-  const status: Status = input.status === 'READY' ? 'scheduled' : 'draft';
+  const targets = input.targets.map(target => {
+    const publication = target.publication;
+    const status: Status = publication?.status === 'PUBLISHED' && publication.remoteId ? 'published'
+      : publication?.status === 'FAILED' || publication?.status === 'REQUIRES_RECONNECT' ? 'failed'
+      : publication?.status === 'CANCELLED' ? 'draft'
+      : input.status === 'READY' ? 'scheduled' : 'draft';
+    return { network: target.provider, status, remoteUrl: publication?.remoteUrl, error: publication?.error };
+  });
+  const status: Status = targets.some(target => target.status === 'failed') ? 'failed'
+    : targets.length > 0 && targets.every(target => target.status === 'published') ? 'published'
+    : targets.some(target => target.status === 'scheduled') ? 'scheduled' : 'draft';
   const overrides: Partial<Record<Network, string>> = {};
   for (const target of input.targets) {
     if (target.textOverride !== null) overrides[target.provider] = target.textOverride;
@@ -123,7 +135,7 @@ export function fromServerPost(input: PostDto): Post {
     date: schedule.date,
     time: schedule.time,
     status,
-    targets: networks.map(network => ({ network, status })),
+    targets,
     mediaIds: [...input.mediaIds],
     overrides,
   };
@@ -145,4 +157,10 @@ export function toSavePostInput(post: Post, status: 'draft' | 'scheduled'): Save
 
 export function seedPosts(): Post[] {
   return [];
+}
+
+
+export function toPublishNowInput(post: Pick<Post,'text' | 'networks' | 'mediaIds' | 'overrides'>, now = Date.now()): SavePostInput {
+  return {baseText:post.text,status:'READY',targets:post.networks.map(provider=>({provider,textOverride:post.overrides[provider] ?? null,
+    scheduledAt:new Date(now).toISOString()})),mediaIds:[...post.mediaIds]};
 }

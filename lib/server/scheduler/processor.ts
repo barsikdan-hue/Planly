@@ -1,13 +1,15 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
-import { posts, postTargets, publications, socialAccounts } from '../../../db/schema.ts';
+import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../../db/schema.ts';
 import { resolveConnector as resolveRegisteredConnector } from '../connectors/registry.ts';
+import { readMediaObjectBytes } from '../storage.ts';
 import type { ConnectorResolver, PublicationErrorType, PublishInput } from '../connectors/types.ts';
 
 export type ProcessPublicationResult = {
   status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_RECONNECT';
   skipped?: boolean;
   errorType?: PublicationErrorType;
+  retryAfterMs?: number;
 };
 
 async function readPublication(publicationId: string) {
@@ -31,6 +33,7 @@ async function markFailure(
   errorType: PublicationErrorType,
   code: string | null,
   message: string,
+  retryAfterMs?: number,
 ): Promise<ProcessPublicationResult> {
   const status = errorType === 'AUTH' ? 'REQUIRES_RECONNECT' : 'FAILED';
   await getDb().update(publications).set({
@@ -41,7 +44,11 @@ async function markFailure(
     nextRetryAt: null,
     updatedAt: new Date(),
   }).where(eq(publications.id, publicationId));
-  return { status, errorType };
+  if (errorType === 'AUTH') {
+    const row = await readPublication(publicationId);
+    await getDb().update(socialAccounts).set({connectionStatus:'ERROR',updatedAt:new Date()}).where(eq(socialAccounts.id,row.account.id));
+  }
+  return { status, errorType, retryAfterMs };
 }
 
 export async function processPublication(
@@ -93,15 +100,32 @@ export async function processPublication(
     text,
   };
 
+  let handedOff = false;
   try {
+    if (resolveConnector === resolveRegisteredConnector && row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN &&
+      (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
+      return markFailure(publicationId,'AUTH','TELEGRAM_DISCONNECTED','Reconnect and enable the Telegram channel before publishing.');
+    }
+    // MAX remains unsupported and must not fetch media unnecessarily.
+    if (row.publication.provider === 'TELEGRAM') {
+      const mediaRows = await getDb().select({asset:mediaAssets}).from(postMedia)
+        .innerJoin(mediaAssets,eq(postMedia.mediaId,mediaAssets.id))
+        .where(and(eq(postMedia.postId,row.post.id),eq(mediaAssets.userId,row.publication.userId)))
+        .orderBy(asc(postMedia.position));
+      const media: NonNullable<PublishInput['media']> = [];
+      for (const {asset} of mediaRows) media.push({name:asset.originalName,mimeType:asset.mimeType,
+        bytes:await readMediaObjectBytes(asset.storageKey,asset.byteSize),width:asset.width,height:asset.height});
+      input.media = media;
+    }
     const connector = resolveConnector(row.publication.provider);
     if (connector.provider !== row.publication.provider) {
       return markFailure(publicationId, 'PERMANENT', 'CONNECTOR_PROVIDER_MISMATCH', 'Connector provider mismatch.');
     }
 
+    handedOff = true;
     const result = await connector.publish(input);
     if (!result.ok) {
-      return markFailure(publicationId, result.errorType, result.code ?? null, result.message);
+      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs);
     }
 
     if (!result.remoteId.trim()) {
@@ -120,12 +144,12 @@ export async function processPublication(
       updatedAt: new Date(),
     }).where(eq(publications.id, publicationId));
     return { status: 'PUBLISHED' };
-  } catch (error) {
+  } catch {
     return markFailure(
       publicationId,
-      'TEMPORARY',
-      'CONNECTOR_EXCEPTION',
-      error instanceof Error ? error.message : 'Connector failed unexpectedly.',
+      handedOff ? 'PERMANENT' : 'TEMPORARY',
+      handedOff ? 'AMBIGUOUS_DELIVERY' : 'MEDIA_PREPARATION_FAILED',
+      handedOff ? 'Provider delivery outcome is unknown. Check the channel before sending again.' : 'Private media could not be prepared for publication.',
     );
   }
 }

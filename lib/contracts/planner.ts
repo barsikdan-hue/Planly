@@ -25,9 +25,17 @@ export const savePostInputSchema = z.object({
 });
 export type SavePostInput = z.infer<typeof savePostInputSchema>;
 
+export type PublicationDto = {
+  status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_RECONNECT';
+  remoteId: string | null;
+  remoteUrl: string | null;
+  error: string | null;
+};
+
 export type PostTargetDto = {
   id: string;
   socialAccountId: string;
+  publication?: PublicationDto | null;
   provider: Provider;
   textOverride: string | null;
   scheduledAt: string | null;

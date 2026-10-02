@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
-import { mediaAssets, postMedia, posts, postTargets, socialAccounts } from '../../db/schema.ts';
+import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import {
   fromDbProvider,
   savePostInputSchema,
@@ -50,9 +50,20 @@ async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
     .where(eq(postMedia.postId, postId))
     .orderBy(asc(postMedia.position));
 
+  const publicationRows = await db.select().from(publications)
+    .where(and(eq(publications.postId, postId), eq(publications.userId, userId)))
+    .orderBy(desc(publications.createdAt), desc(publications.id));
+  const latestByTarget = new Map<string, typeof publications.$inferSelect>();
+  for (const row of publicationRows) if (!latestByTarget.has(row.postTargetId)) latestByTarget.set(row.postTargetId, row);
+
   const targets = targetRows.map(({ target, account }) => ({
     id: target.id,
     socialAccountId: account.id,
+    publication: (() => {
+      const row = latestByTarget.get(target.id);
+      return row ? {status: row.status, remoteId: row.providerRemoteId, remoteUrl: row.providerUrl,
+        error: row.providerErrorMessage} : null;
+    })(),
     provider: fromDbProvider(account.provider),
     textOverride: target.textOverride,
     scheduledAt: target.scheduledAt?.toISOString() ?? null,

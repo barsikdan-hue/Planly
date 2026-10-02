@@ -30,6 +30,8 @@ async function prepareTemporaryRetry(
   publicationId: string,
   attemptLimit: number,
   delays: readonly number[],
+  job: Job<PublicationJob>,
+  providerDelayMs = 0,
 ): Promise<boolean> {
   const [row] = await getDb().select({ attemptCount: publications.attemptCount })
     .from(publications)
@@ -37,7 +39,8 @@ async function prepareTemporaryRetry(
     .limit(1);
   if (!row || row.attemptCount >= attemptLimit) return false;
 
-  const delay = retryDelayMs(row.attemptCount, delays);
+  const delay = Math.max(retryDelayMs(row.attemptCount, delays),Number.isFinite(providerDelayMs) ? Math.max(0,Math.min(providerDelayMs,86_400_000)) : 0);
+  await job.updateData({...job.data,retryDelayMs:delay});
   await getDb().update(publications).set({
     status: 'QUEUED',
     nextRetryAt: new Date(Date.now() + delay),
@@ -56,7 +59,7 @@ export async function processPublicationJob(
 
   const attemptLimit = Number(job.opts.attempts ?? PUBLICATION_MAX_ATTEMPTS);
   const retryDelays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
-  if (!await prepareTemporaryRetry(job.data.publicationId, attemptLimit, retryDelays)) return;
+  if (!await prepareTemporaryRetry(job.data.publicationId, attemptLimit, retryDelays, job, result.retryAfterMs)) return;
 
   throw new Error('Temporary publication failure; retry scheduled');
 }
@@ -74,7 +77,7 @@ export async function startPublicationWorker(
     {
       connection: getRedisConnection(),
       settings: {
-        backoffStrategy: attemptsMade => retryDelayMs(attemptsMade, retryDelays),
+        backoffStrategy: (attemptsMade, _type, _error, job) => job?.data.retryDelayMs ?? retryDelayMs(attemptsMade, retryDelays),
       },
     },
   );
