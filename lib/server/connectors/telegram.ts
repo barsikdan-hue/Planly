@@ -8,19 +8,20 @@ type ApiResult = { ok: true; result: unknown } | Failure;
 const failure = (errorType: PublicationErrorType, code: string, message: string): Failure => ({ ok: false, errorType, code, message });
 const ambiguous = () => failure('PERMANENT', 'AMBIGUOUS_DELIVERY', 'Telegram delivery outcome is unknown. Check the channel before sending again.');
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
-const validDestination = (value: string | null) => !!value && (/^-100\d{1,16}$/.test(value) || /^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(value));
+const validDestination = (value: string | null) => !!value && (/^-[1-9]\d{0,15}$/.test(value) || /^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(value));
 
 export function createTelegramConnector(options: { token: string; fetcher?: typeof fetch; timeoutMs?: number }): SocialConnector & {
   validate(destinationId: string): Promise<TelegramValidationResult>;
 } {
   const fetcher = options.fetcher ?? fetch;
-  const configured = /^\d+:[A-Za-z0-9_-]{20,}$/.test(options.token);
+  const token = options.token.trim();
+  const configured = /^\d+:[A-Za-z0-9_-]{20,}$/.test(token);
 
   async function call(method: string, body: Record<string, unknown> | FormData, mutation: boolean): Promise<ApiResult> {
-    if (!configured) return failure('AUTH', 'TELEGRAM_NOT_CONFIGURED', 'Telegram bot token is not configured on the server.');
+    if (!configured) return token ? failure('AUTH', 'TELEGRAM_TOKEN_FORMAT', 'Telegram bot token format is invalid on the server.') : failure('AUTH', 'TELEGRAM_NOT_CONFIGURED', 'Telegram bot token is not configured on the server.');
     try {
       const multipart = body instanceof FormData;
-      const response = await fetcher(`https://api.telegram.org/bot${options.token}/${method}`, {
+      const response = await fetcher(`https://api.telegram.org/bot${token}/${method}`, {
         method: 'POST', redirect: 'error',
         headers: multipart ? undefined : { 'content-type': 'application/json' },
         body: multipart ? body : JSON.stringify(body),
@@ -51,7 +52,7 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
   return {
     provider: 'TELEGRAM',
     async validate(destinationId) {
-      if (!validDestination(destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a channel @username or -100 channel ID.');
+      if (!validDestination(destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a channel/group @username or negative chat ID.');
       const me = await call('getMe', {}, false);
       if (!me.ok) return me;
       const bot = record(me.result);
@@ -59,18 +60,18 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
       const chatResponse = await call('getChat', { chat_id: destinationId }, false);
       if (!chatResponse.ok) return chatResponse;
       const chat = record(chatResponse.result);
-      if (chat?.type !== 'channel' || !Number.isSafeInteger(chat.id) || !validDestination(String(chat.id))) return failure('VALIDATION', 'TELEGRAM_CHANNEL_REQUIRED', 'Select a Telegram channel.');
-      const canonicalId = String(chat.id);
+      if (!['channel', 'supergroup', 'group'].includes(String(chat?.type)) || !Number.isSafeInteger(chat?.id) || Number(chat?.id) >= 0 || !validDestination(String(chat?.id))) return failure('VALIDATION', 'TELEGRAM_CHAT_REQUIRED', 'Select a Telegram channel or group.');
+      const canonicalId = String(chat!.id);
       const memberResponse = await call('getChatMember', { chat_id: canonicalId, user_id: bot.id }, false);
       if (!memberResponse.ok) return memberResponse;
       const member = record(memberResponse.result);
-      if (record(member?.user)?.id !== bot.id || !(member?.status === 'creator' || (member?.status === 'administrator' && member.can_post_messages === true))) {
-        return failure('AUTH', 'TELEGRAM_POST_PERMISSION', 'Add the bot as channel administrator with permission to post messages.');
+      if (record(member?.user)?.id !== bot.id || !(member?.status === 'creator' || (member?.status === 'administrator' && (chat!.type !== 'channel' || member.can_post_messages === true)))) {
+        return failure('AUTH', 'TELEGRAM_POST_PERMISSION', 'Add the bot as administrator; channels also require permission to post messages.');
       }
-      return { ok: true, destinationId: canonicalId, displayName: typeof chat.title === 'string' ? chat.title.slice(0, 200) : 'Telegram' };
+      return { ok: true, destinationId: canonicalId, displayName: typeof chat!.title === 'string' ? chat!.title.slice(0, 200) : 'Telegram' };
     },
     async publish(input: PublishInput): Promise<PublishResult> {
-      if (input.provider !== 'TELEGRAM' || !validDestination(input.destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a valid connected Telegram channel.');
+      if (input.provider !== 'TELEGRAM' || !validDestination(input.destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a valid connected Telegram channel or group.');
       const media = input.media ?? [];
       if (media.length > 10 || !input.text.trim() || input.text.length > (media.length ? 1024 : 4096)) {
         return failure('VALIDATION', 'TELEGRAM_CONTENT_LIMIT', 'Telegram supports text up to 4096 characters, media captions up to 1024 and albums up to 10 items.');
@@ -109,13 +110,13 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
       const messages = Array.isArray(response.result) ? response.result : [response.result];
       if (messages.length !== Math.max(1, media.length)) return ambiguous();
       const parsed = messages.map(value => ({ value: record(value), chat: record(record(value)?.chat) }));
-      if (parsed.some(({ value, chat }) => !Number.isSafeInteger(value?.message_id) || Number(value?.message_id) <= 0 || chat?.type !== 'channel' ||
+      if (parsed.some(({ value, chat }) => !Number.isSafeInteger(value?.message_id) || Number(value?.message_id) <= 0 || !['channel', 'supergroup', 'group'].includes(String(chat?.type)) || !Number.isSafeInteger(chat?.id) || Number(chat?.id) >= 0 ||
         (input.destinationId!.startsWith('@') ? `@${String(chat.username).toLowerCase()}` !== input.destinationId!.toLowerCase() : String(chat?.id) !== input.destinationId))) return ambiguous();
       const ids = parsed.map(({ value }) => String(value!.message_id));
       if (new Set(ids).size !== ids.length) return ambiguous();
       const chat = parsed[0].chat!;
       const username = typeof chat.username === 'string' && /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(chat.username) ? chat.username : null;
-      const remoteUrl = username ? `https://t.me/${username}/${ids[0]}` : `https://t.me/c/${String(chat.id).replace(/^-100/, '')}/${ids[0]}`;
+      const remoteUrl = username ? `https://t.me/${username}/${ids[0]}` : chat.type !== 'group' && /^-100\d+$/.test(String(chat.id)) ? `https://t.me/c/${String(chat.id).slice(4)}/${ids[0]}` : null;
       return { ok: true, remoteId: ids.join(','), remoteUrl };
     },
   };

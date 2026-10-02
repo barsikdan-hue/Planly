@@ -3,7 +3,7 @@ import { requireApiOwner } from '../../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../../lib/server/http.ts';
 import { connectTelegramAccount, setSocialAccountEnabled } from '../../../../lib/server/social-accounts.ts';
 
-const inputSchema = z.union([z.object({ enabled: z.boolean() }).strict(),z.object({destinationId:z.string().trim().regex(/^(@[A-Za-z][A-Za-z0-9_]{4,31}|-100\d{1,16})$/)}).strict()]);
+const inputSchema = z.union([z.object({ enabled: z.boolean() }).strict(),z.object({destinationId:z.string().trim().regex(/^(@[A-Za-z][A-Za-z0-9_]{4,31}|-[1-9]\d{0,15})$/)}).strict()]);
 type Context = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: Context): Promise<Response> {

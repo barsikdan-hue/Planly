@@ -150,3 +150,47 @@ test('Telegram connection never accepts a bot without channel posting rights', a
     if (!result.ok) assert.equal(result.errorType, 'AUTH');
   }, req => ({ body: { ok: true, result: req.method === 'getMe' ? { id: 123456, is_bot: true, first_name: 'Bot' } : req.method === 'getChat' ? message().chat : { status: 'member', user: { id: 123456, is_bot: true, first_name: 'Bot' } } } }));
 });
+
+for (const [type, id] of [['supergroup', -100123], ['group', -12345]] as const) {
+  test(`Telegram connects an administrator in ${type} without channel-only posting flag`, async () => {
+    await wire(async connector => {
+      assert.deepEqual(await connector.validate(String(id)), {ok:true,destinationId:String(id),displayName:'Test group'});
+    }, req => ({body:{ok:true,result:req.method==='getMe' ? {id:123456,is_bot:true,first_name:'Bot'} : req.method==='getChat' ? {id,type,title:'Test group'} : {status:'administrator',user:{id:123456,is_bot:true,first_name:'Bot'}}}}));
+  });
+  for (const [label, media] of [['text', []], ['photo', [{name:'p',mimeType:'image/png',bytes:new Uint8Array([1])}]], ['video', [{name:'v',mimeType:'video/mp4',bytes:new Uint8Array([2])}]], ['album', [{name:'p',mimeType:'image/png',bytes:new Uint8Array([1])},{name:'v',mimeType:'video/mp4',bytes:new Uint8Array([2])}]]] as const) {
+    test(`Telegram confirms ${label} delivery to ${type} and returns an appropriate link`, async () => {
+      await wire(async connector => {
+        assert.deepEqual(await connector.publish({...input,destinationId:String(id),media:[...media]}), {ok:true,remoteId:label==='album'?'42,43':'42',remoteUrl:type==='supergroup'?'https://t.me/c/123/42':null});
+      }, () => ({body:{ok:true,result:label==='album' ? [42,43].map(message_id=>({message_id,chat:{id,type,title:'Test group'}})) : {message_id:42,chat:{id,type,title:'Test group'}}}}));
+    });
+  }
+}
+
+test('Telegram never connects a non-admin or restricted group member', async () => {
+  for (const status of ['member','restricted','left','kicked']) {
+    await wire(async connector => {
+      const result=await connector.validate('-100123');
+      assert.equal(result.ok,false);
+      if (!result.ok) assert.equal(result.errorType,'AUTH');
+    }, req=>({body:{ok:true,result:req.method==='getMe'?{id:123456,is_bot:true,first_name:'Bot'}:req.method==='getChat'?{id:-100123,type:'supergroup',title:'Group'}:{status,user:{id:123456,is_bot:true,first_name:'Bot'}}}}));
+  }
+});
+
+test('Telegram strips accidental outer token whitespace before constructing the provider URL', async () => {
+  const connector=createTelegramConnector({token:` \r\n${token}\r\n `,fetcher:async url=>{
+    assert.equal(String(url),`https://api.telegram.org/bot${token}/getMe`);
+    return Response.json({ok:false,error_code:401},{status:401});
+  }});
+  const result=await connector.validate('-100123');
+  assert.equal(result.ok,false);
+  if (!result.ok) assert.equal(result.code,'TELEGRAM_401');
+});
+
+test('Telegram distinguishes missing and malformed token without calling or leaking credentials', async () => {
+  for (const [value, code] of [['   ','TELEGRAM_NOT_CONFIGURED'],['Bearer '+token,'TELEGRAM_TOKEN_FORMAT']]) {
+    const result=await createTelegramConnector({token:value,fetcher:async()=>{throw new Error('must not call');}}).validate('-100123');
+    assert.equal(result.ok,false);
+    if (!result.ok) assert.equal(result.code,code);
+    assert.ok(!JSON.stringify(result).includes(token));
+  }
+});
