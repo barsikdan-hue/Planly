@@ -78,3 +78,38 @@ test('unknown post is 404 and response does not expose stack or database interna
   const text = await response.text();
   assert.doesNotMatch(text, /stack|postgres|select |update /i);
 });
+
+test('Telegram connection verifies channel posting permissions before exposing CONNECTED', async () => {
+  const { PATCH } = await import('../app/api/social-accounts/[id]/route.ts');
+  const { createServer } = await import('node:http');
+  const { listSocialAccounts } = await import('../lib/server/social-accounts.ts');
+  const tokenValue = '123456:abcdefghijklmnopqrstuvwxyz123456789';
+  const originalFetch = globalThis.fetch;
+  const methods: string[] = [];
+  let permitted = false;
+  const server = createServer((req,res) => {
+    const method = req.url!.split('/').at(-1)!;
+    methods.push(method);
+    req.resume();
+    const result = method === 'getMe' ? {id:123456,is_bot:true} : method === 'getChat' ? {id:-100123,type:'channel',title:'Test'} : {user:{id:123456},status:'administrator',can_post_messages:permitted};
+    res.setHeader('content-type','application/json'); res.end(JSON.stringify({ok:true,result}));
+  });
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const addr=server.address(); assert.ok(addr && typeof addr !== 'string');
+  globalThis.fetch=(url,init)=>originalFetch(`http://127.0.0.1:${addr.port}${new URL(String(url)).pathname}`,init);
+  process.env.TELEGRAM_BOT_TOKEN=tokenValue;
+  try {
+    const account=(await listSocialAccounts(ownerId)).find(a=>a.provider==='telegram')!;
+    const connect=()=>PATCH(request(`/api/social-accounts/${account.id}`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({destinationId:'@planly_test'})}),{params:Promise.resolve({id:account.id})});
+    const rejected=await connect(); assert.equal(rejected.status,422);
+    assert.equal((await listSocialAccounts(ownerId)).find(a=>a.id===account.id)?.connectionStatus,'DISCONNECTED');
+    permitted=true;
+    const response=await connect(); assert.equal(response.status,200);
+    const body=await response.json();
+    assert.equal(body.connectionStatus,'CONNECTED'); assert.equal(body.providerAccountId,'-100123'); assert.equal(body.enabled,true);
+    assert.ok(!JSON.stringify(body).includes(tokenValue));
+    assert.deepEqual(methods,['getMe','getChat','getChatMember','getMe','getChat','getChatMember']);
+    const foreign=await PATCH(request('/api/social-accounts/not-owned',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({destinationId:'@planly_test'})}),{params:Promise.resolve({id:'not-owned'})});
+    assert.equal(foreign.status,404); assert.equal(methods.length,6);
+  } finally {globalThis.fetch=originalFetch;delete process.env.TELEGRAM_BOT_TOKEN;server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});

@@ -148,3 +148,16 @@ test('TEMPORARY retry exhaustion stops after bounded attempts', async () => {
     await runtime.close();
   }
 });
+
+test('provider retry_after prevents an early retry while preserving the bounded budget', async () => {
+  results=[{ok:false,errorType:'TEMPORARY',code:'TELEGRAM_429',message:'Rate limit',retryAfterMs:450},{ok:true,remoteId:'after-rate-limit'}];
+  const runtime=await startPublicationWorker(resolver,{retryDelaysMs:[20,20,20,20],reconcileIntervalMs:0});
+  try {
+    const id=await schedule(0);
+    await waitFor(async()=>publishCalls>=1);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    assert.equal(publishCalls,1,'provider delay must take precedence over the default retry delay');
+    await waitFor(async()=>(await statusOf(id))?.status==='PUBLISHED');
+    assert.equal(publishCalls,2);
+  } finally {await runtime.close();}
+});
