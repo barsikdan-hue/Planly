@@ -38,6 +38,14 @@ All editor changes advance a revision. Confirmed save resets/clears only the sub
 
 **Runtime boundary:** Fresh browser reload acceptance remains pending browser connectivity. Previous production walkthrough reproduced the original loss; the current branch has not been deployed. Full functional browser acceptance and fresh exact-head CI remain milestone requirements.
 
+## Functional audit fix: media preview order
+
+**Root cause:** Composer used `media.filter` and Poster used `media.find`, both preserving library order instead of selected `post.mediaIds` order. Real React static rendering reproduced selected `[B video, A image]` appearing `[A, B]` with the wrong cover.
+
+**Change:** Both components use a small ordered media lookup. Missing assets are skipped and the text cover remains when none exist. Storage URLs and publication/media persistence are unchanged by this fix.
+
+**Tests/runtime:** Two rendered SSR regressions failed before the fix; eight focused render/navigation checks passed after it, including library permutations and missing media. Focused lint passed with four existing image warnings. These are real React static renders, not interactive browser proof. Signed URL expiry failure is still not reproduced; it is deliberately outside this ordering fix.
+
 ## Evidence environment and limits
 
 Local evidence is outside the repository in sibling `functional-mvp-evidence/`: red/green test logs and `runtime/http-audit-results.json`. Loopback services: separate UI and destructive-test databases, local storage/provider fixture, synthetic owner credentials. Production data and secrets are not used. PGlite serializes a single backend and cannot prove PostgreSQL lock concurrency. Unsigned object-storage fixture cannot prove private-bucket access policy. A signature-only MP4 fixture proves upload/request handling, not video playback. Browser and final exact-head CI results must be recorded separately below.

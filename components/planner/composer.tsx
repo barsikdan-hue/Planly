@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Card, SocialIcon, Action, Empty } from './common';
 import { networkNames, type Post, type Network, type Media, type Status, validatePost } from '@/lib/planner';
+import { orderedPostMedia } from '@/lib/post-media';
 export type ComposerProps = {
     draft: Post;
     setDraft: Dispatch<SetStateAction<Post>>;
@@ -29,7 +30,7 @@ export function Composer({ draft, setDraft, media, upload, save, publishNow, acc
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     const patch = (p: Partial<Post>) => setDraft(current => ({ ...current, ...p }));
-    const attached = media.filter(m => draft.mediaIds.includes(m.id));
+    const attached = orderedPostMedia(draft.mediaIds, media);
     const changeText = (text: string) => variant === 'common' ? patch({ text }) : patch({ overrides: { ...draft.overrides, [variant]: text } });
     const addFiles = async (files: FileList | File[]) => { setBusy(true); try {
         const added = await upload(files);
