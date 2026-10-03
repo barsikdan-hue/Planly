@@ -196,7 +196,7 @@ Publication path:
 
 `Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
 
-Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. The current goal is a simpler sidebar and social-account management in Settings; see [ROADMAP.md](ROADMAP.md) for verification limits and the remaining browser gate.
+Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. Sidebar cleanup and social-account management in Settings are deployed. The current goal is the fully verified functional MVP: pre-enqueue content validation, editor reload recovery and the complete Telegram/MAX publication flow. See [ROADMAP.md](ROADMAP.md) for evidence and human gates. GitHub scheduler timing is accepted temporary tech debt until the target self-host deployment.
 
 OpenAI content research/generation remains a later milestone after publication is trustworthy.
 
