@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { savePostInputSchema } from '../lib/contracts/planner.ts';
 
+test('provider-only text is valid content, but whitespace overrides are not', () => {
+  assert.equal(savePostInputSchema.safeParse({ baseText: '', status: 'READY', mediaIds: [], targets: [{ provider: 'telegram', textOverride: 'specific' }] }).success, true);
+  assert.equal(savePostInputSchema.safeParse({ baseText: '', status: 'DRAFT', mediaIds: [], targets: [{ provider: 'telegram', textOverride: ' \n ' }] }).success, false);
+});
+
 for (const status of ['DRAFT', 'READY'] as const) {
   test(`${status} accepts owned media references without requiring a caption`, () => {
     const parsed = savePostInputSchema.parse({

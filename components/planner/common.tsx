@@ -4,6 +4,7 @@ import { Send, Check, Clock, FileText, AlertCircle, ImageIcon } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import type { Post, Network, Status, Media } from '@/lib/planner';
 import { networkNames, statusNames } from '@/lib/planner';
+import { orderedPostMedia } from '@/lib/post-media';
 export function SocialIcon({ network, small = false }: {
     network: Network;
     small?: boolean;
@@ -24,7 +25,7 @@ export function Poster({ post, media, compact = false }: {
     post: Post;
     media: Media[];
     compact?: boolean;
-}) { const item = media.find(m => post.mediaIds.includes(m.id)); return <div className={`post-poster theme-${post.theme ?? 2} ${compact ? 'compact' : ''}`}>{item ? (item.type.startsWith('video/') ? <video src={item.url} muted playsInline/> : <img src={item.url} alt={item.name}/>) : <><span className="poster-eyebrow">АГЕНТ БЕЗ ГАЛСТУКА</span><strong>{post.text.split('\n')[0]}</strong><span className="poster-caption">о недвижимости и жизни у моря</span></>}</div>; }
+}) { const item = orderedPostMedia(post.mediaIds, media)[0]; return <div className={`post-poster theme-${post.theme ?? 2} ${compact ? 'compact' : ''}`}>{item ? (item.type.startsWith('video/') ? <video src={item.url} muted playsInline/> : <img src={item.url} alt={item.name}/>) : <><span className="poster-eyebrow">АГЕНТ БЕЗ ГАЛСТУКА</span><strong>{post.text.split('\n')[0]}</strong><span className="poster-caption">о недвижимости и жизни у моря</span></>}</div>; }
 export function Empty({ title, description, action }: {
     title: string;
     description?: string;

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
-import { ImageIcon, Video, Plus, Send, Bookmark, Sparkles, X, Eye, Heart, MessageCircle, Upload, Check, Hash } from 'lucide-react';
+import { ImageIcon, Video, Plus, Send, Bookmark, Sparkles, X, Eye, Heart, MessageCircle, Upload, Check, Hash, Copy } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Card, SocialIcon, Action, Empty } from './common';
 import { networkNames, type Post, type Network, type Media, type Status, validatePost } from '@/lib/planner';
+import { orderedPostMedia } from '@/lib/post-media';
 export type ComposerProps = {
     draft: Post;
     setDraft: Dispatch<SetStateAction<Post>>;
@@ -19,8 +20,10 @@ export type ComposerProps = {
     saving?: boolean;
     quick?: boolean;
     expand?: () => void;
+    editBlockedReason?: string | null;
+    duplicatePost?: (post: Post) => void;
 };
-export function Composer({ draft, setDraft, media, upload, save, publishNow, accounts, saving = false, quick = false, expand }: ComposerProps) {
+export function Composer({ draft, setDraft, media, upload, save, publishNow, accounts, saving = false, quick = false, expand, editBlockedReason, duplicatePost }: ComposerProps) {
     const [preview, setPreview] = useState<Network>('telegram');
     const [variant, setVariant] = useState<Network | 'common'>('common');
     const [picker, setPicker] = useState(false);
@@ -29,7 +32,21 @@ export function Composer({ draft, setDraft, media, upload, save, publishNow, acc
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     const patch = (p: Partial<Post>) => setDraft(current => ({ ...current, ...p }));
-    const attached = media.filter(m => draft.mediaIds.includes(m.id));
+    const attached = orderedPostMedia(draft.mediaIds, media);
+    const blockedReason = draft.id ? (editBlockedReason === undefined ? draft.editBlockedReason : editBlockedReason) : null;
+    if (blockedReason) return <Card title="Просмотр поста" className="readonly-composer">
+        <p className="mini-note" role="status">{blockedReason}</p>
+        <h3>Текущий текст в редакторе</h3>
+        <p className="detail-text">{draft.text}</p>
+        {draft.networks.filter(network => draft.overrides[network] !== undefined).map(network => <div key={network}>
+            <h3>{networkNames[network]}</h3><p className="detail-text">{draft.overrides[network]}</p>
+        </div>)}
+        {attached.length > 0 && <div className="attached-media">{attached.map(item => <div key={item.id}>
+            {item.type.startsWith('video/') ? <video src={item.url} controls/> : <img src={item.url} alt={item.name}/>}
+        </div>)}</div>}
+        <p className="mini-note">Изменения можно перенести в отдельный черновик. Оригинал останется без изменений.</p>
+        {duplicatePost && <Action secondary onClick={() => duplicatePost(draft)}><Copy size={16}/>Дублировать в черновик</Action>}
+    </Card>;
     const changeText = (text: string) => variant === 'common' ? patch({ text }) : patch({ overrides: { ...draft.overrides, [variant]: text } });
     const addFiles = async (files: FileList | File[]) => { setBusy(true); try {
         const added = await upload(files);

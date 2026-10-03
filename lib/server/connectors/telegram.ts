@@ -1,4 +1,5 @@
 import type { PublicationErrorType, PublishInput, PublishResult, SocialConnector } from './types.ts';
+import { validatePublicationContent } from '../../publication-content.ts';
 
 export type TelegramValidationResult =
   | { ok: true; destinationId: string; displayName: string }
@@ -73,17 +74,8 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
     async publish(input: PublishInput): Promise<PublishResult> {
       if (input.provider !== 'TELEGRAM' || !validDestination(input.destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a valid connected Telegram channel or group.');
       const media = input.media ?? [];
-      if (media.length > 10 || (!media.length && !input.text.trim()) || input.text.length > (media.length ? 1024 : 4096)) {
-        return failure('VALIDATION', 'TELEGRAM_CONTENT_LIMIT', 'Telegram supports text up to 4096 characters, media captions up to 1024 and albums up to 10 items.');
-      }
-      for (const asset of media) {
-        const photo = asset.mimeType === 'image/jpeg' || asset.mimeType === 'image/png';
-        if (!photo && asset.mimeType !== 'video/mp4') return failure('VALIDATION', 'TELEGRAM_MEDIA_FORMAT', 'Telegram publishing supports JPEG, PNG and MP4.');
-        if (!asset.bytes.length || asset.bytes.length > (photo ? 10 : 20) * 1024 * 1024) return failure('VALIDATION', 'TELEGRAM_MEDIA_SIZE', 'Media exceeds the supported upload size.');
-        if (photo && asset.width && asset.height && (asset.width + asset.height > 10000 || Math.max(asset.width / asset.height, asset.height / asset.width) > 20)) {
-          return failure('VALIDATION', 'TELEGRAM_PHOTO_DIMENSIONS', 'Telegram photo dimensions exceed provider limits.');
-        }
-      }
+      const issue = validatePublicationContent('TELEGRAM', input.text, media.map(asset => ({ ...asset, byteSize: asset.bytes.length })));
+      if (issue) return failure('VALIDATION', issue.code, issue.message);
       let method = 'sendMessage';
       let body: Record<string, unknown> | FormData = { chat_id: input.destinationId, text: input.text };
       if (media.length) {

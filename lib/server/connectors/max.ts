@@ -1,4 +1,5 @@
 import type {PublishInput,PublishResult,SocialConnector,PublicationErrorType} from './types.ts';
+import {validatePublicationContent} from '../../publication-content.ts';
 type Failure=Extract<PublishResult,{ok:false}>;
 type ApiResult={ok:true,result:unknown}|Failure;
 const record=(v:unknown):Record<string,unknown>|null=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:null;
@@ -63,8 +64,9 @@ export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,t
   },
   async publish(input){
    const media=input.media??[];
-   if(input.provider!=='MAX'||!validId(input.destinationId)||(!input.text.trim()&&!media.length)||input.text.length>4000||media.length>12)return failure('VALIDATION','MAX_CONTENT','MAX requires a numeric destination, text up to4000 characters and up to12 media attachments.');
-   for(const asset of media)if(!['image/png','image/jpeg','video/mp4'].includes(asset.mimeType)||!asset.bytes.length||asset.bytes.length>20*1024*1024||(asset.mimeType!=='video/mp4'&&((asset.width??0)>7680||(asset.height??0)>7680)))return failure('VALIDATION','MAX_MEDIA','Planly supports MAX JPEG/PNG and MP4 up to20MiB per file.');
+   if(input.provider!=='MAX'||!validId(input.destinationId))return failure('VALIDATION','MAX_CONTENT','MAX requires a numeric destination.');
+   const issue=validatePublicationContent('MAX',input.text,media.map(asset=>({...asset,byteSize:asset.bytes.length})));
+   if(issue)return failure('VALIDATION',issue.code,issue.message);
    const attachments:Array<{type:'image'|'video',payload:{token:string}}>=[];
    for(const asset of media){const uploaded=await upload(asset);if(!uploaded.ok)return uploaded;attachments.push({type:uploaded.type,payload:{token:uploaded.token}});}
    let sent:ApiResult;
