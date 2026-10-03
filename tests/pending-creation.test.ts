@@ -44,7 +44,8 @@ test('acknowledged editor ID alone does not refresh the frozen publish-now times
   const cache = storage(); const editor = { ...blankPost(), text: 'Once' };
   const frozen = { ...input, status: 'READY' as const, targets: [{ provider: 'telegram' as const, textOverride: null, scheduledAt: '2030-01-01T00:00:00Z' }] };
   await submitPendingCreation(cache, 'owner', editorToken, editor, () => frozen, 'now');
-  await submitPendingCreation(cache, 'owner', editorToken, { ...editor, id: 'ack' }, () => { throw Error('Fresh now payload must not be built'); }, 'now');
+  const retried = await submitPendingCreation(cache, 'owner', editorToken, { ...editor, id: 'ack' }, () => { throw Error('Fresh now payload must not be built'); }, 'now');
+  assert.equal(retried.updateError, undefined);
   assert.equal(requests.length, 2);
   assert.equal(requests[1].url, '/api/posts');
   assert.equal(requests[1].body, requests[0].body);

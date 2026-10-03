@@ -57,7 +57,7 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
   if (belongsToEditor) {
     const currentFields = editorFields(editor);
     if (currentFields.id === pending.acknowledgedId) currentFields.id = pending.editor.id;
-    const unchanged = JSON.stringify(currentFields) === JSON.stringify(pending.editor) && intent === pending.intent;
+    const unchanged = JSON.stringify(currentFields) === JSON.stringify(editorFields(pending.editor)) && intent === pending.intent;
     try {
       const desired = unchanged ? pending.input : input();
       if (canonicalCreationInput(desired) !== canonicalCreationInput(pending.input)) saved = await savePost(desired, saved.id);
