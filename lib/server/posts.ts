@@ -12,11 +12,13 @@ import {
 import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
 import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
 import { PublicationContentError, validatePublicationContent, type PublicationMediaMetadata } from '../publication-content.ts';
+import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
 type PostPersistenceOptions = {
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
+  creationKey?: string;
 };
 
 async function mirrorQueueBestEffort(
@@ -125,20 +127,39 @@ export async function createPost(
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
   const postId = randomUUID();
+  const creationKey = options.creationKey === undefined ? null : creationKeySchema.parse(options.creationKey);
+  const inputHash = creationKey ? creationInputHash(input) : null;
   const db = getDb();
 
-  const changes = await db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
+    const readExisting = async () => {
+      const [existing] = await tx.select({ id: posts.id, inputHash: posts.creationInputHash }).from(posts)
+        .where(and(eq(posts.userId, userId), eq(posts.creationKey, creationKey!))).limit(1);
+      if (existing && existing.inputHash !== inputHash) throw new CreationConflictError();
+      return existing;
+    };
+    if (creationKey) {
+      const existing = await readExisting();
+      if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+    }
     const accounts = await validateRelations(tx, userId, input);
     const now = new Date();
-    await tx.insert(posts).values({
+    const inserted = await tx.insert(posts).values({
       id: postId,
       userId,
       title: input.title ?? null,
       baseText: input.baseText,
       status: input.status,
+      creationKey,
+      creationInputHash: inputHash,
       createdAt: now,
       updatedAt: now,
-    });
+    }).onConflictDoNothing({ target: [posts.userId, posts.creationKey] }).returning({ id: posts.id });
+    if (!inserted.length) {
+      const existing = await readExisting();
+      if (!existing) throw new Error('Creation result unavailable');
+      return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+    }
 
     if (input.targets.length) {
       await tx.insert(postTargets).values(input.targets.map(target => ({
@@ -157,11 +178,11 @@ export async function createPost(
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    return reconcilePostPublicationsInTx(tx, userId, postId);
+    return { postId, changes: await reconcilePostPublicationsInTx(tx, userId, postId), created: true };
   });
 
-  await mirrorQueueBestEffort(changes, options);
-  return readOwnedPost(userId, postId);
+  if (result.created) await mirrorQueueBestEffort(result.changes, options);
+  return readOwnedPost(userId, result.postId);
 }
 
 export async function updatePost(

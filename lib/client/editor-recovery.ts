@@ -12,6 +12,7 @@ const recoverySchema = z.object({
     overrides: z.object({ telegram: z.string().optional(), max: z.string().optional() }).strict(),
   }),
 });
+export const editorFieldsSchema = recoverySchema.shape.editor;
 
 export function editorKey(ownerId: string): string { return `planly:editor:v1:${encodeURIComponent(ownerId)}`; }
 

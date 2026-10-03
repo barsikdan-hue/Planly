@@ -15,9 +15,10 @@ import { Content, MediaLibrary } from './library';
 import { Settings, Analytics } from './settings';
 import { normalizePlannerView } from '@/lib/planner-navigation';
 import { clearSavedRecovery, editorFields, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields } from '@/lib/client/editor-recovery';
+import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
 import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type Post, type Media, type Network, type Status } from '@/lib/planner';
-import type { SocialAccountDto } from '@/lib/contracts/planner';
+import type { SavePostInput, SocialAccountDto } from '@/lib/contracts/planner';
 import {
     loadPlanner,
     savePost as savePostApi,
@@ -64,6 +65,9 @@ export default function PlannerApp() {
     const [draft, setDraftState] = useState<Post>(blankPost);
     const draftRef = useRef(draft);
     const editorRevision = useRef(0);
+    const [initialEditorToken] = useState(() => crypto.randomUUID());
+    const editorToken = useRef(initialEditorToken);
+    const [creationPending, setCreationPending] = useState(false);
     const recoveryOwner = useRef<string | null>(null);
     const persistedEditor = useRef<EditorFields | null>(null);
     const recoveryErrorShown = useRef(false);
@@ -76,7 +80,7 @@ export default function PlannerApp() {
     const warnRecoveryUnavailable = useCallback(() => {
         if (recoveryErrorShown.current) return;
         recoveryErrorShown.current = true;
-        toast.error('Восстановление после обновления страницы недоступно. Сохрани пост на сервер перед выходом.');
+        toast.error('Восстановление после обновления страницы недоступно. Не закрывай вкладку до подтверждения сохранения.');
     }, []);
 
     // Persist outside React updater functions, which Strict Mode may run twice.
@@ -95,12 +99,13 @@ export default function PlannerApp() {
         if (editorRevision.current !== revision) return false;
         if (recoveryOwner.current) {
             const storage = sessionRecoveryStorage();
-            if (!storage || !clearSavedRecovery(storage, recoveryOwner.current, persistedEditor.current ?? post)) warnRecoveryUnavailable();
+            if (!storage || !clearSavedRecovery(storage, recoveryOwner.current, persistedEditor.current ?? post)) { warnRecoveryUnavailable(); return false; }
             else persistedEditor.current = null;
         }
         const next = blankPost();
         draftRef.current = next;
         editorRevision.current += 1;
+        editorToken.current = crypto.randomUUID();
         setDraftState(next);
         setRecoveryNotice(null);
         return true;
@@ -134,6 +139,28 @@ export default function PlannerApp() {
                     setRecoveryNotice(`${restored.missingPost ? 'Исходный пост удалён. Текст восстановлен как новый черновик.' : 'Несохранённый пост восстановлен в этой вкладке.'}${restored.missingMediaCount ? ` Удалённые файлы исключены: ${restored.missingMediaCount}.` : ''}`);
                     if (!writeRecovery(storage, snapshot.profile.id, restored.draft)) warnRecoveryUnavailable();
                     else persistedEditor.current = editorFields(restored.draft);
+                }
+                try {
+                    const pending = readPendingCreation(storage, snapshot.profile.id);
+                    if (pending) {
+                        editorToken.current = pending.activeEditorToken;
+                        setCreationPending(true);
+                        if (!cached.editor && pending.editorToken === pending.activeEditorToken) {
+                            const restored = restoreRecovery(pending.editor, posts, media);
+                            draftRef.current = restored.draft;
+                            editorRevision.current += 1;
+                            setDraftState(restored.draft);
+                        }
+                        if (pending.acknowledgedId && pending.editorToken === editorToken.current) {
+                            const next = { ...draftRef.current, id: pending.acknowledgedId };
+                            draftRef.current = next; setDraftState(next);
+                            if (writeRecovery(storage, snapshot.profile.id, next)) persistedEditor.current = editorFields(next);
+                        }
+                        setRecoveryNotice('Предыдущее создание поста ещё не завершено в этой вкладке. Повтори сохранение, чтобы проверить его результат.');
+                    }
+                } catch (error) {
+                    setCreationPending(true);
+                    setRecoveryNotice(errorMessage(error, 'Не удалось восстановить предыдущее сохранение.'));
                 }
             }
             setLoadError(false);
@@ -198,20 +225,64 @@ export default function PlannerApp() {
         return result;
     }, [data.socialAccounts]);
 
+    const submitEditor = async (post: Post, input: () => SavePostInput, intent: CreationIntent, token: string) => {
+        const storage = sessionRecoveryStorage();
+        const owner = recoveryOwner.current;
+        const pending = storage && owner ? readPendingCreation(storage, owner) : null;
+        if (post.id && !pending) return { saved: await savePostApi(input(), post.id), pending: null, belongsToEditor: true, updateError: undefined };
+        if (!storage || !owner) throw new Error('Не удалось сохранить повторяемый запрос в этой вкладке. Новый пост не отправлен.');
+        try {
+            const result = await submitPendingCreation(storage, owner, token, post, input, intent);
+            setCreationPending(true);
+            return result;
+        } catch (error) {
+            const pending = readPendingCreation(storage, owner);
+            setCreationPending(!!pending);
+            if (pending) setRecoveryNotice('Результат предыдущего создания поста пока не подтверждён. Повтори сохранение, чтобы восстановить его без нового поста.');
+            throw error;
+        }
+    };
+
+    const acknowledgeEditor = (result: Awaited<ReturnType<typeof submitEditor>>, post: Post, revision: number, token: string): boolean => {
+        let cleared = false;
+        if (result.belongsToEditor && editorToken.current === token) {
+            if (result.updateError || editorRevision.current !== revision) setDraft(current => ({ ...current, id: result.saved.id }));
+            else {
+                cleared = clearSubmittedEditor(post, revision);
+                if (!cleared) setDraft(current => ({ ...current, id: result.saved.id }));
+            }
+        }
+        const storage = sessionRecoveryStorage();
+        if (result.pending && storage && recoveryOwner.current) {
+            // Persist the acknowledged ID before discarding the durable original request.
+            const differentEditor = !result.belongsToEditor || editorToken.current !== token;
+            const editorDurable = cleared || persistedEditor.current?.id === result.saved.id ||
+                (differentEditor && JSON.stringify(persistedEditor.current) === JSON.stringify(editorFields(draftRef.current)));
+            if (editorDurable) {
+                try { completePendingCreation(storage, recoveryOwner.current, result.pending.key); setCreationPending(false); }
+                catch { warnRecoveryUnavailable(); }
+            }
+        }
+        return cleared;
+    };
+
     const save = async (post: Post, status: Status) => {
         if (saveLock.current) return;
         if (status !== 'draft' && status !== 'scheduled') return;
-        const error = validatePost(post, status);
+        const error = creationPending ? null : validatePost(post, status);
         if (error) { toast.error(error); return; }
         saveLock.current = true;
         setSaveBusy(true);
         const revision = editorRevision.current;
+        const token = editorToken.current;
         try {
-            const saved = fromServerPost(await savePostApi(toSavePostInput(post, status), post.id || undefined));
+            const result = await submitEditor(post, () => toSavePostInput(post, status), status, token);
+            const saved = fromServerPost(result.saved);
             setData(current => ({ ...current, posts: current.posts.some(item => item.id === saved.id) ? current.posts.map(item => item.id === saved.id ? saved : item) : [saved, ...current.posts] }));
-            const cleared = clearSubmittedEditor(post, revision);
+            const cleared = acknowledgeEditor(result, post, revision, token);
+            if (result.updateError) throw result.updateError;
             if (cleared && view !== 'dashboard') navigate('content');
-            toast.success(status === 'draft' ? 'Черновик сохранён' : 'Расписание сохранено');
+            toast.success(result.belongsToEditor ? (status === 'draft' ? 'Черновик сохранён' : 'Расписание сохранено') : 'Предыдущее сохранение восстановлено. Теперь можно сохранить текущий черновик.');
         } catch (error) {
             toast.error(errorMessage(error, 'Не удалось сохранить пост. Текст остался в редакторе.'));
         } finally {
@@ -221,7 +292,19 @@ export default function PlannerApp() {
     };
 
     const replaceEditor = (next: Post): boolean => {
+        const storage = sessionRecoveryStorage();
+        if (storage && recoveryOwner.current) {
+            try {
+                if (readPendingCreation(storage, recoveryOwner.current)) {
+                    toast.error('Сначала повтори предыдущее сохранение, чтобы восстановить его результат.');
+                    return false;
+                }
+            }
+            catch { toast.error('Сначала восстанови результат предыдущего сохранения.'); return false; }
+        }
         if (shouldReplaceEditor(draftRef.current, next, data.posts) && !window.confirm('В редакторе есть несохранённые изменения. Заменить их другим постом?')) return false;
+        const nextToken = crypto.randomUUID();
+        editorToken.current = nextToken;
         setDraft(next);
         setRecoveryNotice(null);
         navigate('create');
@@ -231,6 +314,7 @@ export default function PlannerApp() {
     const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date } : {}), ...(time ? { time } : {}) }); };
 
     const reschedule = async (post: Post, date: string, time: string) => {
+        if (creationPending) { toast.error('Сначала повтори предыдущее сохранение, чтобы восстановить его результат.'); return; }
         const next = movePost(post, date, time);
         const validation = validatePost(next, 'scheduled');
         if (validation) { toast.error(validation); return; }
@@ -262,18 +346,33 @@ export default function PlannerApp() {
     const publishNow = async(post:Post)=>{
         if (saveLock.current) return;
         const error = validatePost(post,'draft');
-        if (error || !post.networks.length || post.networks.some(network=>!accounts[network])) {
+        if (!creationPending && (error || !post.networks.length || post.networks.some(network=>!accounts[network]))) {
             toast.error(error ?? 'Выбери подключённый канал для публикации.'); return;
         }
         saveLock.current=true;setSaveBusy(true);
         const revision = editorRevision.current;
+        const token = editorToken.current;
         try {
-            const saved=fromServerPost(await savePostApi(toPublishNowInput(post),post.id || undefined));
+            const result=await submitEditor(post,()=>toPublishNowInput(post),'now',token);
+            const saved=fromServerPost(result.saved);
             setData(current=>({...current,posts:current.posts.some(item=>item.id===saved.id) ? current.posts.map(item=>item.id===saved.id ? saved : item) : [saved,...current.posts]}));
-            if (clearSubmittedEditor(post, revision)) navigate('content');
-            toast.success('Пост передан в очередь. Ждём подтверждения площадки.');
+            const cleared = acknowledgeEditor(result, post, revision, token);
+            if (result.updateError) throw result.updateError;
+            if (cleared) navigate('content');
+            toast.success(result.belongsToEditor ? 'Пост передан в очередь. Ждём подтверждения площадки.' : 'Предыдущее сохранение восстановлено. Теперь можно сохранить текущий черновик.');
         } catch(error) {toast.error(errorMessage(error,'Не удалось отправить пост в очередь.'));}
         finally {saveLock.current=false;setSaveBusy(false);}
+    };
+
+    const retryCreation = async () => {
+        const storage = sessionRecoveryStorage();
+        if (!storage || !recoveryOwner.current) return;
+        try {
+            const pending = readPendingCreation(storage, recoveryOwner.current);
+            if (!pending) return;
+            if (pending.intent === 'now') await publishNow(draftRef.current);
+            else await save(draftRef.current, pending.intent);
+        } catch (error) { toast.error(errorMessage(error, 'Не удалось восстановить сохранение.')); }
     };
 
     const composer = { draft, setDraft, media: data.media, upload, save, publishNow, saving: saveBusy, accounts };
@@ -299,6 +398,7 @@ export default function PlannerApp() {
     };
 
     const confirmDelete = async () => {
+        if (creationPending) { toast.error('Сначала повтори предыдущее сохранение, чтобы восстановить его результат.'); return; }
         if (!confirm) return;
         const selected = confirm;
         try {
@@ -318,5 +418,5 @@ export default function PlannerApp() {
         }
     };
 
-    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') navigate('content'); }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && <Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={p => { if (replaceEditor({ ...p, id: '', status: 'draft', targets: [], mediaIds: [...p.mediaIds], networks: [...p.networks], overrides: { ...p.overrides } })) toast.info('Копия открыта в редакторе. Сохрани её как новый пост.'); }}/>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions"><Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action><Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён с сервера.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
+    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') navigate('content'); }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && <Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={p => { if (replaceEditor({ ...p, id: '', status: 'draft', targets: [], mediaIds: [...p.mediaIds], networks: [...p.networks], overrides: { ...p.overrides } })) toast.info('Копия открыта в редакторе. Сохрани её как новый пост.'); }}/>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions"><Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action><Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён с сервера.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
 }

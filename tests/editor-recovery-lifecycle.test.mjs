@@ -38,6 +38,88 @@ function fixture({ cache = storage(), snapshot, mutation } = {}) {
 const fields = { text: 'Не потерять этот текст', networks: ['max', 'telegram'], date: '2099-10-04', time: '19:45', overrides: { max: 'MAX версия', telegram: 'Telegram версия' } };
 const savedPost = { id: 'saved', title: null, baseText: 'Server version', status: 'DRAFT', targets: [], mediaIds: [], createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() };
 
+test('uncertain creation reload retries the original key and frozen publish-now payload', async () => {
+  const snapshot = { profile: { id: 'owner', displayName: 'Owner', email: 'fixture@example.test' }, posts: [], media: [],
+    socialAccounts: [{ id: 'tg', provider: 'telegram', providerAccountId: '-100123', enabled: true, connectionStatus: 'CONNECTED' }] };
+  const requests = [];
+  const mutation = async (url, init) => {
+    requests.push({ url, key: new Headers(init.headers).get('idempotency-key'), body: JSON.parse(init.body) });
+    if (requests.length === 1) throw Error('Response lost after server commit');
+    return Response.json({ ...savedPost, id: 'one-created-post', ...{ baseText: requests[0].body.baseText, targets: [] } }, { status: 201 });
+  };
+  const { cache } = fixture({ snapshot, mutation });
+  await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Send once', networks: ['telegram'] }));
+  await harness.settle();
+  await harness.composer().publishNow(harness.composer().draft);
+  await harness.settle();
+  harness.unmount();
+  fixture({ cache, snapshot, mutation });
+  await harness.settle();
+  assert.equal(requests.length, 1, 'bootstrap must not resubmit');
+  await harness.composer().publishNow(harness.composer().draft);
+  await harness.settle();
+  assert.match(requests[0].key ?? '', /^[0-9a-f-]{36}$/i);
+  assert.equal(requests[1].key, requests[0].key);
+  assert.deepEqual(requests[1].body, requests[0].body);
+});
+
+test('acknowledged create attaches its ID to edits made while the response was pending', async () => {
+  let finish;
+  const { cache } = fixture({ mutation: () => new Promise(resolve => { finish = resolve; }) });
+  await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Submitted' }));
+  await harness.settle();
+  const saving = harness.composer().save(harness.composer().draft, 'draft');
+  await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Edited during save' }));
+  await harness.settle();
+  finish(Response.json({ ...savedPost, id: 'acknowledged', baseText: 'Submitted' }, { status: 201 }));
+  await saving; await harness.settle();
+  assert.equal(harness.composer().draft.id, 'acknowledged');
+  assert.equal(harness.composer().draft.text, 'Edited during save');
+  assert.ok(cache.items.size > 0);
+});
+
+test('changed editor retry resolves original POST before PATCH to the acknowledged ID', async () => {
+  const requests = [];
+  const mutation = async (url, init) => {
+    requests.push({ url, key: new Headers(init.headers).get('idempotency-key'), body: JSON.parse(init.body) });
+    if (requests.length === 1) throw Error('Lost acknowledgement');
+    return Response.json({ ...savedPost, id: 'ack', baseText: JSON.parse(init.body).baseText });
+  };
+  const { cache } = fixture({ mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Original creation' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  harness.unmount(); fixture({ cache, mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Changed after reload' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(requests.length, 3);
+  assert.equal(requests[1].url, '/api/posts');
+  assert.equal(requests[1].key, requests[0].key);
+  assert.equal(requests[1].body.baseText, 'Original creation');
+  assert.equal(requests[2].url, '/api/posts/ack');
+  assert.equal(requests[2].key, null);
+  assert.equal(requests[2].body.baseText, 'Changed after reload');
+});
+
+test('retry restores original scheduled request even when current date became invalid', async () => {
+  const requests = [];
+  fixture({ mutation: async (url, init) => {
+    requests.push({ url, body: JSON.parse(init.body) });
+    if (requests.length === 1) throw Error('Lost acknowledgement');
+    return Response.json({ ...savedPost, id: 'recovered-schedule' });
+  } }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text: 'Schedule once', date: '2099-01-01', time: '12:00' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'scheduled'); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, date: '', time: '' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'scheduled'); await harness.settle();
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1].body, requests[0].body);
+  assert.equal(harness.composer().draft.id, 'recovered-schedule');
+  assert.equal(harness.composer().draft.date, '');
+});
+
 test('unsaved editor survives reload of actual PlannerApp after successful owner bootstrap', async () => {
   const { cache } = fixture();
   await harness.settle();
@@ -90,17 +172,20 @@ test('successful save clears recovery without writing a fresh blank cache record
   assert.equal(harness.composer().draft.text, '');
 });
 
-test('successful save clears older owned recovery when the latest cache write failed', async () => {
-  const { cache } = fixture({ mutation: async () => Response.json(savedPost) }); await harness.settle();
+test('failed durable creation write blocks dispatch and preserves editor instead of losing retry identity', async () => {
+  let calls = 0;
+  const { cache } = fixture({ mutation: async () => { calls += 1; return Response.json(savedPost); } }); await harness.settle();
   harness.composer().setDraft(current => ({ ...current, text: 'Older cached A' })); await harness.settle();
   const setItem = cache.setItem;
   cache.setItem = () => { throw Error('Quota'); };
   harness.composer().setDraft(current => ({ ...current, text: 'Latest saved B' })); await harness.settle();
   await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(calls, 0);
+  assert.equal(harness.composer().draft.text, 'Latest saved B');
   cache.setItem = setItem;
   harness.unmount(); fixture({ cache }); await harness.settle();
-  assert.equal(harness.composer().draft.text, '');
-  assert.equal(cache.items.size, 0);
+  assert.equal(harness.composer().draft.text, 'Older cached A');
+  assert.equal(cache.items.size, 1);
 });
 
 test('owner bootstrap failure does not hydrate cache into the unauthenticated fallback editor', async () => {
@@ -160,7 +245,7 @@ test('sessionStorage access failure leaves actual editor usable', async () => {
   assert.equal(harness.composer().draft.text, 'Still editable');
 });
 
-test('publish-now acknowledgement preserves a different draft opened while pending', async () => {
+test('pending creation blocks editor replacement and preserves edits to the current editor', async () => {
   let resolve;
   const snapshot = { profile: { id: 'owner', displayName: 'Owner' }, posts: [], media: [], socialAccounts: [{ id: 'account', provider: 'telegram', enabled: true, connectionStatus: 'CONNECTED' }] };
   const { cache, handlers } = fixture({ snapshot, mutation: () => new Promise(done => { resolve = done; }) }); await harness.settle();
@@ -169,9 +254,12 @@ test('publish-now acknowledgement preserves a different draft opened while pendi
   window.confirm = () => true;
   window.location.hash = '#content'; handlers.get('hashchange')(); await harness.settle();
   harness.find('Content').props.create(); await harness.settle();
+  window.location.hash = '#create'; handlers.get('hashchange')(); await harness.settle();
+  assert.equal(harness.composer().draft.text, 'Send first', 'replacement must wait for the original acknowledgement');
   harness.composer().setDraft(current => ({ ...current, text: 'Keep second' })); await harness.settle();
   resolve(Response.json(savedPost)); await publication; await harness.settle();
   assert.equal(harness.composer().draft.text, 'Keep second');
+  assert.equal(harness.composer().draft.id, 'saved');
   harness.unmount(); fixture({ cache }); await harness.settle();
   assert.equal(harness.composer().draft.text, 'Keep second');
 });

@@ -80,11 +80,14 @@ export const posts = pgTable('posts', {
   title: text('title'),
   baseText: text('base_text').notNull(),
   status: postStatusEnum('status').notNull().default('DRAFT'),
+  creationKey: text('creation_key'),
+  creationInputHash: text('creation_input_hash'),
   createdAt,
   updatedAt,
 }, (table) => [
   index('posts_user_id_idx').on(table.userId),
   index('posts_status_idx').on(table.status),
+  uniqueIndex('posts_user_creation_key_uidx').on(table.userId, table.creationKey),
 ]);
 
 export const postTargets = pgTable('post_targets', {
