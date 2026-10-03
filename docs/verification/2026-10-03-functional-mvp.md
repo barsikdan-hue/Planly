@@ -73,6 +73,20 @@ The browser persists the exact request and UUID in owner-scoped sessionStorage b
 
 **Limits/runtime:** Browser lost-response acceptance remains pending the final local runtime. Guarantee lasts while the post row exists: hard deletion removes its creation key, so a much later raw replay after deletion can create again. This is not a universal exactly-once guarantee or a new scheduler design. sessionStorage recovery is limited to the same tab; closing it is outside the guarantee.
 
+**Follow-up regression:** Independent cross-feature review reproduced an unnecessary PATCH after reloading an unchanged pending request: schema parsing changed JSON property order. `3e9df84` canonicalizes both editor snapshots. The strengthened helper test first failed and then passed (3/3 helper checks); two real PlannerApp callback regressions independently passed for a published acknowledged ID with failed cache cleanup. `d59ea9b` also closes Redis handles in the authenticated creation tests so a connected CI Redis client cannot keep the test process alive.
+
+**CI:** At `3e9df84`, [CI 37132493988](https://github.com/barsikdan-hue/Planly/actions/runs/37132493988) passed 212/212 with zero skipped, including the native PostgreSQL duplicate-request race, and migrations/typecheck/lint/build. [Self-host 37132494043](https://github.com/barsikdan-hue/Planly/actions/runs/37132494043) passed. Later edit-guard changes require their own CI.
+
+## Functional audit fix: protect content with publication history
+
+**Root cause:** `updatePost` changed the shared post/targets/media before `reconcilePostPublicationsInTx` skipped completed or uncertain publication history. A local HTTP reproduction returned 200 for changed text while retaining the old Telegram receipt, and another tick sent nothing for that changed text.
+
+**Change:** The save transaction locks the owned post and its complete publication history before any change. A changed payload with published, publishing, reconnect-required or ambiguous-delivery history returns HTTP 409 (`POST_EDIT_BLOCKED`); an exact normalized no-op succeeds without writes or queue work. Ordinary drafts and unexecuted schedules remain editable. A processor claim and an edit contend on the same publication rows, preventing content changes after the claim wins.
+
+The server exposes an edit-block reason from all history, including inactive targets. Content details and restored/open editors show the original read-only; copying uses the current local text and clears publication identity. Calendar drag and direct submission are guarded. A retained pending creation can still be resolved through the global retry control after its original was published. Delete copy explicitly says that the Planly record is removed and already published provider messages remain.
+
+**Tests:** Backend RED: 16 assertion failures before implementation. Backend focused/protected GREEN: 51 PASS, 0 FAIL, 2 explicit local PGlite native-concurrency SKIP (creation and edit/claim); normal PostgreSQL CI runs both. Final client/recovery/planner/render batch: 54/54. Typecheck passed; focused lint has zero errors and five image warnings. Independent review found no remaining must-fix after the canonical pending fix; its two retained-pending callback checks passed. Native locks, production build, browser read-only/copy behavior and exact-head CI are recorded in final acceptance below when completed.
+
 ## Evidence environment and limits
 
 Local evidence is outside the repository in sibling `functional-mvp-evidence/`: red/green test logs and `runtime/http-audit-results.json`. Loopback services: separate UI and destructive-test databases, local storage/provider fixture, synthetic owner credentials. Production data and secrets are not used. PGlite serializes a single backend and cannot prove PostgreSQL lock concurrency. Unsigned object-storage fixture cannot prove private-bucket access policy. A signature-only MP4 fixture proves upload/request handling, not video playback. Browser and final exact-head CI results must be recorded separately below.

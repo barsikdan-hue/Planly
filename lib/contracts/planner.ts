@@ -46,6 +46,7 @@ export type PostTargetDto = {
 
 export type PostDto = {
   id: string;
+  editBlockedReason?: string | null;
   title: string | null;
   baseText: string;
   status: PostStatus;

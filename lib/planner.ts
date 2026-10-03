@@ -11,6 +11,7 @@ export type Media = {
 };
 export type Post = {
   id: string;
+  editBlockedReason?: string | null;
   text: string;
   networks: Network[];
   date: string;
@@ -133,6 +134,7 @@ export function fromServerPost(input: PostDto): Post {
   }
   return {
     id: input.id,
+    editBlockedReason: input.editBlockedReason ?? null,
     text: input.baseText,
     networks,
     date: schedule.date,
