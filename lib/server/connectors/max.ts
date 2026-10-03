@@ -44,7 +44,7 @@ export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,t
     if(items.length!==1||!attachmentToken(uploaded))return failure('TEMPORARY','MAX_UPLOAD_RESPONSE','MAX upload response was incomplete.');
     return {ok:true,type,token:uploaded};
    }
-   if((await response.text()).trim()!=='<retval>1</retval>')return failure('TEMPORARY','MAX_UPLOAD_RESPONSE','MAX upload response was incomplete.';
+   if((await response.text()).trim()!=='<retval>1</retval>')return failure('TEMPORARY','MAX_UPLOAD_RESPONSE','MAX upload response was incomplete.');
    return {ok:true,type,token:data!.token as string};
   }catch{return failure('TEMPORARY','MAX_UPLOAD_FAILED','MAX media upload was not confirmed.');}
  }
