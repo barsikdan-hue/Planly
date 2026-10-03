@@ -1,0 +1,3 @@
+Telegram live smoke trigger
+MSK: 2026-10-03T08:13:00+03:00
+Purpose: owner-approved one-shot Telegram Planly API/media/worker smoke.
