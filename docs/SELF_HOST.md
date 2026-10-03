@@ -1,6 +1,6 @@
 # Planly: self-host build
 
-The existing Next.js server and standalone BullMQ worker run with PostgreSQL, Redis and private MinIO storage in Docker Compose. No Render worker or GitHub timer is required at runtime. **Telegram publication is implemented; real group text/photo/video/album verification passed and is tracked in docs/TELEGRAM_TEST.md.** Configure the bot token privately on web and worker and verify a channel or administrator group through the UI. Without a token the registry keeps its explicit unsupported state. MAX remains unimplemented.
+The existing Next.js server and standalone BullMQ worker run with PostgreSQL, Redis and private MinIO storage in Docker Compose. No Render worker or GitHub timer is required for this Compose runtime. **Telegram and MAX publication are implemented, with historical live provider verification.** See [the handoff inspection](verification/2026-10-03-handoff-inspection.md) for evidence and runtime scope. Configure each provider token privately on web and worker and verify the destination through the UI. Without a token the registry keeps its explicit unsupported state.
 
 ## First local launch
 

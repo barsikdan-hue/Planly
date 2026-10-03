@@ -10,7 +10,7 @@ This repository is the authoritative Planly source. Target runtime: the owner's 
 
 ## Current milestone
 
-**MVP v1 / Phase 3 — Scheduler runtime and self-host build**
+**MVP v1 / Phase 4 — Telegram/MAX publication and UI completion**
 
 Implemented in this milestone:
 
@@ -26,16 +26,15 @@ Implemented in this milestone:
 - GitHub Actions verification;
 - Render web + PostgreSQL deployment blueprint;
 - Redis/BullMQ queue, worker, bounded retry and reconciliation;
+- Telegram and MAX connectors with historical live provider verification;
 - Docker Compose for web, worker, migrations, PostgreSQL, Redis and private media storage.
 
 Not implemented yet:
 
-- real Telegram delivery;
-- real MAX delivery;
 - OpenAI research/text/image generation;
 - production analytics.
 
-A UI state is never treated as proof that a social network actually published a post. Real publication starts in the next milestone.
+A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Current work completes the navigation/settings flow; it does not add AI or publish test content.
 
 ## Requirements
 
@@ -65,7 +64,7 @@ Required server variables:
 
 Never expose these through `NEXT_PUBLIC_*` or client code.
 
-`OWNER_PASSWORD_HASH` is a scrypt hash, not a plaintext password. Provider tokens remain absent until real connectors are implemented.
+`OWNER_PASSWORD_HASH` is a scrypt hash, not a plaintext password. Configure `TELEGRAM_BOT_TOKEN` and `MAX_BOT_TOKEN` only on the server for the corresponding connectors. Never expose provider tokens to the browser.
 
 ## Local setup
 
@@ -142,7 +141,7 @@ Active social networks in this milestone are exactly:
 - Telegram
 - MAX
 
-They remain `DISCONNECTED` until their real connectors are implemented.
+Account connection is confirmed by the server after validating the bot and destination permissions. An account without a confirmed connection remains `DISCONNECTED`.
 
 ## Verification
 
@@ -185,7 +184,7 @@ Do not put smoke-test plaintext credentials into committed files or CI logs.
 - one web service;
 - one PostgreSQL database.
 
-The legacy Render blueprint does not provision Scheduler. The owner's-server target uses compose.yaml; no paid Render worker is required.
+The Render blueprint does not provision a paid worker. The existing GitHub scheduler workflow calls the authenticated `/api/scheduler/tick` endpoint. The owner's-server target uses the standalone worker in `compose.yaml`.
 
 The web service uses `/api/health`, which returns `200 {"status":"ok"}` only when PostgreSQL responds. Configuration details are not returned to the client.
 
@@ -193,16 +192,17 @@ Before the first real deployment, set the owner credentials/session secret and S
 
 ## Roadmap
 
-Next production milestone:
+Publication path:
 
 `Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
 
-Queue/processor/worker are implemented. Self-host verification checks the actual container runtime. Telegram is the next provider; MAX follows after Telegram stability.
+Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. The current goal is a simpler sidebar and social-account management in Settings; see [ROADMAP.md](ROADMAP.md) for verification limits and the remaining browser gate.
 
 OpenAI content research/generation remains a later milestone after publication is trustworthy.
 
 ## Project docs
 
-- `docs/baseline/CURRENT_STATE.md` — verified current state and known gaps.
+- `docs/verification/2026-10-03-handoff-inspection.md` — current handoff evidence and verification limits.
+- `docs/baseline/CURRENT_STATE.md` — historical baseline; current code, CI and runtime take precedence.
 - `docs/superpowers/specs/2026-09-30-planly-mvp-v1-design.md` — approved MVP v1 architecture.
 - `docs/superpowers/plans/2026-10-01-foundation-content-core.md` — Milestone 1 implementation plan.

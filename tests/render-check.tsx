@@ -34,7 +34,7 @@ const screens = [
     ['Медиа', <MediaLibrary key="media" media={[]} upload={async () => []} remove={noop} useMedia={noop}/>, 'Медиатека'],
     ['Соцсети', <SocialAccounts key="socials" accounts={socialAccounts} toggle={noop} connect={async()=>{}}/>, 'Не подключено'],
     ['Аналитика', <Analytics key="analytics" posts={posts}/>, 'Демонстрационные цифры'],
-    ['Настройки', <Settings key="settings" name="Данил" saveName={noop}/>, 'Как к тебе обращаться'],
+    ['Настройки', <Settings key="settings" name="Данил" saveName={noop} accounts={socialAccounts} toggle={noop} connect={async()=>{}}/>, 'Как к тебе обращаться'],
 ] as const;
 for (const [name, screen, expected] of screens) {
     const markup = renderToStaticMarkup(screen);
