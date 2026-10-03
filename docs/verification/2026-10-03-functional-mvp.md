@@ -24,6 +24,20 @@ Rules preserve the existing conservative connector limits. Providers may allow m
 
 **Runtime:** Actual local Next HTTP path returned 422 for incompatible content with post/publication counts unchanged. With synthetic accounts and loopback provider fixtures, TG/MAX requests exercised actual adapter serialization; VALIDATION remained terminal and each target retained its own outcome. This is not a fresh live-provider or production deployment claim.
 
+**Commit:** `09dfd22`. [CI 37128816051](https://github.com/barsikdan-hue/Planly/actions/runs/37128816051) passed 171/171 on PostgreSQL/Redis, migrations, typecheck, lint and build. [Self-host 37128816093](https://github.com/barsikdan-hue/Planly/actions/runs/37128816093) passed. These runs validate the PR merge tree for this head; later commits need fresh CI.
+
+## Task 2: unfinished editor reload recovery
+
+**Root cause:** `PlannerApp` initialized its editor with `useState(blankPost)`. Bootstrap restored the saved server list but not the unfinished editor. Three failing lifecycle tests reproduced reload loss, failed-save/reload loss, and an older successful request clearing newer editor work.
+
+**Change:** One owner-scoped sessionStorage record stores editable fields after authenticated bootstrap. No autosave requests, background publication, new storage service or database table. Current server statuses and fresh media URLs remain authoritative. Missing posts recover as new drafts with notice; missing media IDs are pruned. New/Edit/Copy/Media replacements share a confirmation for meaningful unsaved content; date/time/network-only selections in an otherwise empty new draft do not prompt. Closing the tab/browser is outside the recovery guarantee.
+
+All editor changes advance a revision. Confirmed save resets/clears only the submitted revision, using the last successful cache snapshot so a later quota error cannot resurrect older text after saving. Recovery accepts unfinished input beyond submission limits (for example 21 attached files), while refusing unreadable or oversized cache writes before replacing the prior copy. Read/write/remove failures report recovery unavailability and keep the editor usable.
+
+**Review and tests:** Independent review found and reproduced two additional edge cases: own-written over-limit editor cache was unreadable, and a failed cache write followed by successful server save revived older content. Both were fixed with regressions. Final focused suite: 33/33; independent recovery rerun: 19/19; final typecheck passed. Tests execute helper functions and actual PlannerApp callbacks/effects through an explicitly scoped hook harness; they do not establish React renderer or browser acceptance.
+
+**Runtime boundary:** Fresh browser reload acceptance remains pending browser connectivity. Previous production walkthrough reproduced the original loss; the current branch has not been deployed. Full functional browser acceptance and fresh exact-head CI remain milestone requirements.
+
 ## Evidence environment and limits
 
 Local evidence is outside the repository in sibling `functional-mvp-evidence/`: red/green test logs and `runtime/http-audit-results.json`. Loopback services: separate UI and destructive-test databases, local storage/provider fixture, synthetic owner credentials. Production data and secrets are not used. PGlite serializes a single backend and cannot prove PostgreSQL lock concurrency. Unsigned object-storage fixture cannot prove private-bucket access policy. A signature-only MP4 fixture proves upload/request handling, not video playback. Browser and final exact-head CI results must be recorded separately below.

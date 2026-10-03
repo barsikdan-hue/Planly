@@ -136,6 +136,8 @@ The frontend reads a server snapshot and performs mutations through Next.js rout
 
 IndexedDB is no longer authoritative for production planner data. UI state changes only after the server confirms the mutation, so a network error cannot silently pretend a draft was saved.
 
+Unsaved editor changes are kept separately in owner-scoped `sessionStorage` for recovery after reloading the same tab. Text, per-network variants, selected networks, date/time and references to uploaded media are restored after authentication. Closing the tab or browser is outside this recovery guarantee. Explicit saving is still required to store a draft in PostgreSQL; recovery performs no automatic save or publication.
+
 Active social networks in this milestone are exactly:
 
 - Telegram
