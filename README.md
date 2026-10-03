@@ -12,6 +12,8 @@ This repository is the authoritative Planly source. Target runtime: the owner's 
 
 **MVP v1 / Phase 4 — Telegram/MAX publication and UI completion**
 
+Functional fixes are implemented and verified on `codex/functional-mvp`, source head `2ab4b4b`. Production remains at `3d1fcba`; this branch has not been merged or deployed. CI, local runtime/browser evidence and remaining acceptance limits are recorded in [functional MVP verification](docs/verification/2026-10-03-functional-mvp.md).
+
 Implemented in this milestone:
 
 - Next.js production runtime;
@@ -27,6 +29,8 @@ Implemented in this milestone:
 - Render web + PostgreSQL deployment blueprint;
 - Redis/BullMQ queue, worker, bounded retry and reconciliation;
 - Telegram and MAX connectors with historical live provider verification;
+- content validation before enqueue, editor reload recovery and selected media preview order;
+- repeatable post creation after a lost response and protection of published or uncertain originals;
 - Docker Compose for web, worker, migrations, PostgreSQL, Redis and private media storage.
 
 Not implemented yet:
@@ -34,7 +38,7 @@ Not implemented yet:
 - OpenAI research/text/image generation;
 - production analytics.
 
-A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Current work completes the navigation/settings flow; it does not add AI or publish test content.
+A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Final branch checks used synthetic local provider fixtures; fresh production and live-provider acceptance remain separate gates. UI file-chooser upload is not proven because the browser tool stopped before assigning a file, despite enabled permission and reconnection; HTTP upload passed.
 
 ## Requirements
 
@@ -138,6 +142,10 @@ IndexedDB is no longer authoritative for production planner data. UI state chang
 
 Unsaved editor changes are kept separately in owner-scoped `sessionStorage` for recovery after reloading the same tab. Text, per-network variants, selected networks, date/time and references to uploaded media are restored after authentication. Closing the tab or browser is outside this recovery guarantee. Explicit saving is still required to store a draft in PostgreSQL; recovery performs no automatic save or publication.
 
+New-post requests persist their exact payload and creation key before dispatch. After a lost response, manual retry resolves the original post before applying newer edits to its confirmed ID. Switching to another editor is blocked while creation remains unresolved. The creation key lasts while its post row exists; hard deletion ends that guarantee.
+
+Published, publishing or uncertain originals reject content changes. The editor offers a separate draft copy using the current local text, variants and media. Exact unchanged server replays remain harmless; retrying a pending creation does not republish its original.
+
 Active social networks in this milestone are exactly:
 
 - Telegram
@@ -198,13 +206,14 @@ Publication path:
 
 `Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
 
-Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. Sidebar cleanup and social-account management in Settings are deployed. The current goal is the fully verified functional MVP: pre-enqueue content validation, editor reload recovery and the complete Telegram/MAX publication flow. See [ROADMAP.md](ROADMAP.md) for evidence and human gates. GitHub scheduler timing is accepted temporary tech debt until the target self-host deployment.
+Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. Sidebar cleanup and social-account management in Settings are deployed; the functional fixes above remain on the verified branch pending the remaining acceptance and owner gates. See [ROADMAP.md](ROADMAP.md) for evidence and human gates. GitHub scheduler timing is accepted temporary tech debt until the target self-host deployment.
 
 OpenAI content research/generation remains a later milestone after publication is trustworthy.
 
 ## Project docs
 
-- `docs/verification/2026-10-03-handoff-inspection.md` — current handoff evidence and verification limits.
+- `docs/verification/2026-10-03-functional-mvp.md` — verified functional branch, final acceptance and limits.
+- `docs/verification/2026-10-03-handoff-inspection.md` — historical production handoff evidence and verification limits.
 - `docs/baseline/CURRENT_STATE.md` — historical baseline; current code, CI and runtime take precedence.
 - `docs/superpowers/specs/2026-09-30-planly-mvp-v1-design.md` — approved MVP v1 architecture.
 - `docs/superpowers/plans/2026-10-01-foundation-content-core.md` — Milestone 1 implementation plan.

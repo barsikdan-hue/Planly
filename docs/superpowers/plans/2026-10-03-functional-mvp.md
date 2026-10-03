@@ -24,26 +24,33 @@
 
 Files: shared `lib/publication-content.ts`, server posts/http, current connectors, planner contracts/client guard and focused node:test coverage.
 
-- [ ] Reproduce invalid text/media being accepted and queued through actual save path; retain red evidence.
-- [ ] Share current connector limits without expanding provider features; run metadata-only validation before transactional writes.
-- [ ] Return actionable HTTP 422 for scheduled content errors; preserve unscheduled drafts.
-- [ ] Prove create/update rollback, override handling, boundary limits and terminal VALIDATION behavior.
-- [ ] Review diff, run relevant regression/typecheck/lint, commit this fix independently.
+- [x] Reproduce invalid text/media being accepted and queued through actual save path; retain red evidence.
+- [x] Share current connector limits without expanding provider features; run metadata-only validation before transactional writes.
+- [x] Return actionable HTTP 422 for scheduled content errors; preserve unscheduled drafts.
+- [x] Prove create/update rollback, override handling, boundary limits and terminal VALIDATION behavior.
+- [x] Review diff, run relevant regression/typecheck/lint, commit this fix independently.
 
 ## Task 2 — draft/reload persistence
 
 Files: small editor recovery helper, `components/planner/app.tsx`, focused node:test coverage.
 
-- [ ] Reproduce React-only editor state loss on reload and identify every editor replacement/clear path.
-- [ ] Store editable fields only in owner-scoped sessionStorage after hydration; recover existing post metadata from bootstrap.
-- [ ] Handle deleted posts/media and malformed/unavailable storage with an honest notice; never auto-publish.
-- [ ] Guard replacement of dirty content and clear/reset only the revision confirmed saved by the API.
-- [ ] Verify reload/new/edit/failed save/successful save in the actual local browser; commit separately.
+- [x] Reproduce React-only editor state loss on reload and identify every editor replacement/clear path.
+- [x] Store editable fields only in owner-scoped sessionStorage after hydration; recover existing post metadata from bootstrap.
+- [x] Handle deleted posts/media and malformed/unavailable storage with an honest notice; never auto-publish.
+- [x] Guard replacement of dirty content and clear/reset only the revision confirmed saved by the API.
+- [x] Verify reload/new/edit/failed save/successful save in the actual local browser; commit separately.
 
 ## Task 3 — functional audit and handoff
 
-- [ ] Audit Dashboard, Create Post, Content, Calendar, Media, Settings and Telegram/MAX settings using a local authenticated browser.
-- [ ] Exercise upload/preview, draft/edit/delete, immediate/due/future publication, duplicate request, errors and independent target outcomes with actual server paths and local provider fixtures.
-- [ ] Fix only separately reproduced bounded functional defects, each with its own regression and commit.
-- [ ] Run full CI on PostgreSQL/Redis, typecheck/lint/build and self-host runtime; inspect exact head results.
-- [ ] Record pass/fail/unverified per flow, known limitations and evidence. Request main merge/deploy only after the branch is reviewable; do not claim fresh production acceptance before that gate.
+- [x] Audit Dashboard, Create Post, Content, Calendar, Media, Settings and Telegram/MAX settings using a local authenticated browser.
+- [x] Exercise upload/preview, draft/edit/delete, immediate/due/future publication, duplicate request, errors and independent target outcomes with actual server paths and local provider fixtures.
+- [x] Fix only separately reproduced bounded functional defects, each with its own regression and commit.
+- [x] Run full CI on PostgreSQL/Redis, typecheck/lint/build and self-host runtime; inspect exact head results.
+- [x] Record pass/fail/unverified per flow, known limitations and evidence. Request main merge/deploy only after the branch is reviewable; do not claim fresh production acceptance before that gate.
+
+## Outstanding acceptance
+
+- [ ] Upload through the Edge file chooser: tool permission blocker before Planly receives the file; API upload, media selection and playback passed.
+- [ ] Human-approved main merge and production deployment, followed by fresh production/provider acceptance. No deployment is authorized by local test completion.
+
+Evidence: [functional verification report](../../verification/2026-10-03-functional-mvp.md). Implementation and local audit are reviewable; these unchecked acceptance gates prevent a full milestone-complete claim.
