@@ -6,6 +6,8 @@ import { mediaAssets, posts, publications, socialAccounts, users } from '../db/s
 import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
 import { POST } from '../app/api/posts/route.ts';
 import { createPost, updatePost } from '../lib/server/posts.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 
 const key = '45a494bd-2aa4-4e47-a3b7-85c6aefb8854';
 const owner = 'idempotency-owner';
@@ -23,7 +25,11 @@ beforeEach(async () => {
   await db.insert(socialAccounts).values(['TELEGRAM', 'MAX'].map(provider => ({ id: `idempotency-${provider}`, userId: owner, provider: provider as 'TELEGRAM' | 'MAX', displayName: provider })));
   token = await createOwnerSession(owner);
 });
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeRedisConnection();
+  await closeDb();
+});
 
 test('concurrent POST retries with one key create one post and one publication', {
   skip: process.env.PLANLY_TEST_DB_PGLITE === '1' ? 'PGlite socket multiplexing cannot prove concurrent transaction isolation; native PostgreSQL CI covers this race.' : false,
