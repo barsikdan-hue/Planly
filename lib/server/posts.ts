@@ -11,6 +11,7 @@ import {
 } from '../contracts/planner.ts';
 import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
 import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
+import { PublicationContentError, validatePublicationContent, type PublicationMediaMetadata } from '../publication-content.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
@@ -86,10 +87,19 @@ async function validateRelations(
   userId: string,
   input: SavePostInput,
 ) {
+  let media: PublicationMediaMetadata[] = [];
   if (input.mediaIds.length) {
-    const rows = await tx.select({ id: mediaAssets.id }).from(mediaAssets)
+    const rows = await tx.select({ id: mediaAssets.id, mimeType: mediaAssets.mimeType,
+      byteSize: mediaAssets.byteSize, width: mediaAssets.width, height: mediaAssets.height }).from(mediaAssets)
       .where(and(eq(mediaAssets.userId, userId), inArray(mediaAssets.id, input.mediaIds)));
     if (rows.length !== input.mediaIds.length) throw new Error('Media not found for owner');
+    media = rows;
+  }
+
+  for (const target of input.targets) {
+    if (!target.scheduledAt) continue;
+    const issue = validatePublicationContent(toDbProvider(target.provider), target.textOverride ?? input.baseText, media);
+    if (issue) throw new PublicationContentError(issue);
   }
 
   const providers = input.targets.map(target => toDbProvider(target.provider));

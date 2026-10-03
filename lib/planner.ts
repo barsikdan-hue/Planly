@@ -48,8 +48,10 @@ export function validatePost(p: {
   date: string;
   time: string;
   mediaIds?: string[];
+  overrides?: Partial<Record<Network, string>>;
 }, status: string, now = Date.now()): string | null {
-  if (!p.text.trim() && !p.mediaIds?.length) return 'Добавь текст публикации или медиа.';
+  const hasOverride = p.networks.some(network => (network === 'telegram' || network === 'max') && !!p.overrides?.[network]?.trim());
+  if (!p.text.trim() && !p.mediaIds?.length && !hasOverride) return 'Добавь текст публикации или медиа.';
   if (status === 'draft') return null;
   if (!p.networks.length) return 'Выбери хотя бы одну соцсеть.';
   if (status === 'scheduled') {

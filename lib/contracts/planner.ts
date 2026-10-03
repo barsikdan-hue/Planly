@@ -22,7 +22,7 @@ export const savePostInputSchema = z.object({
     ids => new Set(ids).size === ids.length,
     'Duplicate media id',
   ),
-}).refine(input => input.baseText.length > 0 || input.mediaIds.length > 0, {
+}).refine(input => input.baseText.length > 0 || input.mediaIds.length > 0 || input.targets.some(target => !!target.textOverride?.trim()), {
   message: 'Add text or media to the post',
   path: ['baseText'],
 });

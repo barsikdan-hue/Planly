@@ -1,6 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {validatePost,movePost,moscowDate} from '../lib/planner.ts';
+
+test('provider-only content must belong to a selected network',()=>{
+ const p={text:'',networks:['telegram'],date:'2030-01-01',time:'12:00',overrides:{telegram:'specific',max:'stale'}};
+ assert.equal(validatePost(p,'scheduled',0),null);
+ assert.ok(validatePost({...p,overrides:{max:'stale'}},'draft',0));
+ assert.ok(validatePost({...p,overrides:{telegram:' \n '}},'draft',0));
+});
 test('empty posts and missing targets cannot be scheduled',()=>{
  assert.match(validatePost({text:' ',networks:['telegram'],date:'2030-01-01',time:'12:00'},'scheduled',0)??'',/текст/);
  assert.match(validatePost({text:'hello',networks:[],date:'2030-01-01',time:'12:00'},'scheduled',0)??'',/соцсеть/);
