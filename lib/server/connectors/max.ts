@@ -6,6 +6,8 @@ const failure=(errorType:PublicationErrorType,code:string,message:string):Failur
 const ambiguous=()=>failure('PERMANENT','AMBIGUOUS_DELIVERY','MAX delivery outcome is unknown. Check the destination before sending again.');
 const validId=(v:unknown)=>typeof v==='string'&&/^-?[1-9]\d{0,15}$/.test(v)&&Number.isSafeInteger(Number(v));
 const attachmentToken=(v:unknown):v is string=>typeof v==='string'&&v.length>0&&v.length<=8192;
+const safePath=(path:string)=>path.replace(/\/chats\/-?\d+/g,'/chats/:id').replace(/chat_id=-?\d+/g,'chat_id=:id');
+const diag=(event:Record<string,unknown>)=>console.warn('[planly:max]',JSON.stringify(event));
 
 export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,timeoutMs?:number}):SocialConnector & {
  validate(destinationId:string):Promise<{ok:true,destinationId:string,displayName:string}|Failure>;
@@ -17,12 +19,13 @@ export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,t
    const response=await fetcher(`https://platform-api2.max.ru${path}`,{method,redirect:'error',headers:{authorization:token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(options.timeoutMs??30000)});
    const data=record(await response.json());
    if(response.ok&&data&&typeof data.code!=='string')return {ok:true,result:data};
-   if(response.status===401||response.status===403)return failure('AUTH',`MAX_${response.status}`,'MAX bot credentials or destination permissions need reconnecting.');
+   if(response.status===401||response.status===403){diag({event:'api_error',method,path:safePath(path),status:response.status,code:typeof data?.code==='string'?data.code:null,mutation});return failure('AUTH',`MAX_${response.status}`,'MAX bot credentials or destination permissions need reconnecting.');}
    if(data?.code==='attachment.not.ready')return {...failure('TEMPORARY','MAX_ATTACHMENT_NOT_READY','MAX is still processing the attachment.'),retryAfterMs:60000};
    if(response.status===429)return {...failure('TEMPORARY','MAX_429','MAX rate limit; retry later.'),retryAfterMs:60000};
-   if(response.status>=400&&response.status<500)return failure('VALIDATION',`MAX_${response.status}`,'MAX rejected the destination, text or attachment.');
+   if(response.status>=400&&response.status<500){diag({event:'api_error',method,path:safePath(path),status:response.status,code:typeof data?.code==='string'?data.code:null,mutation});return failure('VALIDATION',`MAX_${response.status}`,'MAX rejected the destination, text or attachment.');}
+   diag({event:'api_unavailable',method,path:safePath(path),status:response.status,code:typeof data?.code==='string'?data.code:null,mutation});
    return mutation?ambiguous():failure('TEMPORARY','MAX_UNAVAILABLE','MAX validation or upload preparation is temporarily unavailable.');
-  }catch{return mutation?ambiguous():failure('TEMPORARY','MAX_UNAVAILABLE','MAX validation or upload preparation is temporarily unavailable.');}
+  }catch(error){diag({event:'transport_error',method,path:safePath(path),name:error instanceof Error?error.name:typeof error,mutation});return mutation?ambiguous():failure('TEMPORARY','MAX_UNAVAILABLE','MAX validation or upload preparation is temporarily unavailable.');}
  }
  async function upload(asset:NonNullable<PublishInput['media']>[number]):Promise<{ok:true,type:'image'|'video',token:string}|Failure>{
   const type=asset.mimeType==='video/mp4'?'video':'image';
