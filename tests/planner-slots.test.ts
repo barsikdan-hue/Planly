@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { slotQuerySchema } from '../lib/contracts/swipe-planner.ts';
 import { findNextSlot, slotMinuteKey, slotPresets } from '../lib/planner-slots.ts';
 const query = { providers: ['telegram' as const], startDate: '2030-01-01', endDate: '2030-01-07', weekdays: [1,2,3,4,5,6,7], times: ['10:00'] };
@@ -26,4 +27,10 @@ test('query bounds reject invalid dates, duplicate platforms/weekdays/times and 
   for (const patch of [{providers:[]},{providers:['telegram','telegram']},{times:[]},{times:['10:00','10:00']},{times:['25:00']},{times:['01:00','02:00','03:00','04:00','05:00']},{weekdays:[]},{weekdays:[0]},{weekdays:[1,1]},{startDate:'2030-02-30'},{endDate:'2029-12-31'},{endDate:'2030-02-01'}]) assert.equal(slotQuerySchema.safeParse({...query,...patch}).success,false,JSON.stringify(patch));
   assert.equal(slotQuerySchema.safeParse({...query,endDate:'2030-01-31'}).success,true);
   assert.equal(slotQuerySchema.safeParse({...query,providers:['telegram','max']}).success,true);
+});
+test('last supported four-digit year remains a bounded no-slot search', () => {
+  const moduleUrl = new URL('../lib/planner-slots.ts',import.meta.url).href;
+  const lastDate = {...query,startDate:'9999-12-31',endDate:'9999-12-31'};
+  const result = execFileSync(process.execPath,['--input-type=module','--experimental-strip-types','-e',`import {findNextSlot} from ${JSON.stringify(moduleUrl)}; console.log(findNextSlot(${JSON.stringify(lastDate)},new Set(),new Date('+010000-01-01T00:00:00Z')));`],{timeout:1500,encoding:'utf8'});
+  assert.equal(result.trim(),'null');
 });
