@@ -1,4 +1,4 @@
-import { savePostInputSchema } from '../../../lib/contracts/planner.ts';
+import { createPostSourceSchema, savePostInputSchema } from '../../../lib/contracts/planner.ts';
 import { requireApiOwner } from '../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../lib/server/http.ts';
 import { createPost, listPlannerPosts } from '../../../lib/server/posts.ts';
@@ -16,10 +16,12 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   try {
     const owner = await requireApiOwner(request);
-    const input = savePostInputSchema.parse(await readJson(request));
+    const raw = await readJson(request);
+    const input = savePostInputSchema.parse(raw);
+    const source = createPostSourceSchema.parse(raw);
     const header = request.headers.get('idempotency-key');
     const creationKey = header === null ? undefined : creationKeySchema.parse(header);
-    return json(await createPost(owner.id, input, { creationKey }), 201);
+    return json(await createPost(owner.id, input, { creationKey, ...source }), 201);
   } catch (error) {
     return apiError(error);
   }
