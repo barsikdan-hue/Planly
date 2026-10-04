@@ -20,7 +20,7 @@ before(async () => {
 test('sidebar omits editor shortcut while keeping the content destination', () => {
   const html = renderToStaticMarkup(React.createElement(PlannerApp));
   assert.equal(html.includes('Создать пост'), false);
-  assert.ok(html.includes('Контент'));
+  assert.ok(html.includes('Библиотека'));
 });
 
 test('sidebar omits social accounts destination while keeping Settings', () => {
