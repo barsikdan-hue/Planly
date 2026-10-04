@@ -1,7 +1,9 @@
 # Personal SMM Planner / Planly
 
 CURRENT PHASE: 4 — Telegram/MAX publication and UI completion.
-CURRENT GOAL: finish the remaining acceptance and owner gates for the verified functional branch. Source head: 2ab4b4b on codex/functional-mvp. Production remains at 3d1fcba; no merge or deployment was performed. No VK, AI, analytics, scheduler redesign or paid Render resources.
+CURRENT GOAL: complete functional MVP acceptance on the existing online Render Planly. PR #4 has branch evidence; owner-approved merge/deploy precede production browser/media and affected-provider checks. Localhost chooser verification is not a prerequisite. No VK, AI, analytics, Swipe Planner, scheduler redesign or paid Render resources.
+
+PERMANENT WORKFLOW (2026-10-04): branch → GitHub push → actual CI → PR → owner merge gate → main → existing Render deployment → production browser acceptance → minimal real Telegram/MAX smoke when affected behavior needs it. Local tests/build/smoke support diagnosis and branch review; user-facing final PASS requires deployed runtime. Full rules: AGENTS.md.
 
 DONE
 - Next.js UI, owner auth/session, PostgreSQL/Drizzle Foundation and Content Core.
@@ -31,7 +33,7 @@ HISTORICAL EVIDENCE
 - Verified source + compiled Next.js build artifact was emitted after the successful container smoke. Latest branch CI artifacts provide the exact tested commit. Initialization also rejects malformed emails containing backslashes to preserve dotenv quoting.
 
 KNOWN ISSUES / ACCEPTANCE LIMITS
-- UI file-chooser upload is NOT PROVEN: the browser tool stopped before assigning files despite enabled permission and reconnection. HTTP PNG/MP4 upload passed; this does not close the chooser interaction gap.
+- Browser file assignment was blocked by tool permission handling. This is an automation limitation, not a proven Planly defect or mandatory localhost gate. HTTP PNG/MP4 upload passed; upload acceptance will be completed through the actual Render UI after approved deploy, using a supported browser mechanism or manual file selection.
 - The functional branch has not been deployed to production. Fresh production walkthrough and live-provider acceptance remain gated; historical live sends and synthetic local outcomes do not establish those results.
 - AI and real analytics remain later phases.
 - Owner-server DNS/TLS and backups have not yet been deployed.
@@ -43,11 +45,18 @@ TECH DEBT
 - Ambiguous provider-handoff delivery requires review, never blind resend.
 - Historical baseline files describe earlier checkpoints; current code/CI supersede their runtime statements.
 
-REMAINING GATE before final build handoff: close or explicitly accept the UI upload verification gap, obtain owner approval for main merge and manual production deployment, then perform the separately authorized fresh production/browser and live-provider acceptance. Branch CI is green; prior provider verification does not replace these gates.
-ACTIVE MILESTONE: Phase 4 — functional fixes and branch verification complete, with the acceptance limits above. Each fix has its own root-cause evidence, tests and commit. Merge to main and production deployment remain explicit human gates.
+REMAINING GATE: owner approval for PR #4 merge and existing-service production deploy, then production walkthrough, real UI upload and the minimal necessary Telegram/MAX smoke. After specific merge + deploy approval, continue through verification without another stop. Branch CI is green; localhost chooser interaction is not a merge gate.
+ACTIVE MILESTONE: Phase 4 — functional implementation and internal branch evidence are review-ready; online acceptance remains pending deploy. Each fix has its own root-cause evidence, tests and commit. Merge to main and production deployment remain explicit human gates.
 USER DECISION (2026-10-01): resume the roadmap at Telegram publication tests; online verification precedes downloading the final working build. Packaging is not a substitute for completing this phase.
 IMPLEMENTATION PLAN: docs/superpowers/plans/2026-10-01-telegram-publication.md.
 HISTORICAL CHECKPOINT (2026-10-02): 114 tests, typecheck, lint, migrations and build passed. Actual Docker runtime including worker private-media reads and restart passed. Text live verification: run36971050067. Photo/video/delayed album live verification: run36971756220, commit b931a7a4. Safe media remote IDs/links: docs/verification/2026-10-02-telegram-media.json.
 LIVE TARGET: @danil_sochi_realty (owner’s group), sender @danil_sochi_realty_bot; instructions: docs/TELEGRAM_TEST.md.
 CURRENT IMPLEMENTATION PLAN: docs/superpowers/plans/2026-10-03-functional-mvp.md.
 NEXT MILESTONE: after functional verification and approved deployment, move the app to the target self-hosted server and revisit scheduler runtime there. AI remains deferred.
+
+FUTURE PRODUCT FEATURE — SMART CONTENT QUEUE / SWIPE PLANNER (not implemented now)
+- Swipe left → reject; swipe right → approve.
+- Approved content → next free publication slot or manual date/time.
+- Preset publication schedule; fill the calendar for a week/month.
+- ContentSuggestion remains a suggestion until approval, then becomes a Post.
+- Suggestions can come from non-AI sources; AI is optional.

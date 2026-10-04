@@ -12,7 +12,7 @@ This repository is the authoritative Planly source. Target runtime: the owner's 
 
 **MVP v1 / Phase 4 — Telegram/MAX publication and UI completion**
 
-Functional fixes are implemented and verified on `codex/functional-mvp`, source head `2ab4b4b`. Production remains at `3d1fcba`; this branch has not been merged or deployed. CI, local runtime/browser evidence and remaining acceptance limits are recorded in [functional MVP verification](docs/verification/2026-10-03-functional-mvp.md).
+Functional fixes have internal branch evidence on `codex/functional-mvp`, source head `2ab4b4b`. Production acceptance is pending owner-approved PR #4 merge/deploy on the existing Render service. Delivery is remote-first; see the permanent rules in [AGENTS.md](AGENTS.md) and [PR #4 review / production checklist](docs/verification/2026-10-04-pr4-remote-first-review.md).
 
 Implemented in this milestone:
 
@@ -38,7 +38,7 @@ Not implemented yet:
 - OpenAI research/text/image generation;
 - production analytics.
 
-A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Final branch checks used synthetic local provider fixtures; fresh production and live-provider acceptance remain separate gates. UI file-chooser upload is not proven because the browser tool stopped before assigning a file, despite enabled permission and reconnection; HTTP upload passed.
+A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Branch checks used synthetic local provider fixtures. User-facing final PASS requires production verification after approved deploy. File assignment was blocked by the browser tool; this is not a Planly bug or a mandatory localhost gate. The upload scenario will be verified on the actual Render UI.
 
 ## Requirements
 

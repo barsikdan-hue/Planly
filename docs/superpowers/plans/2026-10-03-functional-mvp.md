@@ -48,9 +48,10 @@ Files: small editor recovery helper, `components/planner/app.tsx`, focused node:
 - [x] Run full CI on PostgreSQL/Redis, typecheck/lint/build and self-host runtime; inspect exact head results.
 - [x] Record pass/fail/unverified per flow, known limitations and evidence. Request main merge/deploy only after the branch is reviewable; do not claim fresh production acceptance before that gate.
 
-## Outstanding acceptance
+## Outstanding production acceptance — remote-first update 2026-10-04
 
-- [ ] Upload through the Edge file chooser: tool permission blocker before Planly receives the file; API upload, media selection and playback passed.
-- [ ] Human-approved main merge and production deployment, followed by fresh production/provider acceptance. No deployment is authorized by local test completion.
+- [ ] Owner approval for PR #4 merge + deployment on the existing Render service, then execute both without an intermediate approval stop.
+- [ ] Verify deployed SHA/health and the user-facing flows through Render, including actual media upload. Use a supported upload mechanism or manual production file selection if automation cannot operate the chooser; localhost file selection is not a prerequisite.
+- [ ] Minimal safe Telegram/MAX live smoke for affected provider validation/lifecycle/publication behavior, with one immediate and one scheduled valid case as needed; verify independent target receipts and no duplicate send. Do not investigate GitHub trigger intervals.
 
-Evidence: [functional verification report](../../verification/2026-10-03-functional-mvp.md). Implementation and local audit are reviewable; these unchecked acceptance gates prevent a full milestone-complete claim.
+Evidence: [internal functional verification](../../verification/2026-10-03-functional-mvp.md) and [remote-first review/checklist](../../verification/2026-10-04-pr4-remote-first-review.md). Existing branch evidence supports review. Final user-facing PASS follows production acceptance, under AGENTS.md.
