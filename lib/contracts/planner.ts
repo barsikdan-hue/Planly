@@ -28,6 +28,10 @@ export const savePostInputSchema = z.object({
 });
 export type SavePostInput = z.infer<typeof savePostInputSchema>;
 
+export const createPostSourceSchema = z.object({
+  sourceLibraryItemId: z.string().min(1).max(200).optional(),
+});
+
 export type PublicationDto = {
   status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_RECONNECT';
   remoteId: string | null;

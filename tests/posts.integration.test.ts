@@ -2,10 +2,12 @@ import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
-import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
+import { libraryItems, mediaAssets, postMedia, posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
 import { createPost, deletePost, listPlannerPosts, updatePost } from '../lib/server/posts.ts';
 import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
 import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
+import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
+import { PATCH } from '../app/api/posts/[id]/route.ts';
 
 const ownerA = 'test-owner-a';
 const ownerB = 'test-owner-b';
@@ -97,4 +99,46 @@ test('updating a post preserves target identity for the same social account', as
   const rows = await db.select().from(postTargets).where(eq(postTargets.postId, created.id));
   assert.equal(rows.length, 1);
   assert.equal(rows[0]!.id, originalTargetId);
+});
+
+test('ordinary Post creation without a source preserves null provenance and leaves Library READY', async () => {
+  await getDb().insert(libraryItems).values({ id: 'posts-independent-source', userId: ownerA, bodyText: 'Independent library copy' });
+  const created = await createPost(ownerA, { baseText: 'ordinary post', status: 'DRAFT', targets: [], mediaIds: [] }, { mirrorQueue: async () => undefined });
+  const [stored] = await getDb().select().from(posts).where(eq(posts.id, created.id));
+  assert.equal(stored.sourceLibraryItemId, null);
+  assert.equal((await getDb().select().from(libraryItems))[0].status, 'READY');
+});
+
+test('Post PATCH cannot replace or clear source provenance and does not consume another Library item', async () => {
+  await getDb().insert(libraryItems).values([
+    { id: 'posts-original-source', userId: ownerA, bodyText: 'original', status: 'USED' },
+    { id: 'posts-other-source', userId: ownerA, bodyText: 'other' },
+  ]);
+  const created = await createPost(ownerA, { baseText: 'original post', status: 'DRAFT', targets: [], mediaIds: [] }, { mirrorQueue: async () => undefined });
+  await getDb().update(posts).set({ sourceLibraryItemId: 'posts-original-source' }).where(eq(posts.id, created.id));
+  await getDb().update(users).set({ email: process.env.OWNER_EMAIL ?? 'owner@example.test' }).where(eq(users.id, ownerA));
+  const token = await createOwnerSession(ownerA);
+  for (const sourceLibraryItemId of ['posts-other-source', null]) {
+    const response = await PATCH(new Request(`http://planly.test/api/posts/${created.id}`, { method: 'PATCH', headers: {
+      cookie: `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`, 'content-type': 'application/json',
+    }, body: JSON.stringify({ baseText: 'edited post', status: 'DRAFT', targets: [], mediaIds: [], sourceLibraryItemId }) }),
+    { params: Promise.resolve({ id: created.id }) });
+    assert.equal(response.status, 200);
+    const [stored] = await getDb().select().from(posts).where(eq(posts.id, created.id));
+    assert.equal(stored.sourceLibraryItemId, 'posts-original-source');
+  }
+  assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'posts-other-source')?.status, 'READY');
+});
+
+test('updatePost ignores source options and preserves the immutable original source', async () => {
+  await getDb().insert(libraryItems).values([
+    { id: 'posts-original-source', userId: ownerA, bodyText: 'original', status: 'USED' },
+    { id: 'posts-other-source', userId: ownerA, bodyText: 'other' },
+  ]);
+  const created = await createPost(ownerA, { baseText: 'original post', status: 'DRAFT', targets: [], mediaIds: [] }, { mirrorQueue: async () => undefined });
+  await getDb().update(posts).set({ sourceLibraryItemId: 'posts-original-source' }).where(eq(posts.id, created.id));
+  await updatePost(ownerA, created.id, { baseText: 'edited post', status: 'DRAFT', targets: [], mediaIds: [] },
+    { sourceLibraryItemId: 'posts-other-source', mirrorQueue: async () => undefined });
+  assert.equal((await getDb().select().from(posts).where(eq(posts.id, created.id)))[0].sourceLibraryItemId, 'posts-original-source');
+  assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'posts-other-source')?.status, 'READY');
 });

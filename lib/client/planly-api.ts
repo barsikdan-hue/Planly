@@ -2,10 +2,11 @@ import type {
   MediaAssetDto,
   PostDto,
   ProfileDto,
-  SavePostInput,
   SocialAccountDto,
   UpdateProfileInput,
 } from '../contracts/planner.ts';
+import type { CreateLibraryItemInput, LibraryItemDto, UpdateLibraryItemInput } from '../contracts/library.ts';
+import type { ComposerPostInput } from '../planner.ts';
 
 export type MediaAssetWithPreview = MediaAssetDto & { previewUrl: string };
 export type PlannerSnapshot = {
@@ -13,6 +14,7 @@ export type PlannerSnapshot = {
   posts: PostDto[];
   media: MediaAssetWithPreview[];
   socialAccounts: SocialAccountDto[];
+  libraryItems: LibraryItemDto[];
 };
 
 export class PlanlyApiError extends Error {
@@ -61,8 +63,10 @@ export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
 }
 
-export async function savePost(input: SavePostInput, id?: string, creationKey?: string): Promise<PostDto> {
-  const init = jsonRequest(id ? 'PATCH' : 'POST', input);
+export async function savePost(input: ComposerPostInput, id?: string, creationKey?: string): Promise<PostDto> {
+  const { sourceLibraryItemId, ...content } = input;
+  const body = !id && sourceLibraryItemId ? { ...content, sourceLibraryItemId } : content;
+  const init = jsonRequest(id ? 'PATCH' : 'POST', body);
   if (!id && creationKey) init.headers = { ...init.headers, 'idempotency-key': creationKey };
   const saved = await request<PostDto>(id ? `/api/posts/${encodeURIComponent(id)}` : '/api/posts', init);
   if (!saved || typeof saved.id !== 'string' || !saved.id.trim()) {
@@ -73,6 +77,22 @@ export async function savePost(input: SavePostInput, id?: string, creationKey?: 
 
 export function removePost(id: string): Promise<void> {
   return request(`/api/posts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function loadLibraryItems(): Promise<LibraryItemDto[]> {
+  return request('/api/library-items');
+}
+
+export function createLibraryItem(input: CreateLibraryItemInput): Promise<LibraryItemDto> {
+  return request('/api/library-items', jsonRequest('POST', input));
+}
+
+export function updateLibraryItem(id: string, input: UpdateLibraryItemInput): Promise<LibraryItemDto> {
+  return request(`/api/library-items/${encodeURIComponent(id)}`, jsonRequest('PATCH', input));
+}
+
+export function removeLibraryItem(id: string): Promise<void> {
+  return request(`/api/library-items/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function saveProfile(input: UpdateProfileInput): Promise<ProfileDto> {

@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
-import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { libraryItems, mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import {
   fromDbProvider,
+  createPostSourceSchema,
   savePostInputSchema,
   toDbProvider,
   type PostDto,
@@ -14,12 +15,14 @@ import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
 import { PublicationContentError, validatePublicationContent, type PublicationMediaMetadata } from '../publication-content.ts';
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
+import { LibrarySourceConflictError } from './library-conversion-error.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
 type PostPersistenceOptions = {
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
   creationKey?: string;
+  sourceLibraryItemId?: string;
 };
 
 async function mirrorQueueBestEffort(
@@ -128,9 +131,10 @@ export async function createPost(
   options: PostPersistenceOptions = {},
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
+  const { sourceLibraryItemId } = createPostSourceSchema.parse(options);
   const postId = randomUUID();
   const creationKey = options.creationKey === undefined ? null : creationKeySchema.parse(options.creationKey);
-  const inputHash = creationKey ? creationInputHash(input) : null;
+  const inputHash = creationKey ? creationInputHash(input, sourceLibraryItemId) : null;
   const db = getDb();
 
   const result = await db.transaction(async tx => {
@@ -144,6 +148,23 @@ export async function createPost(
       const existing = await readExisting();
       if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
     }
+    if (sourceLibraryItemId) {
+      const [source] = await tx.select().from(libraryItems)
+        .where(and(eq(libraryItems.id, sourceLibraryItemId), eq(libraryItems.userId, userId))).limit(1).for('update');
+      // The key may have been bound to another Post while this source lock waited.
+      if (creationKey) {
+        const existing = await readExisting();
+        if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+      }
+      if (!source) throw new Error('Library item not found');
+      const [linked] = await tx.select({ id: posts.id }).from(posts)
+        .where(and(eq(posts.sourceLibraryItemId, sourceLibraryItemId), eq(posts.userId, userId))).limit(1);
+      // Returning a USED source is a lookup: preserve the canonical key/hash and
+      // leave any fresh key unreserved, as decided by the owner.
+      if (linked) return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
+      if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
+      if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
+    }
     const accounts = await validateRelations(tx, userId, input);
     const now = new Date();
     const inserted = await tx.insert(posts).values({
@@ -154,6 +175,7 @@ export async function createPost(
       status: input.status,
       creationKey,
       creationInputHash: inputHash,
+      sourceLibraryItemId: sourceLibraryItemId ?? null,
       createdAt: now,
       updatedAt: now,
     }).onConflictDoNothing({ target: [posts.userId, posts.creationKey] }).returning({ id: posts.id });
@@ -180,7 +202,12 @@ export async function createPost(
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    return { postId, changes: await reconcilePostPublicationsInTx(tx, userId, postId), created: true };
+    const changes = await reconcilePostPublicationsInTx(tx, userId, postId);
+    if (sourceLibraryItemId) {
+      await tx.update(libraryItems).set({ status: 'USED', updatedAt: now })
+        .where(and(eq(libraryItems.id, sourceLibraryItemId), eq(libraryItems.userId, userId)));
+    }
+    return { postId, changes, created: true };
   });
 
   if (result.created) await mirrorQueueBestEffort(result.changes, options);

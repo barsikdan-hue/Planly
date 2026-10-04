@@ -12,7 +12,7 @@ export async function DELETE(request: Request, context: Context): Promise<Respon
     return new Response(null, { status: 204 });
   } catch (error) {
     if (error instanceof Error && /attached/i.test(error.message)) {
-      return Response.json({ error: 'Media is attached to a post' }, { status: 409 });
+      return Response.json({ error: 'Media is attached to content' }, { status: 409 });
     }
     return apiError(error);
   }

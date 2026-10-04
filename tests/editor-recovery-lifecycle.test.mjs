@@ -273,3 +273,103 @@ test('successful publish-now acknowledgement clears the unchanged editor recover
   harness.unmount(); fixture({ cache }); await harness.settle();
   assert.equal(harness.composer().draft.text, '');
 });
+
+test('actual Library draft reload retries frozen source and key before PATCH without provenance', async () => {
+  const requests = [];
+  const mutation = async (url, init) => {
+    requests.push({ url, key:new Headers(init.headers).get('idempotency-key'), body:JSON.parse(init.body) });
+    if (requests.length === 1) throw Error('Lost source creation acknowledgement');
+    return Response.json({ ...savedPost, id:'source-post', baseText:JSON.parse(init.body).baseText });
+  };
+  const { cache } = fixture({ mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text:'Library content', sourceLibraryItemId:'library-source' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(JSON.parse(cache.getItem('planly:pending-create:v1:owner')).input.sourceLibraryItemId, 'library-source');
+  harness.unmount(); fixture({ cache, mutation }); await harness.settle();
+  assert.equal(harness.composer().draft.sourceLibraryItemId, 'library-source');
+  assert.equal(requests.length, 1);
+  harness.composer().setDraft(current => ({ ...current, text:'Edited after reload' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(requests.length, 3);
+  assert.deepEqual(requests[1], requests[0]);
+  assert.equal(requests[2].url, '/api/posts/source-post');
+  assert.equal(requests[2].body.baseText, 'Edited after reload');
+  assert.equal('sourceLibraryItemId' in requests[2].body, false);
+});
+
+test('actual Library create acknowledgement clears source on retained edits and later PATCH', async () => {
+  const requests = []; let finish;
+  const mutation = (url, init) => {
+    requests.push({ url, body:JSON.parse(init.body) });
+    if (requests.length === 1) return new Promise(resolve => { finish = resolve; });
+    return Response.json({ ...savedPost, id:'source-post', baseText:JSON.parse(init.body).baseText });
+  };
+  const { cache } = fixture({ mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text:'Prepared', sourceLibraryItemId:'library-source' })); await harness.settle();
+  const saving = harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text:'Edited while saving' })); await harness.settle();
+  finish(Response.json({ ...savedPost, id:'source-post', baseText:'Prepared' })); await saving; await harness.settle();
+  assert.equal(requests[0].body.sourceLibraryItemId, 'library-source');
+  assert.equal(harness.composer().draft.id, 'source-post');
+  assert.equal(harness.composer().draft.sourceLibraryItemId, null);
+  assert.equal(JSON.parse(cache.getItem('planly:editor:v1:owner')).editor.sourceLibraryItemId, null);
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(requests[1].url, '/api/posts/source-post');
+  assert.equal(requests[1].body.baseText, 'Edited while saving');
+  assert.equal('sourceLibraryItemId' in requests[1].body, false);
+});
+
+test('actual ordinary New, Edit, Copy and unrelated Media replacements clear Library source', async () => {
+  const snapshot = { profile:{ id:'owner', displayName:'Owner' }, posts:[savedPost], media:[], socialAccounts:[] };
+  const { handlers } = fixture({ snapshot }); await harness.settle();
+  window.confirm = () => true;
+  const unrelated = { id:'saved', text:'Unrelated content', sourceLibraryItemId:'stale-source', networks:['telegram'],
+    date:'2030-01-01', time:'10:00', mediaIds:[], overrides:{}, targets:[], status:'draft' };
+  for (const action of ['New', 'Edit', 'Copy', 'Media']) {
+    harness.composer().setDraft(current => ({ ...current, id:'', text:'Prepared draft', sourceLibraryItemId:'library-source' })); await harness.settle();
+    window.location.hash = action === 'Media' ? '#media' : '#content'; handlers.get('hashchange')(); await harness.settle();
+    if (action === 'New') harness.find('Content').props.create();
+    if (action === 'Edit') harness.find('Content').props.editPost(unrelated);
+    if (action === 'Copy') harness.find('Content').props.duplicatePost(unrelated);
+    if (action === 'Media') harness.find('MediaLibrary').props.useMedia({ id:'unrelated-media' });
+    await harness.settle();
+    assert.equal(harness.composer().draft.sourceLibraryItemId, null, action);
+  }
+});
+
+test('actual Library publish-now reload preserves original source and frozen timestamp', async () => {
+  const snapshot = { profile:{ id:'owner', displayName:'Owner' }, posts:[], media:[], socialAccounts:[{ id:'tg', provider:'telegram', enabled:true, connectionStatus:'CONNECTED' }] };
+  const requests = [];
+  const mutation = async (url, init) => {
+    requests.push({ url, key:new Headers(init.headers).get('idempotency-key'), body:JSON.parse(init.body) });
+    if (requests.length === 1) throw Error('Lost response');
+    return Response.json({ ...savedPost, id:'source-now' });
+  };
+  const { cache } = fixture({ snapshot, mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text:'Publish prepared', sourceLibraryItemId:'library-now' })); await harness.settle();
+  await harness.composer().publishNow(harness.composer().draft); await harness.settle();
+  harness.unmount(); fixture({ cache, snapshot, mutation }); await harness.settle();
+  await harness.composer().publishNow(harness.composer().draft); await harness.settle();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].body.sourceLibraryItemId, 'library-now');
+  assert.equal(requests[0].body.status, 'READY');
+  assert.deepEqual(requests[1], requests[0]);
+});
+
+test('actual definitive Library source rejection preserves recovered editor and permits ordinary New', async () => {
+  const mutation = async () => Response.json({ error:'Used library item cannot create another Post', code:'LIBRARY_SOURCE_CONFLICT' }, { status:409 });
+  const { cache } = fixture({ mutation }); await harness.settle();
+  harness.composer().setDraft(current => ({ ...current, text:'Prepared orphan source content', sourceLibraryItemId:'used-source-with-deleted-post' })); await harness.settle();
+  await harness.composer().save(harness.composer().draft, 'draft'); await harness.settle();
+  assert.equal(harness.composer().draft.text, 'Prepared orphan source content');
+  assert.equal(harness.composer().draft.sourceLibraryItemId, 'used-source-with-deleted-post');
+  assert.equal(cache.getItem('planly:pending-create:v1:owner'), null);
+  harness.unmount(); const { handlers } = fixture({ cache, mutation }); await harness.settle();
+  assert.equal(harness.composer().draft.text, 'Prepared orphan source content');
+  assert.equal(harness.composer().draft.sourceLibraryItemId, 'used-source-with-deleted-post');
+  window.confirm = () => true;
+  window.location.hash = '#content'; handlers.get('hashchange')(); await harness.settle();
+  harness.find('Content').props.create(); await harness.settle();
+  assert.equal(harness.composer().draft.text, '');
+  assert.equal(harness.composer().draft.sourceLibraryItemId, null);
+});

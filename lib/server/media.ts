@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { getDb } from '../../db/index.ts';
-import { mediaAssets, postMedia } from '../../db/schema.ts';
+import { libraryItemMedia, mediaAssets, postMedia } from '../../db/schema.ts';
 import type { MediaAssetDto } from '../contracts/planner.ts';
 import { validateMediaUpload, type ValidatedMedia } from './media-validation.ts';
 import { getObjectStorage, type ObjectStorage } from './storage.ts';
@@ -93,15 +93,21 @@ export async function deleteMediaAsset(
   storage: ObjectStorage = getObjectStorage(),
 ): Promise<void> {
   const db = getDb();
-  const [row] = await db.select().from(mediaAssets)
-    .where(and(eq(mediaAssets.id, mediaId), eq(mediaAssets.userId, userId)))
-    .limit(1);
-  if (!row) throw new Error('Media not found');
-  const [attached] = await db.select({ mediaId: postMedia.mediaId }).from(postMedia)
-    .where(eq(postMedia.mediaId, mediaId)).limit(1);
-  if (attached) throw new Error('Media is attached to a post');
-
-  await db.delete(mediaAssets).where(and(eq(mediaAssets.id, mediaId), eq(mediaAssets.userId, userId)));
+  const row = await db.transaction(async tx => {
+    // FK attachment inserts lock this asset too. Check references only after
+    // acquiring the lock so a concurrent attachment cannot be cascaded away.
+    const [owned] = await tx.select().from(mediaAssets)
+      .where(and(eq(mediaAssets.id, mediaId), eq(mediaAssets.userId, userId)))
+      .limit(1).for('update');
+    if (!owned) throw new Error('Media not found');
+    const [postAttachment] = await tx.select({ mediaId: postMedia.mediaId }).from(postMedia)
+      .where(eq(postMedia.mediaId, mediaId)).limit(1);
+    const [libraryAttachment] = await tx.select({ mediaId: libraryItemMedia.mediaId }).from(libraryItemMedia)
+      .where(eq(libraryItemMedia.mediaId, mediaId)).limit(1);
+    if (postAttachment || libraryAttachment) throw new Error('Media is attached to content');
+    await tx.delete(mediaAssets).where(and(eq(mediaAssets.id, mediaId), eq(mediaAssets.userId, userId)));
+    return owned;
+  });
   try {
     await storage.delete(row.storageKey);
   } catch (error) {

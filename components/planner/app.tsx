@@ -12,15 +12,21 @@ import { Dashboard } from './dashboard';
 import { Composer } from './composer';
 import { Calendar } from './calendar';
 import { Content, MediaLibrary } from './library';
+import { ContentLibrary } from './content-library';
 import { Settings, Analytics } from './settings';
 import { normalizePlannerView } from '@/lib/planner-navigation';
 import { clearSavedRecovery, editorFields, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields } from '@/lib/client/editor-recovery';
 import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
-import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type Post, type Media, type Network, type Status } from '@/lib/planner';
-import type { SavePostInput, SocialAccountDto } from '@/lib/contracts/planner';
+import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type ComposerPostInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
+import type { SocialAccountDto } from '@/lib/contracts/planner';
+import type { CreateLibraryItemInput, LibraryItemDto } from '@/lib/contracts/library';
 import {
     loadPlanner,
+    loadLibraryItems,
+    createLibraryItem,
+    updateLibraryItem,
+    removeLibraryItem,
     PlanlyApiError,
     savePost as savePostApi,
     removePost as removePostApi,
@@ -32,16 +38,17 @@ import {
     type MediaAssetWithPreview,
 } from '@/lib/client/planly-api';
 
-const navigation = [{ id: 'dashboard', label: 'Главная', icon: Home }, { id: 'calendar', label: 'Календарь', icon: CalendarDays }, { id: 'content', label: 'Контент', icon: FileText }, { id: 'media', label: 'Медиа', icon: ImageIcon }, { id: 'analytics', label: 'Аналитика', icon: BarChart3 }, { id: 'settings', label: 'Настройки', icon: SettingsIcon }];
+const navigation = [{ id: 'dashboard', label: 'Главная', icon: Home }, { id: 'calendar', label: 'Календарь', icon: CalendarDays }, { id: 'content', label: 'Библиотека', icon: FileText }, { id: 'media', label: 'Медиа', icon: ImageIcon }, { id: 'analytics', label: 'Аналитика', icon: BarChart3 }, { id: 'settings', label: 'Настройки', icon: SettingsIcon }];
 
 type PlannerData = {
     posts: Post[];
     media: Media[];
     name: string;
     socialAccounts: SocialAccountDto[];
+    libraryItems: LibraryItemDto[];
 };
 
-const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [] };
+const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [], libraryItems: [] };
 
 function toUiMedia(item: MediaAssetWithPreview): Media {
     return { id: item.id, name: item.originalName, url: item.previewUrl, type: item.mimeType, size: item.byteSize };
@@ -63,6 +70,7 @@ export default function PlannerApp() {
     const [loadError, setLoadError] = useState(false);
     const [view, setView] = useState('dashboard');
     const [query, setQuery] = useState('');
+    const [contentTab, setContentTab] = useState<'prepared' | 'publications'>('prepared');
     const [draft, setDraftState] = useState<Post>(blankPost);
     const draftRef = useRef(draft);
     const editorRevision = useRef(0);
@@ -76,6 +84,7 @@ export default function PlannerApp() {
     const [detailId, setDetailId] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<{ type: 'post' | 'media'; id: string; label: string } | null>(null);
     const saveLock = useRef(false);
+    const libraryRevision = useRef(0);
     const [saveBusy, setSaveBusy] = useState(false);
 
     const warnRecoveryUnavailable = useCallback(() => {
@@ -86,7 +95,8 @@ export default function PlannerApp() {
 
     // Persist outside React updater functions, which Strict Mode may run twice.
     const setDraft: Dispatch<SetStateAction<Post>> = useCallback(update => {
-        const next = typeof update === 'function' ? update(draftRef.current) : update;
+        const updated = typeof update === 'function' ? update(draftRef.current) : update;
+        const next = updated.id ? { ...updated, sourceLibraryItemId: null } : updated;
         draftRef.current = next;
         editorRevision.current += 1;
         setDraftState(next);
@@ -123,6 +133,7 @@ export default function PlannerApp() {
                 media,
                 name: snapshot.profile.displayName,
                 socialAccounts: snapshot.socialAccounts,
+                libraryItems: snapshot.libraryItems,
             });
             recoveryOwner.current = snapshot.profile.id;
             const storage = sessionRecoveryStorage();
@@ -153,7 +164,7 @@ export default function PlannerApp() {
                             setDraftState(restored.draft);
                         }
                         if (pending.acknowledgedId && pending.editorToken === editorToken.current) {
-                            const next = { ...draftRef.current, id: pending.acknowledgedId };
+                            const next = { ...draftRef.current, id: pending.acknowledgedId, sourceLibraryItemId: null };
                             draftRef.current = next; setDraftState(next);
                             if (writeRecovery(storage, snapshot.profile.id, next)) persistedEditor.current = editorFields(next);
                         }
@@ -178,6 +189,7 @@ export default function PlannerApp() {
             const hash = window.location.hash.slice(1);
             const nextView = normalizePlannerView(hash) ?? 'dashboard';
             if (hash === 'socials') window.history.replaceState(window.history.state, '', '#settings');
+            if (nextView !== 'content') setContentTab('prepared');
             setView(nextView);
         };
         sync();
@@ -187,6 +199,7 @@ export default function PlannerApp() {
     const navigate = useCallback((v: string) => {
         const nextView = normalizePlannerView(v);
         if (!nextView) return;
+        setContentTab('prepared');
         setView(nextView);
         window.location.hash = nextView;
         window.scrollTo({ top: 0, behavior: 'instant' });
@@ -200,9 +213,10 @@ export default function PlannerApp() {
         const poll=async()=>{
             if (busy || document.hidden || saveLock.current) return;
             busy=true;
+            const revision = libraryRevision.current;
             try {
                 const snapshot=await loadPlanner();
-                if (active && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts}));
+                if (active && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts,libraryItems:revision === libraryRevision.current ? snapshot.libraryItems : current.libraryItems}));
             } catch { /* Initial loading and mutations already display errors; polling remains quiet. */ }
             finally {busy=false;}
         };
@@ -226,7 +240,7 @@ export default function PlannerApp() {
         return result;
     }, [data.socialAccounts]);
 
-    const submitEditor = async (post: Post, input: () => SavePostInput, intent: CreationIntent, token: string) => {
+    const submitEditor = async (post: Post, input: () => ComposerPostInput, intent: CreationIntent, token: string) => {
         const storage = sessionRecoveryStorage();
         const owner = recoveryOwner.current;
         const pending = storage && owner ? readPendingCreation(storage, owner) : null;
@@ -294,6 +308,7 @@ export default function PlannerApp() {
             const saved = fromServerPost(result.saved);
             setData(current => ({ ...current, posts: current.posts.some(item => item.id === saved.id) ? current.posts.map(item => item.id === saved.id ? saved : item) : [saved, ...current.posts] }));
             const cleared = acknowledgeEditor(result, post, revision, token);
+            await refreshSourceLibrary(post, result);
             if (result.updateError) throw result.updateError;
             if (cleared && view !== 'dashboard') navigate('content');
             toast.success(result.belongsToEditor ? (status === 'draft' ? 'Черновик сохранён' : 'Расписание сохранено') : 'Предыдущее сохранение восстановлено. Теперь можно сохранить текущий черновик.');
@@ -327,16 +342,50 @@ export default function PlannerApp() {
     };
     const editPost = (post: Post) => {
         if (editBlockedReasonFor(post)) { setDetailId(post.id); return; }
-        if (replaceEditor({ ...post, mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } })) setDetailId(null);
+        if (replaceEditor({ ...post, sourceLibraryItemId: null, mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } })) setDetailId(null);
     };
     const duplicatePost = (post: Post, preservesCurrent = false) => {
-        if (replaceEditor({ ...post, id: '', status: 'draft', targets: [], editBlockedReason: null,
+        if (replaceEditor({ ...post, id: '', sourceLibraryItemId: null, status: 'draft', targets: [], editBlockedReason: null,
             mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } }, preservesCurrent)) {
             setDetailId(null);
             toast.info('Копия открыта в редакторе. Сохрани её как новый пост.');
         }
     };
     const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date } : {}), ...(time ? { time } : {}) }); };
+
+    const createFromLibrary = (item: LibraryItemDto) => {
+        const source = data.libraryItems.find(current => current.id === item.id);
+        if (source?.status !== 'READY') return;
+        replaceEditor({ ...blankPost(), text: source.text, mediaIds: [...source.mediaIds], sourceLibraryItemId: source.id });
+    };
+
+    const saveLibraryItem = async (input: CreateLibraryItemInput & { status?: 'READY' | 'ARCHIVED' }, id?: string) => {
+        const saved = id ? await updateLibraryItem(id, { ...input, status: input.status ?? 'READY' }) : await createLibraryItem(input);
+        libraryRevision.current += 1;
+        setData(current => ({ ...current, libraryItems: [saved, ...current.libraryItems.filter(item => item.id !== saved.id)] }));
+    };
+    const deleteLibraryItem = async (id: string) => {
+        await removeLibraryItem(id);
+        libraryRevision.current += 1;
+        setData(current => ({ ...current, libraryItems: current.libraryItems.filter(item => item.id !== id) }));
+    };
+    const refreshSourceLibrary = async (post: Post, result: Awaited<ReturnType<typeof submitEditor>>) => {
+        if (!post.sourceLibraryItemId && !result.pending?.input.sourceLibraryItemId) return;
+        try {
+            let revision = libraryRevision.current;
+            let libraryItems = await loadLibraryItems();
+            // A concurrent Library acknowledgement invalidates the older list,
+            // but the newly consumed source still needs an authoritative refresh.
+            while (revision !== libraryRevision.current) {
+                revision = libraryRevision.current;
+                libraryItems = await loadLibraryItems();
+            }
+            libraryRevision.current += 1;
+            setData(current => ({ ...current, libraryItems }));
+        } catch {
+            toast.error('Пост сохранён, но библиотеку не удалось обновить. Обнови страницу, чтобы увидеть статус заготовки.');
+        }
+    };
 
     const reschedule = async (post: Post, date: string, time: string) => {
         if (creationPending) { toast.error('Сначала повтори предыдущее сохранение, чтобы восстановить его результат.'); return; }
@@ -387,6 +436,7 @@ export default function PlannerApp() {
             const saved=fromServerPost(result.saved);
             setData(current=>({...current,posts:current.posts.some(item=>item.id===saved.id) ? current.posts.map(item=>item.id===saved.id ? saved : item) : [saved,...current.posts]}));
             const cleared = acknowledgeEditor(result, post, revision, token);
+            await refreshSourceLibrary(post, result);
             if (result.updateError) throw result.updateError;
             if (cleared) navigate('content');
             toast.success(result.belongsToEditor ? 'Пост передан в очередь. Ждём подтверждения площадки.' : 'Предыдущее сохранение восстановлено. Теперь можно сохранить текущий черновик.');
@@ -450,5 +500,5 @@ export default function PlannerApp() {
         }
     };
 
-    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') navigate('content'); }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && <Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
+    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && <ContentLibrary items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
 }
