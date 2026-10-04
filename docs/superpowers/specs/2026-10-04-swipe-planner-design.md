@@ -2,9 +2,9 @@
 
 Date: 2026-10-04. Repository: `barsikdan-hue/Planly`.
 Source: `49a16c977aed425c99e5fa81bcb3705526a5653c`.
-Status: PROPOSED — spec and plan await one owner approval. No implementation.
+Status: APPROVED by the owner implementation request on 2026-10-04. Implemented on the Phase 6 branch; merge/deploy and production acceptance remain gated.
 
-## Inspection / current phase
+## Inspection snapshot before approval
 
 - Cwd root is an unborn `master` with untracked prototype files; it is not the production source.
 - `work/Planly`: clean `codex/docs-product-rules`, HEAD `d720802fd4c53370fe30334b25b2b6af2ad67397`.
