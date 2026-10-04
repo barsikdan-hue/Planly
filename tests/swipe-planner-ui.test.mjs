@@ -105,6 +105,14 @@ test('custom schedule validates weekdays and 1–4 unique times before preview',
   for (const label of ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']) await click(h, label);
   assert.equal(button(h, 'Одобрить').props.disabled, true);
 });
+test('equivalent preset switches refresh preview instead of leaving next-slot approval loading', async () => {
+  const {h,calls}=ui(); await change(h,'Режим одобрения','next'); await click(h,'Telegram');
+  const count=calls.preview.length; assert.equal(button(h,'Одобрить').props.disabled,false);
+  await change(h,'Расписание','custom');
+  assert.equal(calls.preview.length,count+1); assert.equal(button(h,'Одобрить').props.disabled,false);
+  await change(h,'Расписание','daily10');
+  assert.equal(calls.preview.length,count+2); assert.equal(button(h,'Одобрить').props.disabled,false);
+});
 test('approve failure retains card; in flight double click and skip cannot advance; success advances once', async () => {
   let resolve; let attempts = 0;
   const { h } = ui({ onApprove: async () => { attempts++; if (attempts === 1) throw Error('Не сохранено'); await new Promise(r => { resolve = r; }); return { id: 'saved' }; } });

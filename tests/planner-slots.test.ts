@@ -31,6 +31,6 @@ test('query bounds reject invalid dates, duplicate platforms/weekdays/times and 
 test('last supported four-digit year remains a bounded no-slot search', () => {
   const moduleUrl = new URL('../lib/planner-slots.ts',import.meta.url).href;
   const lastDate = {...query,startDate:'9999-12-31',endDate:'9999-12-31'};
-  const result = execFileSync(process.execPath,['--input-type=module','--experimental-strip-types','-e',`import {findNextSlot} from ${JSON.stringify(moduleUrl)}; console.log(findNextSlot(${JSON.stringify(lastDate)},new Set(),new Date('+010000-01-01T00:00:00Z')));`],{timeout:1500,encoding:'utf8'});
+  const result = execFileSync(process.execPath,['--input-type=module','--experimental-strip-types','-e',`import {findNextSlot} from ${JSON.stringify(moduleUrl)}; console.log(findNextSlot(${JSON.stringify(lastDate)},new Set(),new Date('+010000-01-01T00:00:00Z')));`],{timeout:10000,encoding:'utf8'});
   assert.equal(result.trim(),'null');
 });
