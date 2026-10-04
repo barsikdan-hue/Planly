@@ -30,6 +30,10 @@ export type SavePostInput = z.infer<typeof savePostInputSchema>;
 
 export const createPostSourceSchema = z.object({
   sourceLibraryItemId: z.string().min(1).max(200).optional(),
+  sourceLibraryUpdatedAt: z.string().datetime({ offset: true }).optional(),
+  requireFreeSlot: z.boolean().optional(),
+}).refine(input => (!input.requireFreeSlot && input.sourceLibraryUpdatedAt === undefined) || !!input.sourceLibraryItemId, {
+  message: 'Planner approval requires a library source', path: ['sourceLibraryItemId'],
 });
 
 export type PublicationDto = {

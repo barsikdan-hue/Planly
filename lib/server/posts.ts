@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { ZodError } from 'zod';
 import { getDb } from '../../db/index.ts';
 import { libraryItems, mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import {
@@ -16,6 +17,8 @@ import { PublicationContentError, validatePublicationContent, type PublicationMe
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
+import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts } from './planner-slots.ts';
+import { slotMinuteKey } from '../planner-slots.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
@@ -23,6 +26,8 @@ type PostPersistenceOptions = {
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
   creationKey?: string;
   sourceLibraryItemId?: string;
+  sourceLibraryUpdatedAt?: string;
+  requireFreeSlot?: boolean;
 };
 
 async function mirrorQueueBestEffort(
@@ -131,13 +136,14 @@ export async function createPost(
   options: PostPersistenceOptions = {},
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
-  const { sourceLibraryItemId } = createPostSourceSchema.parse(options);
+  const { sourceLibraryItemId, sourceLibraryUpdatedAt, requireFreeSlot } = createPostSourceSchema.parse(options);
   const postId = randomUUID();
   const creationKey = options.creationKey === undefined ? null : creationKeySchema.parse(options.creationKey);
-  const inputHash = creationKey ? creationInputHash(input, sourceLibraryItemId) : null;
+  const inputHash = creationKey ? creationInputHash(input, sourceLibraryItemId, { sourceLibraryUpdatedAt, requireFreeSlot }) : null;
   const db = getDb();
 
   const result = await db.transaction(async tx => {
+    await lockOwnerSchedule(tx, userId);
     const readExisting = async () => {
       const [existing] = await tx.select({ id: posts.id, inputHash: posts.creationInputHash }).from(posts)
         .where(and(eq(posts.userId, userId), eq(posts.creationKey, creationKey!))).limit(1);
@@ -156,14 +162,31 @@ export async function createPost(
         const existing = await readExisting();
         if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
       }
-      if (!source) throw new Error('Library item not found');
+      if (!source) {
+        if (sourceLibraryUpdatedAt !== undefined) throw new LibrarySourceStaleError();
+        throw new Error('Library item not found');
+      }
       const [linked] = await tx.select({ id: posts.id }).from(posts)
         .where(and(eq(posts.sourceLibraryItemId, sourceLibraryItemId), eq(posts.userId, userId))).limit(1);
       // Returning a USED source is a lookup: preserve the canonical key/hash and
       // leave any fresh key unreserved, as decided by the owner.
       if (linked) return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
+      if (sourceLibraryUpdatedAt !== undefined && source.updatedAt.getTime() !== Date.parse(sourceLibraryUpdatedAt)) throw new LibrarySourceStaleError();
       if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
       if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
+    }
+    const schedules = input.targets.map(target => target.scheduledAt);
+    if (requireFreeSlot && (input.status !== 'READY' || !schedules.length || schedules.some(value => value === null)
+      || new Set(schedules.map(value => value === null ? null : Date.parse(value))).size !== 1)) {
+      throw new ZodError([{ code: 'custom', path: ['targets'], message: 'Free-slot approval requires READY with identical nonnull target times' }]);
+    }
+    if (requireFreeSlot || (sourceLibraryUpdatedAt !== undefined && schedules.some(value => value !== null))) {
+      await requirePlannerAccounts(tx, userId, input.targets.map(target => target.provider));
+      if (schedules.some(value => value !== null && Date.parse(value) <= Date.now())) throw new PlannerSlotConflictError();
+    }
+    if (requireFreeSlot) {
+      const occupied = await occupiedSlotMinutes(tx, userId, { providers: input.targets.map(target => target.provider) });
+      if (occupied.has(slotMinuteKey(schedules[0]!))) throw new PlannerSlotConflictError();
     }
     const accounts = await validateRelations(tx, userId, input);
     const now = new Date();
@@ -224,6 +247,7 @@ export async function updatePost(
   const db = getDb();
 
   const result = await db.transaction(async tx => {
+    await lockOwnerSchedule(tx, userId);
     const [owned] = await tx.select().from(posts)
       .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1).for('update');
     if (!owned) throw new Error('Post not found');

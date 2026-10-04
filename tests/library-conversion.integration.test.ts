@@ -191,7 +191,7 @@ test('concurrent same-key conversion of different sources conflicts and leaves t
   assert.equal(mirrors, 1);
 });
 
-test('a key bound to another source while USED conversion waits must conflict after acquiring the source lock', native, async () => {
+test('a key bound to another source while USED conversion waits must conflict after acquiring the owner lock', native, async () => {
   const itemA = await source();
   const itemB = await source();
   const key1 = '11111111-1111-4111-8111-111111111111';
@@ -201,40 +201,49 @@ test('a key bound to another source while USED conversion waits must conflict af
   await createPost(owner, input, { ...options, sourceLibraryItemId: itemA.id, creationKey: key1 });
   const gate = new Client({ connectionString: process.env.DATABASE_URL });
   await gate.connect();
-  let waiting: Promise<PromiseSettledResult<unknown>> | undefined;
+  const running: Promise<PromiseSettledResult<unknown>>[] = [];
+  const settle = (operation: () => Promise<unknown>) => operation().then(
+    value => ({ status: 'fulfilled' as const, value }), reason => ({ status: 'rejected' as const, reason }),
+  );
   try {
     await gate.query('BEGIN');
-    await gate.query('SELECT id FROM library_items WHERE id = $1 FOR UPDATE', [itemA.id]);
+    await gate.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [owner]);
     const gatePid = (await gate.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
-    waiting = createPost(owner, input, { ...options, sourceLibraryItemId: itemA.id, creationKey: key2 }).then(
-      value => ({ status: 'fulfilled' as const, value }), reason => ({ status: 'rejected' as const, reason }),
-    );
-    let observed = false;
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      await gate.query('SELECT pg_stat_clear_snapshot()');
-      const blocked = await gate.query(`SELECT pid FROM pg_stat_activity
-        WHERE datname = current_database() AND wait_event_type = 'Lock'
-          AND query ILIKE '%library_items%' AND query ILIKE '%for update%'
-          AND $1 = ANY(pg_blocking_pids(pid))`, [gatePid]);
-      if (blocked.rows.length) { observed = true; break; }
-      await delay(20);
+    for (const item of [itemB, itemA]) {
+      running.push(settle(() => createPost(owner, input, { ...options, sourceLibraryItemId: item.id, creationKey: key2 })));
+      let observed = false;
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        await gate.query('SELECT pg_stat_clear_snapshot()');
+        const blocked = await gate.query<{ pid: number; blockers: number[] }>(`SELECT pid, pg_blocking_pids(pid) AS blockers FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'
+            AND query ILIKE '%users%' AND query ILIKE '%for update%'`);
+        const byPid = new Map(blocked.rows.map(row => [row.pid, row.blockers]));
+        const reachesGate = (pid: number, seen = new Set<number>()): boolean => {
+          if (pid === gatePid) return true;
+          if (seen.has(pid)) return false;
+          seen.add(pid);
+          return (byPid.get(pid) ?? []).some(blocker => reachesGate(blocker, new Set(seen)));
+        };
+        if (blocked.rows.filter(row => reachesGate(row.pid)).length >= running.length) { observed = true; break; }
+        await delay(20);
+      }
+      assert.ok(observed, 'creation must serialize at the owner row before taking a source lock');
     }
-    assert.ok(observed, 'USED lookup must wait on the source row before returning');
-    const createdB = await createPost(owner, input, { ...options, sourceLibraryItemId: itemB.id, creationKey: key2 });
     await gate.query('COMMIT');
-    const result = await waiting;
+    const [createdB, result] = await Promise.all(running);
+    assert.equal(createdB.status, 'fulfilled');
     assert.equal(result.status, 'rejected');
     if (result.status === 'rejected') assert.equal(result.reason.name, 'CreationConflictError');
     const rows = await ownerPosts();
     assert.equal(rows.length, 2);
     assert.equal(rows.find(post => post.sourceLibraryItemId === itemA.id)?.creationKey, key1);
-    assert.equal(rows.find(post => post.id === createdB.id)?.creationKey, key2);
+    assert.equal(rows.find(post => post.sourceLibraryItemId === itemB.id)?.creationKey, key2);
     assert.equal(mirrors, 2);
     assert.equal((await getDb().select().from(publications)).length, 2);
   } finally {
     await gate.query('ROLLBACK');
-    if (waiting) await waiting;
+    await Promise.all(running);
     await gate.end();
   }
 });
@@ -315,4 +324,25 @@ for (const mutation of ['archive', 'update', 'delete'] as const) {
       }
     });
   }
+}
+
+for (const mutation of ['archive', 'update', 'delete'] as const) {
+  test(`queue approval racing earlier ${mutation} rejects stale source atomically`, native, async () => {
+    const item = await source();
+    const convert = () => createPost(owner, input, { ...noMirror, sourceLibraryItemId: item.id, sourceLibraryUpdatedAt: item.updatedAt });
+    const mutate = () => mutation === 'delete' ? deleteLibraryItem(owner, item.id) : updateLibraryItem(owner, item.id,
+      { title: 'New title', text: 'New source copy', mediaIds: [], status: mutation === 'archive' ? 'ARCHIVED' : 'READY' });
+    // Ensure the source revision changes even on a millisecond-resolution clock.
+    const oldRevision = new Date('2000-01-01T00:00:00Z');
+    const { libraryItems } = await import('../db/schema.ts');
+    await getDb().update(libraryItems).set({ updatedAt: oldRevision }).where(eq(libraryItems.id, item.id));
+    item.updatedAt = oldRevision.toISOString();
+    const [modification, conversion] = await orderedRace(item.id, mutate, convert);
+    assert.equal(modification.status, 'fulfilled'); assert.equal(conversion.status, 'rejected');
+    if (conversion.status === 'rejected') assert.equal(conversion.reason.name, 'LibrarySourceStaleError');
+    assert.deepEqual(await ownerPosts(), []); assert.deepEqual(await getDb().select().from(publications), []);
+    const items = await listLibraryItems(owner);
+    if (mutation === 'delete') assert.deepEqual(items, []);
+    else { assert.equal(items[0].text, 'New source copy'); assert.equal(items[0].status, mutation === 'archive' ? 'ARCHIVED' : 'READY'); }
+  });
 }
