@@ -7,6 +7,7 @@ import type {
 } from '../contracts/planner.ts';
 import type { CreateLibraryItemInput, LibraryItemDto, UpdateLibraryItemInput } from '../contracts/library.ts';
 import type { ComposerPostInput } from '../planner.ts';
+import type { SlotQuery } from '../contracts/swipe-planner.ts';
 
 export type MediaAssetWithPreview = MediaAssetDto & { previewUrl: string };
 export type PlannerSnapshot = {
@@ -81,6 +82,15 @@ export function removePost(id: string): Promise<void> {
 
 export function loadLibraryItems(): Promise<LibraryItemDto[]> {
   return request('/api/library-items');
+}
+
+export function loadPlannerSlot(query: SlotQuery): Promise<{ scheduledAt: string | null }> {
+  const params = new URLSearchParams({providers:query.providers.join(','),startDate:query.startDate,endDate:query.endDate,
+    weekdays:query.weekdays.join(','),times:query.times.join(',')});
+  return request(`/api/planner-slots?${params}`);
+}
+export function archiveLibraryItem(id: string, expectedUpdatedAt: string): Promise<LibraryItemDto> {
+  return request(`/api/library-items/${encodeURIComponent(id)}`,jsonRequest('PATCH',{status:'ARCHIVED',expectedUpdatedAt}));
 }
 
 export function createLibraryItem(input: CreateLibraryItemInput): Promise<LibraryItemDto> {

@@ -1,6 +1,6 @@
 import type { PostDto, SavePostInput } from './contracts/planner.ts';
 
-export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string };
+export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string; sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean };
 
 export type Network = 'telegram' | 'max';
 export type Status = 'draft' | 'scheduled' | 'published' | 'failed';

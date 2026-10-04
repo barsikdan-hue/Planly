@@ -18,7 +18,7 @@ function MediaPreview({ item }: { item: Media }) {
     return item.type.startsWith('video/') ? <video src={item.url} controls aria-label={item.name}/> : <img src={item.url} alt={item.name}/>;
 }
 
-export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, children }: {
+export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, startReview, children }: {
     items: LibraryItemDto[];
     media: Media[];
     posts: Pick<Post, 'id'>[];
@@ -29,6 +29,7 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
     deleteItem: (id: string) => Promise<void>;
     createPublication: (item: LibraryItemDto) => void;
     openPublication: (id: string) => void;
+    startReview?: () => void;
     children: ReactNode;
 }) {
     const [localTab, setLocalTab] = useState<'prepared' | 'publications'>('prepared');
@@ -101,7 +102,7 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
                 {media.length ? <div className="media-picker-grid library-media-picker">{media.map(asset => <button key={asset.id} className={editor.mediaIds.includes(asset.id) ? 'active' : ''} disabled={busy} aria-pressed={editor.mediaIds.includes(asset.id)} onClick={() => selectMedia(asset.id)}>{asset.type.startsWith('video/') ? <video src={asset.url} muted/> : <img src={asset.url} alt=""/>}<span>{asset.name}</span></button>)}</div> : <p className="mini-note">Медиатека пока пуста.</p>}
                 <div className="library-editor-actions"><Button disabled={busy} onClick={() => { void submit(); }}>Сохранить</Button><Button disabled={busy} variant="outline" onClick={() => { setEditor(null); setError(null); }}>Отмена</Button>{busy && <span role="status">Сохранение / загрузка…</span>}</div>
             </Card> : <>
-                <div className="content-toolbar"><div className="library-status-filters" role="group" aria-label="Статус заготовок">{[['all', 'Все'], ['READY', 'Готовые'], ['USED', 'Использованные'], ['ARCHIVED', 'Архив']].map(([value, label]) => <Button key={value} aria-pressed={filter === value} variant={filter === value ? 'default' : 'outline'} onClick={() => setFilter(value)}>{label}</Button>)}</div><div className="search-field"><Search size={16}/><input aria-label="Поиск заготовок" placeholder="Название, текст или файл…" value={query} onChange={event => setQuery(event.target.value)}/></div></div>
+                {startReview && <Button variant="outline" disabled={busy} onClick={startReview}>Разобрать заготовки</Button>}<div className="content-toolbar"><div className="library-status-filters" role="group" aria-label="Статус заготовок">{[['all', 'Все'], ['READY', 'Готовые'], ['USED', 'Использованные'], ['ARCHIVED', 'Архив']].map(([value, label]) => <Button key={value} aria-pressed={filter === value} variant={filter === value ? 'default' : 'outline'} onClick={() => setFilter(value)}>{label}</Button>)}</div><div className="search-field"><Search size={16}/><input aria-label="Поиск заготовок" placeholder="Название, текст или файл…" value={query} onChange={event => setQuery(event.target.value)}/></div></div>
                 {filtered.length ? <div className="content-grid library-grid">{filtered.map(item => <article key={item.id} className="content-card library-card">
                     {item.mediaIds.length > 0 && <div className="library-media-preview">{orderedPostMedia(item.mediaIds, media).map(asset => <MediaPreview key={asset.id} item={asset}/>)}</div>}
                     <div className="content-card-body"><span className={`pill library-status-${item.status.toLowerCase()}`}>{statuses[item.status]}</span><h2>{item.title || item.text.split('\n')[0] || 'Без названия'}</h2><p className="library-text-preview">{item.text || 'Заготовка с медиа'}</p><time dateTime={item.updatedAt}>Обновлено {new Date(item.updatedAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</time>

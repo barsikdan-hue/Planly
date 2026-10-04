@@ -9,7 +9,7 @@ const creationInputSchema = savePostInputSchema.and(createPostSourceSchema);
 const pendingSchema = z.object({ version: z.literal(1), key: z.string().uuid(),
   input: creationInputSchema, editor: editorFieldsSchema,
   intent: z.enum(['draft', 'scheduled', 'now']), editorToken: z.string().uuid(), activeEditorToken: z.string().uuid(),
-  acknowledgedId: z.string().min(1).optional() });
+  acknowledgedId: z.string().min(1).optional(), origin: z.enum(['composer', 'swipe-planner']).optional() });
 export type PendingCreation = z.infer<typeof pendingSchema>;
 export type CreationIntent = PendingCreation['intent'];
 export const pendingCreationKey = (ownerId: string) => `planly:pending-create:v1:${encodeURIComponent(ownerId)}`;
@@ -37,11 +37,11 @@ export function replacePendingEditor(storage: RecoveryStorage, ownerId: string, 
 
 // No submission occurs during hydration. The caller invokes this only for an explicit save/retry.
 export async function submitPendingCreation(storage: RecoveryStorage, ownerId: string, editorToken: string,
-  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent) {
+  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent, options: { origin?: 'composer' | 'swipe-planner' } = {}) {
   let pending = readPendingCreation(storage, ownerId);
   if (!pending) {
     pending = { version: 1, key: crypto.randomUUID(), input: creationInputSchema.parse(input()),
-      editor: editorFields(editor), intent, editorToken, activeEditorToken: editorToken };
+      editor: editorFields(editor), intent, editorToken, activeEditorToken: editorToken, ...(options.origin ? {origin:options.origin} : {}) };
     // If persistence fails, never dispatch an unrepeatable creation request.
     writePendingCreation(storage, ownerId, pending);
   }
@@ -52,7 +52,7 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
       // This typed source rejection occurs before creation; release the durable
       // request while keeping the editor available for restore/retry or abandon.
       const sourceRejected = error.status === 409 && error.body && typeof error.body === 'object' &&
-        'code' in error.body && error.body.code === 'LIBRARY_SOURCE_CONFLICT';
+        'code' in error.body && ['LIBRARY_SOURCE_CONFLICT', 'LIBRARY_SOURCE_STALE', 'PLANNER_SLOT_CONFLICT'].includes(String(error.body.code));
       if ([400, 404, 422].includes(error.status) || sourceRejected) completePendingCreation(storage, ownerId, pending.key);
     }
     throw error;
@@ -62,7 +62,7 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
   try { writePendingCreation(storage, ownerId, pending); } catch { /* Original durable request remains. */ }
   const belongsToEditor = pending.editorToken === editorToken;
   let updateError: unknown;
-  if (belongsToEditor) {
+  if (belongsToEditor && pending.origin !== 'swipe-planner') {
     const currentFields = editorFields(editor);
     if (currentFields.id === pending.acknowledgedId) {
       currentFields.id = pending.editor.id;
