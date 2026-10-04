@@ -11,11 +11,15 @@ import {
 } from '../contracts/planner.ts';
 import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
 import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
+import { PublicationContentError, validatePublicationContent, type PublicationMediaMetadata } from '../publication-content.ts';
+import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
+import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
 
 const providerOrder = { telegram: 0, max: 1 } as const;
 
 type PostPersistenceOptions = {
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
+  creationKey?: string;
 };
 
 async function mirrorQueueBestEffort(
@@ -71,6 +75,7 @@ async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
 
   return {
     id: post.id,
+    editBlockedReason: postEditBlockedReason(publicationRows),
     title: post.title,
     baseText: post.baseText,
     status: post.status,
@@ -86,10 +91,19 @@ async function validateRelations(
   userId: string,
   input: SavePostInput,
 ) {
+  let media: PublicationMediaMetadata[] = [];
   if (input.mediaIds.length) {
-    const rows = await tx.select({ id: mediaAssets.id }).from(mediaAssets)
+    const rows = await tx.select({ id: mediaAssets.id, mimeType: mediaAssets.mimeType,
+      byteSize: mediaAssets.byteSize, width: mediaAssets.width, height: mediaAssets.height }).from(mediaAssets)
       .where(and(eq(mediaAssets.userId, userId), inArray(mediaAssets.id, input.mediaIds)));
     if (rows.length !== input.mediaIds.length) throw new Error('Media not found for owner');
+    media = rows;
+  }
+
+  for (const target of input.targets) {
+    if (!target.scheduledAt) continue;
+    const issue = validatePublicationContent(toDbProvider(target.provider), target.textOverride ?? input.baseText, media);
+    if (issue) throw new PublicationContentError(issue);
   }
 
   const providers = input.targets.map(target => toDbProvider(target.provider));
@@ -115,20 +129,39 @@ export async function createPost(
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
   const postId = randomUUID();
+  const creationKey = options.creationKey === undefined ? null : creationKeySchema.parse(options.creationKey);
+  const inputHash = creationKey ? creationInputHash(input) : null;
   const db = getDb();
 
-  const changes = await db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
+    const readExisting = async () => {
+      const [existing] = await tx.select({ id: posts.id, inputHash: posts.creationInputHash }).from(posts)
+        .where(and(eq(posts.userId, userId), eq(posts.creationKey, creationKey!))).limit(1);
+      if (existing && existing.inputHash !== inputHash) throw new CreationConflictError();
+      return existing;
+    };
+    if (creationKey) {
+      const existing = await readExisting();
+      if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+    }
     const accounts = await validateRelations(tx, userId, input);
     const now = new Date();
-    await tx.insert(posts).values({
+    const inserted = await tx.insert(posts).values({
       id: postId,
       userId,
       title: input.title ?? null,
       baseText: input.baseText,
       status: input.status,
+      creationKey,
+      creationInputHash: inputHash,
       createdAt: now,
       updatedAt: now,
-    });
+    }).onConflictDoNothing({ target: [posts.userId, posts.creationKey] }).returning({ id: posts.id });
+    if (!inserted.length) {
+      const existing = await readExisting();
+      if (!existing) throw new Error('Creation result unavailable');
+      return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+    }
 
     if (input.targets.length) {
       await tx.insert(postTargets).values(input.targets.map(target => ({
@@ -147,11 +180,11 @@ export async function createPost(
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    return reconcilePostPublicationsInTx(tx, userId, postId);
+    return { postId, changes: await reconcilePostPublicationsInTx(tx, userId, postId), created: true };
   });
 
-  await mirrorQueueBestEffort(changes, options);
-  return readOwnedPost(userId, postId);
+  if (result.created) await mirrorQueueBestEffort(result.changes, options);
+  return readOwnedPost(userId, result.postId);
 }
 
 export async function updatePost(
@@ -163,27 +196,45 @@ export async function updatePost(
   const input = savePostInputSchema.parse(rawInput);
   const db = getDb();
 
-  const changes = await db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
+    const [owned] = await tx.select().from(posts)
+      .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1).for('update');
+    if (!owned) throw new Error('Post not found');
+    // Lock every publication before changing shared content. The processor claim
+    // UPDATE uses these same rows, so the post cannot change after a claim wins.
+    const history = await tx.select().from(publications)
+      .where(and(eq(publications.postId, postId), eq(publications.userId, userId)))
+      .orderBy(asc(publications.id)).for('update');
+    const existingTargets = await tx.select({ target: postTargets, provider: socialAccounts.provider })
+      .from(postTargets).innerJoin(socialAccounts, eq(postTargets.socialAccountId, socialAccounts.id))
+      .where(and(eq(postTargets.postId, postId), eq(socialAccounts.userId, userId)));
+    const existingMedia = await tx.select({ mediaId: postMedia.mediaId }).from(postMedia)
+      .where(eq(postMedia.postId, postId)).orderBy(asc(postMedia.position));
+    const current: SavePostInput = { title: owned.title, baseText: owned.baseText, status: owned.status,
+      targets: existingTargets.filter(({ target }) => target.active).map(({ target, provider }) => ({
+        provider: fromDbProvider(provider), textOverride: target.textOverride,
+        scheduledAt: target.scheduledAt?.toISOString() ?? null,
+      })), mediaIds: existingMedia.map(row => row.mediaId) };
+    if (samePostInput(input, current)) return { changed: false, changes: [] as PublicationQueueChange[] };
+    const blockedReason = postEditBlockedReason(history);
+    if (blockedReason) throw new PostEditConflictError(blockedReason);
     const accounts = await validateRelations(tx, userId, input);
-    const [owned] = await tx.update(posts)
+    await tx.update(posts)
       .set({
         title: input.title ?? null,
         baseText: input.baseText,
         status: input.status,
         updatedAt: new Date(),
       })
-      .where(and(eq(posts.id, postId), eq(posts.userId, userId)))
-      .returning({ id: posts.id });
-    if (!owned) throw new Error('Post not found');
+      .where(and(eq(posts.id, postId), eq(posts.userId, userId)));
 
     const now = new Date();
-    const existingTargets = await tx.select().from(postTargets).where(eq(postTargets.postId, postId));
     const desiredByAccount = new Map(input.targets.map(target => [
       accounts.get(toDbProvider(target.provider))!,
       target,
     ]));
 
-    for (const existing of existingTargets) {
+    for (const { target: existing } of existingTargets) {
       const desired = desiredByAccount.get(existing.socialAccountId);
       if (desired) {
         await tx.update(postTargets)
@@ -220,10 +271,10 @@ export async function updatePost(
       await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
     }
 
-    return reconcilePostPublicationsInTx(tx, userId, postId);
+    return { changed: true, changes: await reconcilePostPublicationsInTx(tx, userId, postId) };
   });
 
-  await mirrorQueueBestEffort(changes, options);
+  if (result.changed) await mirrorQueueBestEffort(result.changes, options);
   return readOwnedPost(userId, postId);
 }
 

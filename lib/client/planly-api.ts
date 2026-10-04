@@ -61,10 +61,14 @@ export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
 }
 
-export function savePost(input: SavePostInput, id?: string): Promise<PostDto> {
-  return id
-    ? request(`/api/posts/${encodeURIComponent(id)}`, jsonRequest('PATCH', input))
-    : request('/api/posts', jsonRequest('POST', input));
+export async function savePost(input: SavePostInput, id?: string, creationKey?: string): Promise<PostDto> {
+  const init = jsonRequest(id ? 'PATCH' : 'POST', input);
+  if (!id && creationKey) init.headers = { ...init.headers, 'idempotency-key': creationKey };
+  const saved = await request<PostDto>(id ? `/api/posts/${encodeURIComponent(id)}` : '/api/posts', init);
+  if (!saved || typeof saved.id !== 'string' || !saved.id.trim()) {
+    throw new PlanlyApiError('Сервер не подтвердил сохранение поста. Повтори сохранение, чтобы восстановить результат.', 502);
+  }
+  return saved;
 }
 
 export function removePost(id: string): Promise<void> {
