@@ -6,13 +6,13 @@ Main flow:
 
 `Создать контент → выбрать Telegram/MAX → выбрать время → сохранить → позже опубликовать через worker`
 
-This repository is the authoritative Planly source. Target runtime: the owner's server with Next.js, PostgreSQL, Redis and a standalone worker. See [self-host launch and verification](docs/SELF_HOST.md). Render remains optional; legacy Sites/Vinext files are not the production runtime.
+This repository is the authoritative Planly source. The current production and final acceptance environment is the existing Render deployment. The eventual Phase 10 target is the owner's server with Next.js, PostgreSQL, Redis and a standalone worker; see [self-host launch and verification](docs/SELF_HOST.md). Legacy Sites/Vinext files are not the production runtime.
 
 ## Current milestone
 
-**MVP v1 / Phase 4 — Telegram/MAX publication and UI completion**
+**MVP v1 / Phase 4 — Telegram/MAX Functional MVP DONE**
 
-Functional fixes have internal branch evidence on `codex/functional-mvp`, source head `2ab4b4b`. Production acceptance is pending owner-approved PR #4 merge/deploy on the existing Render service. Delivery is remote-first; see the permanent rules in [AGENTS.md](AGENTS.md) and [PR #4 review / production checklist](docs/verification/2026-10-04-pr4-remote-first-review.md).
+PR #4 is merged and deployed on the existing Render service at `af6288540bfe34d12e992b0535dfc2e04a5bc787`. Functional MVP acceptance combines the owner-confirmed production UI/media/MAX handoff at this SHA with the final fresh Telegram gate: bot/destination permission validation, PNG upload/preview/publication and scheduled text publication, with no duplicates observed after a control scheduler tick. See [production acceptance and evidence scope](docs/verification/2026-10-04-functional-mvp-production-pass.md). Phase 5 Content Library is next; starting it is a separate milestone decision.
 
 Implemented in this milestone:
 
@@ -28,17 +28,18 @@ Implemented in this milestone:
 - GitHub Actions verification;
 - Render web + PostgreSQL deployment blueprint;
 - Redis/BullMQ queue, worker, bounded retry and reconciliation;
-- Telegram and MAX connectors with historical live provider verification;
+- Telegram and MAX connectors, accepted production behavior and scoped live provider evidence;
 - content validation before enqueue, editor reload recovery and selected media preview order;
 - repeatable post creation after a lost response and protection of published or uncertain originals;
 - Docker Compose for web, worker, migrations, PostgreSQL, Redis and private media storage.
 
 Not implemented yet:
 
-- OpenAI research/text/image generation;
 - production analytics.
 
-A UI state is never treated as proof that a social network actually published a post. Historical provider evidence and its runtime scope are recorded in [the handoff inspection](docs/verification/2026-10-03-handoff-inspection.md). Branch checks used synthetic local provider fixtures. User-facing final PASS requires production verification after approved deploy. File assignment was blocked by the browser tool; this is not a Planly bug or a mandatory localhost gate. The upload scenario will be verified on the actual Render UI.
+AI research/text/image generation is removed from the product roadmap. Additional networks require an explicit owner decision.
+
+A UI state is never treated as proof that a social network actually published a post. The [current production acceptance report](docs/verification/2026-10-04-functional-mvp-production-pass.md) distinguishes fresh Telegram receipts from the accepted earlier UI/media/MAX handoff; MAX was not freshly rerun for the final Telegram gate. Historical branch checks and provider evidence retain their original scope. Development may use local browsers; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Delivery follows the full Harness and human gates in [AGENTS.md](AGENTS.md).
 
 ## Requirements
 
@@ -206,12 +207,13 @@ Publication path:
 
 `Post → PostTarget → BullMQ Job → Worker → TelegramConnector / MaxConnector`
 
-Queue/processor/worker and both provider connectors are implemented. Self-host verification checks the actual container runtime. Sidebar cleanup and social-account management in Settings are deployed; the functional fixes above remain on the verified branch pending the remaining acceptance and owner gates. See [ROADMAP.md](ROADMAP.md) for evidence and human gates. GitHub scheduler timing is accepted temporary tech debt until the target self-host deployment.
+Foundation, UI, Content Core, scheduler core and Telegram/MAX Functional MVP are DONE for MVP. Phase 5 Content Library is NEXT, followed by Phase 6 Smart Content Queue / Swipe Planner, Phase 7 additional networks only by explicit owner decision, Phase 8 analytics, Phase 9 scheduling automation and Phase 10 target hosting optimization. See [ROADMAP.md](ROADMAP.md) for phase contracts and [production acceptance](docs/verification/2026-10-04-functional-mvp-production-pass.md) for current evidence. GitHub scheduler timing remains accepted temporary tech debt until the Phase 10 target self-host deployment.
 
-OpenAI content research/generation remains a later milestone after publication is trustworthy.
+Smart Content Queue uses left reject/right approve, then the next free slot or manual date/time. A ContentSuggestion becomes a Post only after approval. AI is excluded.
 
 ## Project docs
 
+- `docs/verification/2026-10-04-functional-mvp-production-pass.md` — current Functional MVP acceptance, deployed SHA and final Telegram evidence.
 - `docs/verification/2026-10-03-functional-mvp.md` — verified functional branch, final acceptance and limits.
 - `docs/verification/2026-10-03-handoff-inspection.md` — historical production handoff evidence and verification limits.
 - `docs/baseline/CURRENT_STATE.md` — historical baseline; current code, CI and runtime take precedence.
