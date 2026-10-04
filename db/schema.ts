@@ -16,6 +16,7 @@ const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).
 export const socialProviderEnum = pgEnum('social_provider', ['TELEGRAM', 'MAX']);
 export const socialConnectionStatusEnum = pgEnum('social_connection_status', ['DISCONNECTED', 'CONNECTED', 'ERROR']);
 export const postStatusEnum = pgEnum('post_status', ['DRAFT', 'READY', 'ARCHIVED']);
+export const libraryItemStatusEnum = pgEnum('library_item_status', ['READY', 'USED', 'ARCHIVED']);
 export const mediaSourceEnum = pgEnum('media_source', ['UPLOAD', 'AI_GENERATED']);
 export const publicationStatusEnum = pgEnum('publication_status', [
   'SCHEDULED',
@@ -74,6 +75,18 @@ export const socialAccounts = pgTable('social_accounts', {
   index('social_accounts_user_id_idx').on(table.userId),
 ]);
 
+export const libraryItems = pgTable('library_items', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  bodyText: text('body_text').notNull(),
+  status: libraryItemStatusEnum('status').notNull().default('READY'),
+  createdAt,
+  updatedAt,
+}, (table) => [
+  index('library_items_user_id_idx').on(table.userId),
+]);
+
 export const posts = pgTable('posts', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -82,12 +95,14 @@ export const posts = pgTable('posts', {
   status: postStatusEnum('status').notNull().default('DRAFT'),
   creationKey: text('creation_key'),
   creationInputHash: text('creation_input_hash'),
+  sourceLibraryItemId: text('source_library_item_id').references(() => libraryItems.id, { onDelete: 'set null' }),
   createdAt,
   updatedAt,
 }, (table) => [
   index('posts_user_id_idx').on(table.userId),
   index('posts_status_idx').on(table.status),
   uniqueIndex('posts_user_creation_key_uidx').on(table.userId, table.creationKey),
+  uniqueIndex('posts_source_library_item_uidx').on(table.sourceLibraryItemId),
 ]);
 
 export const postTargets = pgTable('post_targets', {
@@ -129,6 +144,15 @@ export const postMedia = pgTable('post_media', {
 }, (table) => [
   primaryKey({ columns: [table.postId, table.mediaId] }),
   uniqueIndex('post_media_post_position_uidx').on(table.postId, table.position),
+]);
+
+export const libraryItemMedia = pgTable('library_item_media', {
+  libraryItemId: text('library_item_id').notNull().references(() => libraryItems.id, { onDelete: 'cascade' }),
+  mediaId: text('media_id').notNull().references(() => mediaAssets.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.libraryItemId, table.mediaId] }),
+  uniqueIndex('library_item_media_item_position_uidx').on(table.libraryItemId, table.position),
 ]);
 
 export const publications = pgTable('publications', {
