@@ -106,3 +106,29 @@ test('replacement guard protects meaningful changes, ignores pristine editor and
   assert.equal(shouldReplaceEditor({ ...saved, text: 'Changed' }, blankPost(), [saved]), true);
   assert.equal(shouldReplaceEditor({ ...blankPost(), overrides: { max: 'Override only' } }, blankPost(), []), true);
 });
+
+test('Library Composer source round-trips in v1 editor recovery with stale media filtering', () => {
+  const storage = memoryStorage();
+  const draft = { ...editor(), sourceLibraryItemId:'library-source' };
+  assert.equal(writeRecovery(storage, 'owner', draft), true);
+  const raw = JSON.parse(storage.getItem(editorKey('owner')));
+  assert.equal(raw.version, 1);
+  assert.equal(raw.editor.sourceLibraryItemId, 'library-source');
+  const recovered = restoreRecovery(readRecovery(storage, 'owner').editor, [], [{ id:'A' }]);
+  assert.equal(recovered.draft.sourceLibraryItemId, 'library-source');
+  assert.equal(recovered.missingMediaCount, 1);
+  assert.deepEqual(recovered.draft.mediaIds, ['A']);
+});
+
+test('old v1 editor without source restores and existing Post recovery clears stale source', () => {
+  const storage = memoryStorage();
+  const legacy = { id:'', text:'Legacy', networks:['telegram'], date:'2030-01-01', time:'10:00', mediaIds:[], overrides:{} };
+  storage.setItem(editorKey('owner'), JSON.stringify({ version:1, editor:legacy }));
+  const read = readRecovery(storage, 'owner');
+  assert.equal(read.invalid, false);
+  assert.equal(read.editor.text, 'Legacy');
+  assert.equal(restoreRecovery(read.editor, [], []).draft.sourceLibraryItemId, null);
+  const existing = { ...blankPost(), id:'saved', text:'Server' };
+  assert.equal(restoreRecovery({ ...legacy, id:'saved', sourceLibraryItemId:'stale-library' }, [existing], []).draft.sourceLibraryItemId, null);
+  assert.equal(restoreRecovery({ ...legacy, id:'deleted', sourceLibraryItemId:'stale-library' }, [], []).draft.sourceLibraryItemId, null);
+});

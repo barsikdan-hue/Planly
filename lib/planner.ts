@@ -1,5 +1,7 @@
 import type { PostDto, SavePostInput } from './contracts/planner.ts';
 
+export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string };
+
 export type Network = 'telegram' | 'max';
 export type Status = 'draft' | 'scheduled' | 'published' | 'failed';
 export type Media = {
@@ -11,6 +13,7 @@ export type Media = {
 };
 export type Post = {
   id: string;
+  sourceLibraryItemId?: string | null;
   editBlockedReason?: string | null;
   text: string;
   networks: Network[];
@@ -85,6 +88,7 @@ export function addDays(date: string, offset: number) {
 export function blankPost(): Post {
   return {
     id: '',
+    sourceLibraryItemId: null,
     text: '',
     networks: ['telegram'],
     date: day(1),
@@ -134,6 +138,7 @@ export function fromServerPost(input: PostDto): Post {
   }
   return {
     id: input.id,
+    sourceLibraryItemId: null,
     editBlockedReason: input.editBlockedReason ?? null,
     text: input.baseText,
     networks,
@@ -146,9 +151,10 @@ export function fromServerPost(input: PostDto): Post {
   };
 }
 
-export function toSavePostInput(post: Post, status: 'draft' | 'scheduled'): SavePostInput {
+export function toSavePostInput(post: Post, status: 'draft' | 'scheduled'): ComposerPostInput {
   const scheduledAt = status === 'scheduled' ? moscowDate(post.date, post.time).toISOString() : null;
   return {
+    ...(!post.id && post.sourceLibraryItemId ? { sourceLibraryItemId: post.sourceLibraryItemId } : {}),
     baseText: post.text,
     status: status === 'scheduled' ? 'READY' : 'DRAFT',
     targets: post.networks.map(provider => ({
@@ -165,8 +171,8 @@ export function seedPosts(): Post[] {
 }
 
 
-export function toPublishNowInput(post: Pick<Post,'text' | 'networks' | 'mediaIds' | 'overrides'>, now = Date.now()): SavePostInput {
-  return {baseText:post.text,status:'READY',targets:post.networks.map(provider=>({provider,textOverride:post.overrides[provider] ?? null,
+export function toPublishNowInput(post: Pick<Post,'text' | 'networks' | 'mediaIds' | 'overrides'> & Partial<Pick<Post,'id' | 'sourceLibraryItemId'>>, now = Date.now()): ComposerPostInput {
+  return {...(!post.id && post.sourceLibraryItemId ? {sourceLibraryItemId:post.sourceLibraryItemId} : {}),baseText:post.text,status:'READY',targets:post.networks.map(provider=>({provider,textOverride:post.overrides[provider] ?? null,
     scheduledAt:new Date(now).toISOString()})),mediaIds:[...post.mediaIds]};
 }
 

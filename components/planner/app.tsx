@@ -17,8 +17,9 @@ import { normalizePlannerView } from '@/lib/planner-navigation';
 import { clearSavedRecovery, editorFields, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields } from '@/lib/client/editor-recovery';
 import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
-import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type Post, type Media, type Network, type Status } from '@/lib/planner';
-import type { SavePostInput, SocialAccountDto } from '@/lib/contracts/planner';
+import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type ComposerPostInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
+import type { SocialAccountDto } from '@/lib/contracts/planner';
+import type { LibraryItemDto } from '@/lib/contracts/library';
 import {
     loadPlanner,
     PlanlyApiError,
@@ -39,9 +40,10 @@ type PlannerData = {
     media: Media[];
     name: string;
     socialAccounts: SocialAccountDto[];
+    libraryItems: LibraryItemDto[];
 };
 
-const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [] };
+const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [], libraryItems: [] };
 
 function toUiMedia(item: MediaAssetWithPreview): Media {
     return { id: item.id, name: item.originalName, url: item.previewUrl, type: item.mimeType, size: item.byteSize };
@@ -86,7 +88,8 @@ export default function PlannerApp() {
 
     // Persist outside React updater functions, which Strict Mode may run twice.
     const setDraft: Dispatch<SetStateAction<Post>> = useCallback(update => {
-        const next = typeof update === 'function' ? update(draftRef.current) : update;
+        const updated = typeof update === 'function' ? update(draftRef.current) : update;
+        const next = updated.id ? { ...updated, sourceLibraryItemId: null } : updated;
         draftRef.current = next;
         editorRevision.current += 1;
         setDraftState(next);
@@ -123,6 +126,7 @@ export default function PlannerApp() {
                 media,
                 name: snapshot.profile.displayName,
                 socialAccounts: snapshot.socialAccounts,
+                libraryItems: snapshot.libraryItems,
             });
             recoveryOwner.current = snapshot.profile.id;
             const storage = sessionRecoveryStorage();
@@ -153,7 +157,7 @@ export default function PlannerApp() {
                             setDraftState(restored.draft);
                         }
                         if (pending.acknowledgedId && pending.editorToken === editorToken.current) {
-                            const next = { ...draftRef.current, id: pending.acknowledgedId };
+                            const next = { ...draftRef.current, id: pending.acknowledgedId, sourceLibraryItemId: null };
                             draftRef.current = next; setDraftState(next);
                             if (writeRecovery(storage, snapshot.profile.id, next)) persistedEditor.current = editorFields(next);
                         }
@@ -202,7 +206,7 @@ export default function PlannerApp() {
             busy=true;
             try {
                 const snapshot=await loadPlanner();
-                if (active && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts}));
+                if (active && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts,libraryItems:snapshot.libraryItems}));
             } catch { /* Initial loading and mutations already display errors; polling remains quiet. */ }
             finally {busy=false;}
         };
@@ -226,7 +230,7 @@ export default function PlannerApp() {
         return result;
     }, [data.socialAccounts]);
 
-    const submitEditor = async (post: Post, input: () => SavePostInput, intent: CreationIntent, token: string) => {
+    const submitEditor = async (post: Post, input: () => ComposerPostInput, intent: CreationIntent, token: string) => {
         const storage = sessionRecoveryStorage();
         const owner = recoveryOwner.current;
         const pending = storage && owner ? readPendingCreation(storage, owner) : null;
@@ -327,10 +331,10 @@ export default function PlannerApp() {
     };
     const editPost = (post: Post) => {
         if (editBlockedReasonFor(post)) { setDetailId(post.id); return; }
-        if (replaceEditor({ ...post, mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } })) setDetailId(null);
+        if (replaceEditor({ ...post, sourceLibraryItemId: null, mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } })) setDetailId(null);
     };
     const duplicatePost = (post: Post, preservesCurrent = false) => {
-        if (replaceEditor({ ...post, id: '', status: 'draft', targets: [], editBlockedReason: null,
+        if (replaceEditor({ ...post, id: '', sourceLibraryItemId: null, status: 'draft', targets: [], editBlockedReason: null,
             mediaIds: [...post.mediaIds], networks: [...post.networks], overrides: { ...post.overrides } }, preservesCurrent)) {
             setDetailId(null);
             toast.info('Копия открыта в редакторе. Сохрани её как новый пост.');

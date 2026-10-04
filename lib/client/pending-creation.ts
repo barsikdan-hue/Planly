@@ -1,11 +1,13 @@
 import { z } from 'zod';
-import { savePostInputSchema, type SavePostInput } from '../contracts/planner.ts';
+import { createPostSourceSchema, savePostInputSchema } from '../contracts/planner.ts';
+import type { ComposerPostInput } from '../planner.ts';
 import { canonicalCreationInput } from '../post-creation.ts';
 import { editorFields, editorFieldsSchema, type EditorFields, type RecoveryStorage } from './editor-recovery.ts';
 import { PlanlyApiError, savePost } from './planly-api.ts';
 
+const creationInputSchema = savePostInputSchema.and(createPostSourceSchema);
 const pendingSchema = z.object({ version: z.literal(1), key: z.string().uuid(),
-  input: savePostInputSchema, editor: editorFieldsSchema,
+  input: creationInputSchema, editor: editorFieldsSchema,
   intent: z.enum(['draft', 'scheduled', 'now']), editorToken: z.string().uuid(), activeEditorToken: z.string().uuid(),
   acknowledgedId: z.string().min(1).optional() });
 export type PendingCreation = z.infer<typeof pendingSchema>;
@@ -35,10 +37,10 @@ export function replacePendingEditor(storage: RecoveryStorage, ownerId: string, 
 
 // No submission occurs during hydration. The caller invokes this only for an explicit save/retry.
 export async function submitPendingCreation(storage: RecoveryStorage, ownerId: string, editorToken: string,
-  editor: EditorFields, input: () => SavePostInput, intent: CreationIntent) {
+  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent) {
   let pending = readPendingCreation(storage, ownerId);
   if (!pending) {
-    pending = { version: 1, key: crypto.randomUUID(), input: savePostInputSchema.parse(input()),
+    pending = { version: 1, key: crypto.randomUUID(), input: creationInputSchema.parse(input()),
       editor: editorFields(editor), intent, editorToken, activeEditorToken: editorToken };
     // If persistence fails, never dispatch an unrepeatable creation request.
     writePendingCreation(storage, ownerId, pending);
@@ -46,7 +48,13 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
   let saved;
   try { saved = await savePost(pending.input, undefined, pending.key); }
   catch (error) {
-    if (error instanceof PlanlyApiError && [400, 404, 422].includes(error.status)) completePendingCreation(storage, ownerId, pending.key);
+    if (error instanceof PlanlyApiError) {
+      // This typed source rejection occurs before creation; release the durable
+      // request while keeping the editor available for restore/retry or abandon.
+      const sourceRejected = error.status === 409 && error.body && typeof error.body === 'object' &&
+        'code' in error.body && error.body.code === 'LIBRARY_SOURCE_CONFLICT';
+      if ([400, 404, 422].includes(error.status) || sourceRejected) completePendingCreation(storage, ownerId, pending.key);
+    }
     throw error;
   }
   pending = { ...pending, activeEditorToken: readPendingCreation(storage, ownerId)?.activeEditorToken ?? pending.activeEditorToken, acknowledgedId: saved.id };
@@ -56,7 +64,12 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
   let updateError: unknown;
   if (belongsToEditor) {
     const currentFields = editorFields(editor);
-    if (currentFields.id === pending.acknowledgedId) currentFields.id = pending.editor.id;
+    if (currentFields.id === pending.acknowledgedId) {
+      currentFields.id = pending.editor.id;
+      // Acknowledgement clears transient source together with the unsaved ID.
+      // Neither change means publish-now needs a fresh timestamp.
+      currentFields.sourceLibraryItemId = pending.editor.sourceLibraryItemId ?? null;
+    }
     const unchanged = JSON.stringify(currentFields) === JSON.stringify(editorFields(pending.editor)) && intent === pending.intent;
     try {
       const desired = unchanged ? pending.input : input();

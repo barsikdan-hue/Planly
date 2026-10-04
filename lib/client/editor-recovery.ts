@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { blankPost, type Media, type Post } from '../planner.ts';
 
-export type EditorFields = Pick<Post, 'id' | 'text' | 'networks' | 'date' | 'time' | 'mediaIds' | 'overrides'>;
+export type EditorFields = Pick<Post, 'id' | 'text' | 'networks' | 'date' | 'time' | 'mediaIds' | 'overrides' | 'sourceLibraryItemId'>;
 export type RecoveryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const recoverySchema = z.object({
   version: z.literal(1),
   editor: z.object({
     id: z.string().max(200), text: z.string(), date: z.string().max(10), time: z.string().max(5),
+    sourceLibraryItemId: z.string().min(1).max(200).nullable().optional(),
     networks: z.array(z.enum(['telegram', 'max'])).max(2).refine(values => new Set(values).size === values.length),
     mediaIds: z.array(z.string().min(1).max(200)).refine(values => new Set(values).size === values.length),
     overrides: z.object({ telegram: z.string().optional(), max: z.string().optional() }).strict(),
@@ -22,7 +23,7 @@ export function editorFields(post: EditorFields): EditorFields {
     if (post.overrides[network] !== undefined) overrides[network] = post.overrides[network];
   }
   return { id: post.id, text: post.text, networks: [...post.networks], date: post.date, time: post.time,
-    mediaIds: [...post.mediaIds], overrides };
+    mediaIds: [...post.mediaIds], overrides, sourceLibraryItemId: post.sourceLibraryItemId ?? null };
 }
 
 function encoded(fields: EditorFields): string { return JSON.stringify({ version: 1, editor: editorFields(fields) }); }
@@ -73,7 +74,8 @@ export function restoreRecovery(fields: EditorFields, posts: Post[], media: Pick
   const currentPost = fields.id ? posts.find(post => post.id === fields.id) : undefined;
   const available = new Set(media.map(item => item.id));
   const mediaIds = fields.mediaIds.filter(id => available.has(id));
-  return { draft: { ...(currentPost ?? blankPost()), ...editorFields(fields), id: currentPost?.id ?? '', mediaIds },
+  return { draft: { ...(currentPost ?? blankPost()), ...editorFields(fields), id: currentPost?.id ?? '', mediaIds,
+    sourceLibraryItemId: fields.id ? null : fields.sourceLibraryItemId ?? null },
     missingPost: !!fields.id && !currentPost, missingMediaCount: fields.mediaIds.length - mediaIds.length };
 }
 

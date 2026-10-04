@@ -83,3 +83,15 @@ test('mixed failed and waiting targets keep status polling active until each tar
  posts[0].targets[0].status='published';
  assert.equal(planner.hasPendingPublications(posts),false);
 });
+
+test('Composer creation builders include Library source for draft, schedule and now but existing Posts clear it', async () => {
+ const {blankPost,toSavePostInput,toPublishNowInput,fromServerPost}=await import('../lib/planner.ts');
+ assert.equal(blankPost().sourceLibraryItemId,null);
+ const draft={...blankPost(),text:'Prepared',sourceLibraryItemId:'library',date:'2030-01-01',time:'12:00'};
+ assert.equal(toSavePostInput(draft,'draft').sourceLibraryItemId,'library');
+ assert.equal(toSavePostInput(draft,'scheduled').sourceLibraryItemId,'library');
+ assert.equal(toPublishNowInput(draft,0).sourceLibraryItemId,'library');
+ assert.equal('sourceLibraryItemId' in toSavePostInput({...draft,id:'existing'},'draft'),false);
+ const server=fromServerPost({id:'existing',title:null,baseText:'Prepared',status:'DRAFT',targets:[],mediaIds:[],createdAt:'2030-01-01T00:00:00Z',updatedAt:'2030-01-01T00:00:00Z'});
+ assert.equal(server.sourceLibraryItemId,null);
+});
