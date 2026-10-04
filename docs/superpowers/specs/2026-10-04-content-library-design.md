@@ -28,7 +28,7 @@ There is no server-side content-library entity today.
 
 Current persisted `Post` data is already part of the publication lifecycle through `posts`, `post_targets`, `post_media`, `publications`, scheduler reconciliation and provider connectors. Reusing `Post(DRAFT)` as a content-library record would therefore violate the product rule that prepared library material must remain outside Posts until explicit approval.
 
-Existing `media_assets` are independent of Posts and can be reused safely by library items without duplicating files.
+Existing `media_assets` are independent of Posts and can be reused safely by library items without duplicating files. The existing media deletion rule rejects deletion while media is attached to a Post; Phase 5 must extend the same protection to media attached to a library item.
 
 ## 3. Scope
 
@@ -39,8 +39,8 @@ Phase 5 includes:
 - persist it on the server;
 - search library items;
 - filter by simple status;
-- archive and permanently delete a library item;
-- reload recovery through normal server persistence;
+- archive, restore and permanently delete a library item;
+- reload persistence through the normal server snapshot;
 - start a publication from a library item;
 - reuse existing media assets;
 - keep current Posts and publication flows working unchanged in behavior.
@@ -84,7 +84,8 @@ Each library card shows:
 
 Actions:
 
-- `Создать публикацию`;
+- `Создать публикацию` for READY items;
+- `Открыть публикацию` for USED items when the linked Post still exists;
 - `Редактировать`;
 - `Архивировать` or `Вернуть из архива`;
 - `Удалить`.
@@ -98,6 +99,8 @@ Filters:
 
 Search matches title, text and attached media names.
 
+Editing a USED library item changes only the library copy. It never mutates the already-created Post and does not reopen conversion. To publish another variant, use the existing Post duplication flow from the linked publication.
+
 ### 4.2 Add/edit library item
 
 Use a focused library editor rather than the publication Composer because a library item has no networks, schedule or provider overrides.
@@ -109,6 +112,8 @@ Fields:
 - media selection/upload using the existing server media flow.
 
 At least text or one media asset is required.
+
+New items always start READY. Archiving is an explicit later action, not a create mode.
 
 ### 4.3 Create publication
 
@@ -143,7 +148,7 @@ Add table `library_items`:
 Indexes:
 
 - user ID;
-- user ID + status if query plans justify it; avoid speculative indexing beyond list/filter access.
+- user ID + status only if implementation/query evidence shows it useful; avoid speculative indexing.
 
 Add join table `library_item_media`:
 
@@ -166,17 +171,23 @@ Deleting a library item that already has a source Post must not delete the Post.
 
 ## 6. Contracts
 
-Add dedicated library contracts rather than extending `SavePostInput` with unrelated fields.
+Add dedicated library contracts rather than mixing library state into mutable Post content.
 
-`SaveLibraryItemInput`:
+`CreateLibraryItemInput`:
 
 - `title?: string | null`, trimmed, max 200;
 - `text: string`, trimmed, max 20,000;
-- `status: READY | ARCHIVED` for direct owner edits;
 - `mediaIds: string[]`, unique, max 20;
 - refinement: text or media required.
 
-Clients must not directly set `USED`; the server owns that transition when a source Post is successfully created.
+Creation status is always READY.
+
+`UpdateLibraryItemInput` is a full replacement of editable library content:
+
+- same title/text/media rules as creation;
+- `status: READY | ARCHIVED`.
+
+Clients must not directly set `USED`; the server owns that transition when a source Post is successfully created. A USED item remains USED when its library copy is edited; editing cannot reset it to READY.
 
 `LibraryItemDto`:
 
@@ -187,9 +198,9 @@ Clients must not directly set `USED`; the server owns that transition when a sou
 - mediaIds;
 - createdAt;
 - updatedAt;
-- optional `sourcePostId` for USED items so UI can open the created publication if desired.
+- `sourcePostId: string | null`.
 
-For Post creation, extend the existing create-only request with an optional provenance field in a separate wrapper/parameter, not as mutable Post content. Updating an existing Post must never change its source library item.
+For Post creation, carry an optional source-library identifier only on create requests. Updating an existing Post must never change its source library item.
 
 ## 7. Server architecture
 
@@ -200,12 +211,14 @@ Responsibilities:
 - list owner library items;
 - read one owner library item;
 - validate referenced media belongs to the owner;
-- create/update/archive/delete item;
+- create/update/archive/restore/delete item;
 - preserve media order;
 - reject cross-owner IDs;
 - expose source Post linkage when present.
 
 Do not put library CRUD inside `lib/server/posts.ts`.
+
+Update the existing media deletion service so a media asset attached to either `post_media` or `library_item_media` is considered in use and cannot be deleted until detached. This preserves the current safety rule instead of allowing a library item to lose content through an unrelated Media screen action.
 
 ### 7.1 Conversion transaction
 
@@ -215,16 +228,18 @@ Expected transaction behavior:
 
 1. validate and lock the owned library item;
 2. reject ARCHIVED as a conversion source unless it is restored first;
-3. if the item is already USED and has a linked source Post, return/reconcile the existing result rather than create a duplicate;
+3. if the item is already USED and has a linked source Post, resolve the existing Post rather than create a duplicate;
 4. create the Post through the existing Post persistence rules and idempotency contract;
 5. set `posts.source_library_item_id`;
 6. set the library item status to `USED`;
 7. commit;
 8. perform existing queue mirroring after commit exactly as current Post creation does.
 
+Library update/archive/delete operations that race with conversion must lock/serialize on the same owned library row so the final state is deterministic and no duplicate Post can be created.
+
 The implementation should reuse the current Post creation logic rather than fork validation, target creation, media attachment or publication reconciliation into a second implementation.
 
-The exact internal function boundary may be chosen after code inspection during implementation, but behavior above is mandatory.
+The exact internal function boundary may be chosen after implementation-time code inspection, but the behavior above is mandatory.
 
 ## 8. API
 
@@ -237,14 +252,15 @@ Add owner-authenticated endpoints:
 
 `POST /api/library-items`
 
-- creates READY or ARCHIVED item;
+- creates a READY item;
 - validates input/media ownership.
 
 `PATCH /api/library-items/:id`
 
-- updates title/text/media/status;
+- replaces editable title/text/media and applies READY/ARCHIVED owner status where permitted;
 - cannot directly set USED;
-- archived items may be restored to READY.
+- a USED item may update its library copy but remains USED;
+- archived READY items may be restored to READY.
 
 `DELETE /api/library-items/:id`
 
@@ -253,7 +269,7 @@ Add owner-authenticated endpoints:
 - never deletes an already-created Post;
 - missing/non-owned item follows the existing API error convention and must not leak cross-owner existence.
 
-Post creation from a library source should use the existing `/api/posts` creation path with an explicit source-library identifier in the create request contract/header/body chosen during implementation. It must retain current idempotency-key behavior.
+Post creation from a library source uses the existing `/api/posts` creation path with an explicit source-library identifier on create only. The implementation may choose a small create-request wrapper or dedicated create-only field/header, but must keep existing Post content validation and `idempotency-key` behavior intact. Do not add source provenance to mutable PATCH content.
 
 Do not introduce a second independent publication endpoint.
 
@@ -265,15 +281,13 @@ Extend `/api/bootstrap` and `PlannerSnapshot` with `libraryItems` so initial app
 
 Add client API helpers for library CRUD.
 
-Do not reuse browser localStorage/sessionStorage as the source of truth for Library. Normal server persistence is authoritative.
+Do not use browser localStorage/sessionStorage as the source of truth for Library. Normal server persistence is authoritative.
 
-The existing Composer recovery mechanism remains limited to Composer drafts. Phase 5 does not need a second crash-recovery subsystem for library editing unless implementation evidence proves it necessary.
+The existing Composer recovery mechanism remains limited to Composer drafts. Phase 5 does not add a second crash-recovery subsystem for library editing unless implementation evidence proves a concrete data-loss problem that cannot be handled by normal save/error state.
 
 ## 10. Navigation/component boundaries
 
-Update navigation normalization so the existing `content` route/hash can remain compatible while the visible label becomes `Библиотека`.
-
-Prefer preserving `#content` for backward compatibility rather than renaming routes for cosmetic reasons.
+Update navigation presentation while preserving the existing `content` route/hash for compatibility. The visible label becomes `Библиотека`; `normalizePlannerView('content')` continues to work.
 
 Refactor only enough to keep responsibilities clear:
 
@@ -293,7 +307,8 @@ Required cases:
 - invalid title/text/media count → 400;
 - referenced media missing/not owned → safe client error, no partial write;
 - library item missing/not owned → non-leaking not-found behavior;
-- archive/delete conflict with a concurrent conversion → transaction decides one winner; no duplicate Post;
+- deleting media still attached to a library item → reject using the existing in-use media pattern;
+- archive/update/delete racing with conversion → row locking/transaction decides one winner; no duplicate Post or partial library state;
 - repeated create-Post request after lost response → current Post idempotency behavior must still recover the same Post;
 - if Post creation fails, library item remains READY;
 - if conversion commits but client loses the response, retry must resolve to the same source Post and USED library item.
@@ -313,7 +328,7 @@ No network/provider call occurs from library CRUD itself.
 
 Add one forward migration after `0003`.
 
-The migration may add:
+The migration adds:
 
 - `library_item_status` enum;
 - `library_items`;
@@ -333,7 +348,8 @@ Follow TDD for implementation.
 - valid text-only, media-only and text+media library input;
 - empty item rejected;
 - title/text/media limits;
-- USED cannot be assigned directly by client;
+- new item always READY;
+- USED cannot be assigned/reset directly by client;
 - navigation still accepts existing `content` route.
 
 ### DB/integration tests
@@ -341,8 +357,9 @@ Follow TDD for implementation.
 - create/list/update/archive/restore/delete owner library item;
 - media order preserved;
 - cross-owner media rejected;
-- deleting item does not delete media;
-- deleting USED item leaves created Post intact and clears/nulls provenance as designed;
+- deleting unattached item does not delete media;
+- deleting a media asset attached to a library item is rejected;
+- deleting USED item leaves created Post intact and clears/nulls provenance through FK behavior;
 - bootstrap includes library items;
 - migration/schema checks.
 
@@ -353,6 +370,7 @@ Follow TDD for implementation.
 - retry after lost response resolves same Post;
 - repeated conversion cannot create a second source Post;
 - creation failure leaves item READY;
+- archive/update/delete race with conversion does not create duplicate/partial state;
 - existing Post creation without library source remains unchanged;
 - scheduling/publish-now path from a library source still uses existing target/publication logic.
 
@@ -362,6 +380,7 @@ Follow TDD for implementation.
 - `Заготовки | Публикации` tabs;
 - search/filter behavior;
 - create/edit/archive/restore/delete UI;
+- USED item links to its created publication and cannot reconvert;
 - existing Publications tab keeps current filters/actions;
 - Create publication populates Composer correctly;
 - reload shows persisted library items.
@@ -391,7 +410,7 @@ Phase 5 is DONE only when:
 - library CRUD works and survives reload;
 - title/text/media editing works;
 - search/status filters work;
-- existing media assets are reused without byte duplication;
+- existing media assets are reused without byte duplication and cannot be deleted while attached;
 - opening Create publication does not create a Post;
 - successful first Post creation from a library item marks it USED atomically;
 - retries cannot create duplicate source Posts;
