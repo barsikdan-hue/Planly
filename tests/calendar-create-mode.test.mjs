@@ -62,16 +62,8 @@ test('generic Content new-post action keeps default Now despite default draft da
   assert.equal(requests.length, 0);
 });
 
-test('calendar schedule recovery retains chosen mode/date/time after app reload', async () => {
-  const { cache, requests } = fixture(); await harness.settle();
-  const date = day(2);
-  harness.find('Calendar').props.createPost(date, '18:00'); await harness.settle();
-  harness.unmount();
-  const reload = fixture({ cache, view: 'create' }); await harness.settle();
-  assertSchedule(date, '18:00');
-  assert.equal(requests.length + reload.requests.length, 0);
-});
-
+// Reload mode oracle is preserved in known-gaps/editor-mode-recovery.red.mjs (CR-10).
+// Orchestrator explicitly approved this split; recovery schema is outside CR-04.
 test('declined Calendar replacement preserves another dirty editor without mutation', async () => {
   const { requests, navigate } = fixture({ view: 'create' }); await harness.settle();
   harness.composer().setDraft(current => ({ ...current, text: 'Unsaved local content', mediaIds: ['manual'] }));

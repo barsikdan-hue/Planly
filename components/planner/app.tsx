@@ -364,7 +364,7 @@ export default function PlannerApp() {
             toast.info('Копия открыта в редакторе. Сохрани её как новый пост.');
         }
     };
-    const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date } : {}), ...(time ? { time } : {}) }); };
+    const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date, status: 'scheduled' as const } : {}), ...(time ? { time } : {}) }); };
 
     const createFromLibrary = (item: LibraryItemDto) => {
         const source = data.libraryItems.find(current => current.id === item.id);
