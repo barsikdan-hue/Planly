@@ -1,0 +1,15 @@
+# CR-03 Composer upload race evidence
+
+STATUS: RED_CONFIRMED; test-only branch, no implementation/merge/deploy.
+AUTHORITY: barsikdan-hue/Planly; fresh origin/main95f53b7d18e656e0f8ceff5002b4c42af3d12251; work/Planly-composer-upload; codex/customer-ready-composer-upload. PR12a3b8c31 and PR13 8d9bb74 remain frozen READY and await Owner approval in the direct ChatGPT bridge.
+
+ROOT_CAUSE: components/planner/composer.tsx::addFiles → each overlapping upload sets the same busy boolean true → first finally sets false while another upload awaits → draft/schedule/publish Action controls enable → callbacks submit current mediaIds before remaining batch attaches. components/planner/app.tsx::upload handles individual errors and returns only successful assets, including [] for an entirely failed batch; that completion still triggered the premature unlock.
+
+BASELINE: focused existing Composer/post-edit callback/UI/media-order tests16/16PASS on fresh worktree. Existing native main suite446 baseline; not rerun locally without native PostgreSQL/Redis.
+RED: tests/composer-upload-race.test.mjs actual component callbacks using existing post-edit-ui-loader + planner-hook-harness;10total/3PASS/7expectedFAIL/0skip. Six overlap cases (full now/full scheduled/quick × either completion order) and failed empty first batch all assert true disabled after first completion, actually false while another upload promise remains pending. Single multi-file batch, saving/account guards and unmount controls PASS. Initial test selector included the closed media-picker Done action; corrected to semantic submit controls before accepting RED.
+
+INDEPENDENT_PROBE: read-only reviewer reproduced full input+drop and quick input+input before rerender; enabled publish callback received only existing/manual plus first-finished ID, later draft contained both. Latest draft text/manual media survived existing functional merge. Actual PlannerApp.upload with mocked /api/media500 returned[] while another request awaited. No file edits/external requests/secrets in probe. Deterministic callback evidence, not browser/production proof.
+
+CONTRACT: keep all applicable submit controls disabled until every current Composer batch settles; preserve latest draft/media functional merge, concurrent batches, quick/full modes, per-file failure/partial-success/[] behavior and saving/account/unmount guards.
+SCOPE: Composer pending-batch state only; no auth/retry/scheduler/provider/API/Calendar/Library/recovery/infra changes or serialization policy.
+NEXT: minimal pending-count fix after this confirmed RED; targeted GREEN, local protected/type/lint/build, full native CI/Docker and independent review. Exact final HEAD evidence in PR body before READY. Owner gate through browser; production/provider acceptance remains NOT PROVEN and no messages are sent.
