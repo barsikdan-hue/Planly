@@ -1,7 +1,7 @@
-import { updateLibraryItemInputSchema } from '../../../../lib/contracts/library.ts';
+import { patchLibraryItemInputSchema } from '../../../../lib/contracts/library.ts';
 import { requireApiOwner } from '../../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../../lib/server/http.ts';
-import { deleteLibraryItem, updateLibraryItem } from '../../../../lib/server/library-items.ts';
+import { archiveLibraryItem, deleteLibraryItem, updateLibraryItem } from '../../../../lib/server/library-items.ts';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -9,8 +9,10 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
   try {
     const owner = await requireApiOwner(request);
     const { id } = await context.params;
-    const input = updateLibraryItemInputSchema.parse(await readJson(request));
-    return json(await updateLibraryItem(owner.id, id, input));
+    const input = patchLibraryItemInputSchema.parse(await readJson(request));
+    return json('expectedUpdatedAt' in input
+      ? await archiveLibraryItem(owner.id, id, input.expectedUpdatedAt)
+      : await updateLibraryItem(owner.id, id, input));
   } catch (error) {
     return apiError(error);
   }

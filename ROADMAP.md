@@ -1,7 +1,8 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phase 4 — Telegram/MAX Functional MVP DONE on the existing Render deployment at `af6288540bfe34d12e992b0535dfc2e04a5bc787` (PR #4 merged; deploy `dep-db1177dg1s2s73839l80` LIVE).
-NEXT MILESTONE: Phase 5 — Content Library. Start separately after documentation closure and an explicit owner-approved milestone contract; no implementation in this closure.
+CURRENT STATE: Phase 5 Content Library DONE and deployed at owner checkpoint `49a16c977aed425c99e5fa81bcb3705526a5653c`.
+CURRENT MILESTONE: Phase 6 Swipe Planner implemented on `codex/phase6-swipe-planner`, pending CI/Self-host and owner merge/deploy gates. [Verification](docs/verification/2026-10-04-swipe-planner.md).
+NEXT MILESTONE: close Phase 6 through authorized delivery and production acceptance; additional networks require an explicit decision.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -14,8 +15,8 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 2 | Content Core | DONE |
 | 3 | Scheduler core | DONE for MVP; timing is accepted debt until Phase 10 |
 | 4 | Telegram + MAX Functional MVP | DONE; scoped production acceptance below |
-| 5 | Content Library | NEXT; separate approved start |
-| 6 | Smart Content Queue / Swipe Planner | Future; no implementation now |
+| 5 | Content Library | DONE and deployed |
+| 6 | Smart Content Queue / Swipe Planner | Implemented; owner merge/deploy gate pending |
 | 7 | Additional networks | Only after an explicit owner decision |
 | 8 | Analytics | Future |
 | 9 | Scheduling automation | Future |
@@ -23,7 +24,7 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 
 AI is REMOVED from the product roadmap, not deferred or optional.
 
-## Current acceptance — 2026-10-04
+## Historical Phase 4 acceptance — 2026-10-04
 
 Functional MVP PASS combines the owner-confirmed production UI/media/MAX handoff at the deployed SHA with the final fresh Telegram gate. MAX was not freshly rerun for this gate. Detailed scope and evidence: [Functional MVP production acceptance](docs/verification/2026-10-04-functional-mvp-production-pass.md).
 

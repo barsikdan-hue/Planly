@@ -24,6 +24,17 @@ export const updateLibraryItemInputSchema = z.object({
 }).refine(hasContent, contentRequired);
 export type UpdateLibraryItemInput = z.infer<typeof updateLibraryItemInputSchema>;
 
+export const archiveLibraryItemInputSchema = z.object({
+  status: z.literal('ARCHIVED'),
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
+}).strict();
+export const patchLibraryItemInputSchema = z.union([
+  archiveLibraryItemInputSchema,
+  // A conditional command cannot fall through to a full replacement that
+  // strips the revision, even when stale content fields accompany it.
+  z.object({ expectedUpdatedAt: z.never().optional() }).passthrough().pipe(updateLibraryItemInputSchema),
+]);
+
 export type LibraryItemDto = {
   id: string;
   title: string | null;

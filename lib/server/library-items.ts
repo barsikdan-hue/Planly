@@ -4,11 +4,14 @@ import { getDb } from '../../db/index.ts';
 import { libraryItemMedia, libraryItems, mediaAssets, posts } from '../../db/schema.ts';
 import {
   createLibraryItemInputSchema,
+  archiveLibraryItemInputSchema,
   updateLibraryItemInputSchema,
   type CreateLibraryItemInput,
   type LibraryItemDto,
   type UpdateLibraryItemInput,
 } from '../contracts/library.ts';
+import { LibrarySourceStaleError } from './planner-slots.ts';
+import { LibrarySourceConflictError } from './library-conversion-error.ts';
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
@@ -77,7 +80,9 @@ export async function updateLibraryItem(userId: string, id: string, raw: UpdateL
       title: input.title ?? null,
       bodyText: input.text,
       status: owned.status === 'USED' ? 'USED' : input.status,
-      updatedAt: new Date(),
+      // updatedAt is the queue's revision token; even same-millisecond edits
+      // must invalidate a displayed copy while holding the source row lock.
+      updatedAt: new Date(Math.max(Date.now(), owned.updatedAt.getTime() + 1)),
     }).where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));
     await tx.delete(libraryItemMedia).where(eq(libraryItemMedia.libraryItemId, id));
     if (input.mediaIds.length) {
@@ -94,4 +99,20 @@ export async function deleteLibraryItem(userId: string, id: string): Promise<voi
     if (!owned) throw new Error('Library item not found');
     await tx.delete(libraryItems).where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));
   });
+}
+
+export async function archiveLibraryItem(userId: string, id: string, expectedUpdatedAt: string): Promise<LibraryItemDto> {
+  const input = archiveLibraryItemInputSchema.parse({ status: 'ARCHIVED', expectedUpdatedAt });
+  await getDb().transaction(async tx => {
+    const [owned] = await tx.select().from(libraryItems)
+      .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
+    if (!owned || owned.updatedAt.getTime() !== Date.parse(input.expectedUpdatedAt)) throw new LibrarySourceStaleError();
+    if (owned.status !== 'READY') throw new LibrarySourceConflictError('Only READY library items can be rejected');
+    const [linked] = await tx.select({ id: posts.id }).from(posts)
+      .where(and(eq(posts.sourceLibraryItemId, id), eq(posts.userId, userId))).limit(1);
+    if (linked) throw new LibrarySourceConflictError('Used library item cannot be rejected');
+    await tx.update(libraryItems).set({ status: 'ARCHIVED', updatedAt: new Date(Math.max(Date.now(), owned.updatedAt.getTime() + 1)) })
+      .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));
+  });
+  return readOwnedLibraryItem(userId, id);
 }
