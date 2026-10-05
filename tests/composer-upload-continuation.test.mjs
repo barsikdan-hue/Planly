@@ -30,6 +30,27 @@ function text(node) {
 }
 const file = name => new File([new Uint8Array([1])], name, { type: 'image/png' });
 const asset = (id, name = `${id}.png`) => ({ id, originalName: name, mimeType: 'image/png', byteSize: 1, previewUrl: `/${id}` });
+
+for (const deleted of [true, false]) {
+  test(`batch acknowledgement respects ${deleted ? 'successful' : 'rejected'} intervening Media deletion`, async () => {
+    const value = await fixture({ mutation: request => {
+      assert.equal(request.url, '/api/media/first'); assert.equal(request.method, 'DELETE');
+      return deleted ? new Response(null, { status: 204 }) : Response.json({ error: 'File still in use' }, { status: 409 });
+    } });
+    value.begin(['first.png', 'last.png']); await value.settle();
+    value.finish('first.png', 'first'); await value.settle(); await value.navigate('media');
+    const library = value.app.find('MediaLibrary');
+    library.props.remove(library.props.media.find(item => item.id === 'first')); await value.settle();
+    find(value.app.tree, node => node.props?.className === 'destructive-action').props.onClick(); await value.settle();
+    assert.equal(value.requests.filter(request => request.method === 'DELETE').length, 1, 'actual delete dispatched');
+    value.finish('last.png', 'last'); await value.settle(); await value.navigate('create');
+    const expected = deleted ? ['last'] : ['first', 'last'];
+    assert.deepEqual(value.props.media.map(item => item.id), expected);
+    assert.deepEqual(value.props.draft.mediaIds, expected, 'later batch must not resurrect a successfully removed asset');
+    assert.deepEqual(value.recovery.mediaIds, expected);
+    assert.equal(value.postRequests.length, 0);
+  });
+}
 async function fixture({ owner = 'owner', media = [], mediaLookup, posts = [], libraryItems = [], seedCache = new Map(), mutation } = {}) {
   const cache = seedCache, requests = [], uploads = [], messages = []; let storageDenied = false, closed = false;
   for (const kind of Object.keys(originalToast)) toast[kind] = message => { messages.push({ kind, message }); };

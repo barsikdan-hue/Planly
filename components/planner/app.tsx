@@ -97,6 +97,7 @@ export default function PlannerApp() {
     const [saveBusy, setSaveBusy] = useState(false);
     const composerLifetime = useRef({ mounted: false, ownerId: null as string | null, generation: 0 });
     const composerBatches = useRef(new Map<string, ComposerUploadBatch>());
+    const removedMediaIds = useRef(new Set<string>());
     const [composerUploads, setComposerUploads] = useState<{
         ownerId: string | null; generation: number; batches: ComposerUploadBatch[];
     }>({ ownerId: null, generation: 0, batches: [] });
@@ -518,6 +519,7 @@ export default function PlannerApp() {
             try {
                 const item = toUiMedia(await uploadMediaApi(file));
                 if (canApply && !canApply()) break;
+                removedMediaIds.current.delete(item.id);
                 added.push(item);
                 setData(current => ({ ...current, media: [...current.media.filter(media => media.id !== item.id), item] }));
             } catch (error) {
@@ -540,8 +542,9 @@ export default function PlannerApp() {
             const added = await upload(files, () => isCurrentComposerOwner(context), () => isCurrentComposerEditor(context));
             if (added.length && isCurrentComposerEditor(context)) {
                 // A whole batch appends on completion; its files retain input order.
+                const addedIds = added.filter(item => !removedMediaIds.current.has(item.id)).map(item => item.id);
                 setDraft(current => ({ ...current,
-                    mediaIds: [...new Set([...current.mediaIds, ...added.map(item => item.id)])] }));
+                    mediaIds: [...new Set([...current.mediaIds, ...addedIds])] }));
             }
         } catch (error) {
             if (isCurrentComposerEditor(context)) toast.error(errorMessage(error, 'Не удалось загрузить файлы.'));
@@ -641,6 +644,8 @@ export default function PlannerApp() {
                 setDetailId(null);
             } else {
                 await removeMediaApi(selected.id);
+                // A pending batch may still hold this earlier successful upload.
+                removedMediaIds.current.add(selected.id);
                 setData(current => ({ ...current, media: current.media.filter(media => media.id !== selected.id) }));
                 setDraft(current => ({ ...current, mediaIds: current.mediaIds.filter(id => id !== selected.id) }));
             }

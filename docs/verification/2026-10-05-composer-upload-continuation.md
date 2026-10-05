@@ -1,6 +1,6 @@
 # CR09 Composer upload continuation evidence
 
-STATUS: IMPLEMENTATION_APPROVED_TASK1_VERIFICATION; approved runtime limited to App/Composer. Final readiness requires exact-head CI, independent review and frozen PR14/16/17 compatibility.
+STATUS: STOP_SPLIT_OWNER_POLL_COMPATIBILITY; PR18 remains DRAFT. Approved App/Composer runtime passes independent verification, but required frozen compatibility exposes a surviving-App owner replacement gap.
 AUTHORITY: barsikdan-hue/Planly; fresh fetched main95f53b7d18e656e0f8ceff5002b4c42af3d12251; work/Planly-composer-continuation; codex/customer-ready-composer-continuation. PR12–17 frozen READY; PR17 exact89111873a6cda4ecceba545102911706eafc386c native492/492PASS and DockerSUCCESS; completed Orchestrator gate awaits actual Owner approval. No merge/deploy/provider sends.
 
 ROOT_CAUSE: App owns the surviving draft. Dashboard quick Composer's expand navigates to create, replacing the child with full Composer. Composer::addFiles stores lock and continuation locally, applies returned IDs only if mounted.current. App::upload completes actual POST->GET media lookup and updates global Media, but lacks editor-owned attachment continuation/busy. Child replacement releases the lock and rejects same-editor attachment.
@@ -39,3 +39,20 @@ Additional rulings: retryCreation Swipe bypasses save/publish, so guard retry en
 
 NEXT: finish Task1 GREEN/types/lint and push DRAFT checkpoint; Task2 full suite/build/independent review/required compatibility/exact native and Docker. Final exact-head workflow evidence will be maintained in PR body to avoid circular report commits. Production/browser/LIVE_PROVIDER NOT PROVEN until authorized delivery.
 TASK1_FINAL:143/143PASS/0fail/0skip (35 acceptance +108 protected), typecheckPASS, full lint0errors/13existingwarnings. Logs cr09-task1-green/types/lint. Runtime two files only; build/native/Docker/final review/compatibility still Task2 gates.
+
+## Task2 / final review / required compatibility
+
+At runtime5475414f01e03d4be6294e0a77901c773c6cfb20, local complete pure312/312PASS/0skip, typesPASS, lint0errors/13existingwarnings, Webpack buildPASS. Exact native37379192482/job111996390229:481/481PASS/0FAIL/0SKIP; migration/drift/types/lint/standardBuildSUCCESS. Exact Docker37379192422/job111996389207SUCCESS: foundationHTTP/private media, actual worker bytes, PG/media persistence, Redis-loss reconciliation, real worker result and packaged verified build; live jobSKIPPED.
+
+Fresh independent final review on most-capable reviewer: no Critical or Minor; one Important/P2 issue. Batch[first,last], first uploaded, user successfully deletes first through actual MediaLibrary.remove->confirmDelete->DELETE204 while last awaits; parent acknowledgement re-added hidden deleted ID. Media[last] versus draft/recovery[first,last]; downstream server validateRelations rejects missing ID (dataflow proof, not live request). Single permitted fix pass: successful-delete regressionRED1FAIL/rejected-delete control1PASS -> GREEN2/2. App records successful removals, clears marker on newly received same ID, filters captured batch IDs before pure latest-draft merge. Full suite/type/lint/build repeat tracked after this fix; no second reviewer dispatch.
+
+Required uncommitted isolated PR14+16+17 probe: original combined20files245/245PASS/0FAIL/0SKIP and no-incremental typecheckPASS. Preserves fallback counter, UI mode/recovery namespace, Library guards/mediaRevision and token messages. Separate actual surviving-App owner-poll probe has3independentFAIL/0skip: frozen PR17 changes Library owner/visible Media while Composer owner/generation/recoveryOwner remain old. Delayed old media acknowledgement then appends asset, writes old draft/recovery and emits stale success. [Exact causal probe and options](2026-10-06-composer-library-owner-poll-probe.md). Main does not have this polling route. No owner mitigation/reset guessed; PR12–17 untouched. Required compatibility is not waived by ordinary suite PASS. Review-fix compatibility recheck follows separately.
+
+Final review declined-to-judge rulings (all retained):
+
+- Future frozen integration is judged separately; the owner-poll RED is a blocker, not a waiver. Cost if wrong: cross-owner asset/cache/message continuation.
+- Reverse sequence save-already-inflight then upload is outside the changed pending/submit contract; no new policy guessed, track as unproven separate lifecycle case. Cost if wrong: later file selection may be lost after save acknowledgement.
+- Callback proof remains separate from browser/production/provider acceptance. Cost if wrong: overstated customer readiness.
+
+No deferred minors. Original four root assertions remain. Final exact-head CI is canonical in PR body; historical checkpoint CI is labeled above. STATUS STOP_SPLIT; direct Orchestrator decision required for bounded owner lifecycle/raw-work/cache rule or separate dependent task. No merge/deploy/provider sends, no actual Owner approval observed; production/browser/LIVE_PROVIDER NOT PROVEN. CR06/P2/unproven backlog remains independent.
+REVIEW_FIX_LOCAL_FINAL:314/314 complete pure/0FAIL/0SKIP, including37 actual Composer acceptance cases; typecheckPASS, full lint0errors/13existingwarnings, WebpackbuildPASS. Original4 assertions retained. Current review finding fixed via RED->GREEN; no minors, no re-review. Native/Docker on next exact pushed checkpoint required; current frozen owner-poll still3independentRED after review fix. Main freshly fetched unchanged95f53b7.
