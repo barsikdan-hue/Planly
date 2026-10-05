@@ -1,14 +1,12 @@
-import test, { after, afterEach, beforeEach } from 'node:test';
+import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
 import { posts, postTargets, publications, socialAccounts, users } from '../db/schema.ts';
-import { runOwnerSchedulerTick } from '../lib/client/planly-api.ts';
 import { createPost } from '../lib/server/posts.ts';
-import { runDuePublications } from '../lib/server/scheduler/tick.ts';
+import { runDuePublications, shouldProcessImmediately } from '../lib/server/scheduler/tick.ts';
 import type { SocialConnector } from '../lib/server/connectors/types.ts';
 
-const originalFetch = globalThis.fetch;
 const now = new Date('2026-10-05T06:00:00.000Z');
 let published: string[] = [];
 
@@ -21,7 +19,6 @@ const connector: SocialConnector = {
   },
 };
 
-afterEach(() => { globalThis.fetch = originalFetch; });
 after(closeDb);
 
 beforeEach(async () => {
@@ -51,25 +48,37 @@ async function schedule(userId: string, text: string) {
   }, { mirrorQueue: async () => undefined });
 }
 
-test('owner scheduler client uses the authenticated same-origin POST endpoint', async () => {
-  const calls: Array<{ url: string; method: string }> = [];
-  globalThis.fetch = async (input, init) => {
-    calls.push({ url: String(input), method: init?.method ?? 'GET' });
-    return Response.json({ scanned: 0, processed: 0, published: 0, skipped: 0, failed: 0 });
+test('publish-now input is recognized without treating a future schedule or draft as immediate', () => {
+  const immediate = {
+    baseText: 'now',
+    status: 'READY' as const,
+    mediaIds: [],
+    targets: [{ provider: 'telegram' as const, textOverride: null, scheduledAt: now.toISOString() }],
+  };
+  const future = {
+    ...immediate,
+    targets: [{ ...immediate.targets[0], scheduledAt: new Date(now.getTime() + 60_000).toISOString() }],
+  };
+  const draft = {
+    ...immediate,
+    status: 'DRAFT' as const,
+    targets: [{ ...immediate.targets[0], scheduledAt: null }],
   };
 
-  await runOwnerSchedulerTick();
-
-  assert.deepEqual(calls, [{ url: '/api/scheduler/owner-tick', method: 'POST' }]);
+  assert.equal(shouldProcessImmediately(immediate, new Date(now.getTime() + 2_000)), true);
+  assert.equal(shouldProcessImmediately(future, now), false);
+  assert.equal(shouldProcessImmediately(draft, now), false);
 });
 
-test('owner scheduler tick processes only publications belonging to that owner', async () => {
+test('scoped catch-up processes only the requested owner and post', async () => {
   const own = await schedule('owner-a', 'own');
-  const other = await schedule('owner-b', 'other');
+  const ownOther = await schedule('owner-a', 'own other');
+  const otherOwner = await schedule('owner-b', 'other owner');
 
   const result = await runDuePublications({
     now,
     userId: 'owner-a',
+    postId: own.id,
     limit: 10,
     resolveConnector: () => connector,
   });
@@ -77,8 +86,11 @@ test('owner scheduler tick processes only publications belonging to that owner',
   assert.deepEqual(result, { scanned: 1, processed: 1, published: 1, skipped: 0, failed: 0 });
   assert.deepEqual(published, ['-100A']);
 
-  const [ownPublication] = await getDb().select().from(publications).where(eq(publications.postId, own.id));
-  const [otherPublication] = await getDb().select().from(publications).where(eq(publications.postId, other.id));
-  assert.equal(ownPublication?.status, 'PUBLISHED');
-  assert.equal(otherPublication?.status, 'SCHEDULED');
+  const status = async (postId: string) => {
+    const [row] = await getDb().select().from(publications).where(eq(publications.postId, postId));
+    return row?.status;
+  };
+  assert.equal(await status(own.id), 'PUBLISHED');
+  assert.equal(await status(ownOther.id), 'SCHEDULED');
+  assert.equal(await status(otherOwner.id), 'SCHEDULED');
 });
