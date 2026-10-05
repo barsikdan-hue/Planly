@@ -1,9 +1,19 @@
 import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { count, eq } from 'drizzle-orm';
-import { POST } from '../app/api/auth/login/route.ts';
+import { register } from 'node:module';
 import { closeDb, getDb } from '../db/index.ts';
 import { loginRateLimits, sessions } from '../db/schema.ts';
+
+// Next's bundler accepts the extensionless entry; native Node needs server.js.
+// Resolve only that entry to the real package, without replacing route logic,
+// NextResponse, auth, sessions or database operations. Test files run separately.
+register(`data:text/javascript,${encodeURIComponent(`
+  export async function resolve(specifier, context, nextResolve) {
+    return nextResolve(specifier === 'next/server' ? 'next/server.js' : specifier, context);
+  }
+`)}`, import.meta.url);
+const { POST } = await import('../app/api/auth/login/route.ts');
 
 // Disposable native CI database only; no production requests or credentials.
 const address = '198.51.100.24';
