@@ -1,6 +1,7 @@
-import { and, asc, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { publications } from '../../../db/schema.ts';
+import type { SavePostInput } from '../../contracts/planner.ts';
 import type { ConnectorResolver } from '../connectors/types.ts';
 import { processPublication } from './processor.ts';
 import { PUBLICATION_MAX_ATTEMPTS } from './queue.ts';
@@ -20,7 +21,20 @@ type RunDuePublicationsOptions = {
   attemptLimit?: number;
   retryDelaysMs?: readonly number[];
   resolveConnector?: ConnectorResolver;
+  userId?: string;
+  postId?: string;
 };
+
+const IMMEDIATE_SCHEDULE_GRACE_MS = 10_000;
+
+export function shouldProcessImmediately(
+  input: Pick<SavePostInput, 'status' | 'targets'>,
+  now = new Date(),
+): boolean {
+  if (input.status !== 'READY' || input.targets.length === 0) return false;
+  const cutoff = now.getTime() + IMMEDIATE_SCHEDULE_GRACE_MS;
+  return input.targets.every(target => target.scheduledAt !== null && Date.parse(target.scheduledAt) <= cutoff);
+}
 
 function emptyResult(): SchedulerTickResult {
   return { scanned: 0, processed: 0, published: 0, skipped: 0, failed: 0 };
@@ -31,13 +45,17 @@ export async function runDuePublications(options: RunDuePublicationsOptions = {}
   const limit = options.limit ?? 10;
   const attemptLimit = options.attemptLimit ?? PUBLICATION_MAX_ATTEMPTS;
   const retryDelays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+  const conditions = [
+    inArray(publications.status, ['SCHEDULED', 'QUEUED']),
+    isNotNull(publications.scheduledAt),
+    lte(publications.scheduledAt, now),
+    or(isNull(publications.nextRetryAt), lte(publications.nextRetryAt, now)),
+  ];
+  if (options.userId) conditions.push(eq(publications.userId, options.userId));
+  if (options.postId) conditions.push(eq(publications.postId, options.postId));
+
   const rows = await getDb().select({ id: publications.id }).from(publications)
-    .where(and(
-      inArray(publications.status, ['SCHEDULED', 'QUEUED']),
-      isNotNull(publications.scheduledAt),
-      lte(publications.scheduledAt, now),
-      or(isNull(publications.nextRetryAt), lte(publications.nextRetryAt, now)),
-    ))
+    .where(and(...conditions))
     .orderBy(asc(publications.scheduledAt), asc(publications.id))
     .limit(limit);
 
