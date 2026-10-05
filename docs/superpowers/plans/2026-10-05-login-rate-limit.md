@@ -10,8 +10,8 @@ Execution: login route derives fingerprint â†’ checkLoginRateLimit hashes key â†
 
 Scope: login fingerprint only if native route RED proves the bypass; existing DB schema/rate-limit algorithm retained. Exclude proxy trust changes, IP header spoofing assumptions, concurrent admission redesign, auth credentials/secrets, middleware/session changes, UI, PR12 and infrastructure. Production/proxy exploitability is NOT PROVEN by synthetic route headers.
 
-- [ ] Native actual POST handler regressions for rotating/removing agent and reconnection, with normal expiry/success/independent-client controls; push test-only DRAFT PR and inspect RED.
-- [ ] Minimal stable identity fix, with no client-controlled User-Agent component.
+- [x] Native actual POST handler regressions for rotating/removing agent and reconnection, with normal expiry/success/independent-client controls; push test-only DRAFT PR and inspect RED.
+- [x] Minimal stable identity fix, with no client-controlled User-Agent component.
 - [ ] Native full suite/typecheck/lint13knownwarnings/standard build and Docker HTTP/login/private-media/persistence/recovery. Verify exact final HEAD.
 - [ ] Independent adversarial review, bounded diff/clean tree, report/PR updated, ready only after full GREEN.
 - [ ] Send merge gate through existing ChatGPT browser bridge, read response. Merge/deploy require direct Owner approval there; continue independent campaign tasks separately.
