@@ -92,6 +92,14 @@ export async function processPublication(
   }
 
   const row = await readPublication(publicationId);
+  // Historical/queued rows may outlive a change back to a draft or archive.
+  // Re-read after the claim; edit locking now prevents the post changing
+  // between this check and provider handoff.
+  if (row.post.status !== 'READY') {
+    await getDb().update(publications).set({ status: 'CANCELLED', nextRetryAt: null, updatedAt: new Date() })
+      .where(eq(publications.id, publicationId));
+    return { status: 'CANCELLED', skipped: true };
+  }
   const text = row.target.textOverride ?? row.post.baseText;
   const input: PublishInput = {
     publicationId,
