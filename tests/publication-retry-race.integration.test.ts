@@ -113,3 +113,18 @@ test('concurrent edit and retry leave only one deliverable publication', async (
   await runDuePublications({ userId: owner, resolveConnector: resolver });
   assert.deepEqual(delivered, ['Concurrent edit']);
 });
+
+test('safe historical row with matching timestamp cannot suppress the current retry', async () => {
+  const { post, row } = await failedPublication();
+  // Millisecond timestamps are not a causal ordering of distinct requests.
+  // An older cancelled row can share a timestamp with the current creation.
+  await getDb().insert(publications).values({
+    id: 'retry-race-safe-history', userId: owner, postId: post.id,
+    postTargetId: row.postTargetId, provider: 'TELEGRAM', status: 'CANCELLED',
+    scheduledAt: new Date(due), idempotencyKey: 'retry-race-safe-history',
+    createdAt: row.createdAt, updatedAt: row.createdAt,
+  });
+  assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: true, delayMs: 0 });
+  await runDuePublications({ userId: owner, resolveConnector: resolver });
+  assert.deepEqual(delivered, ['Original']);
+});
