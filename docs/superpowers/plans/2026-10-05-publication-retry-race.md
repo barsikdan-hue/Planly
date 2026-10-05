@@ -24,9 +24,9 @@ Files: tests/publication-retry-race.integration.test.ts; lib/server/scheduler/re
 Consumes: prepareTemporaryPublicationRetry(id, limit, delays, providerDelay?, now?). Produces: unchanged scheduled/delay result.
 - [x] Original native RED: real processor TEMPORARY rejection → updatePost → stale retry → tick delivered Edited twice; actual CI, no setup failures.
 - [x] Independent equal-timestamp regression retained at 4adb69d; owner authorized bounded correction, no merge/deploy.
-- [ ] Push cancellation/queue/protected-outcome controls before runtime correction; verify native RED.
-- [ ] Cancel superseded FAILED/TEMPORARY atomically during reconciliation, retain error history, emit queue removal, lock standalone reconciliation in the same order. Remove timestamp heuristic from locked retry.
-- [ ] Run targeted controls, full native suite, migrations/typecheck/lint/build, Docker worker/private media/persistence/recovery.
-- [ ] Independent whole-branch review, clean diff, commit/push actual CI, owner gate. Continue independent audit tasks in fresh branches.
+- [x] Push cancellation/queue/protected-outcome controls before runtime correction; verify native RED.
+- [x] Cancel superseded FAILED/TEMPORARY atomically during reconciliation, retain error history, emit queue removal, lock standalone reconciliation in the same order. Remove timestamp heuristic from locked retry.
+- [x] Run targeted20/20 and full native466/466, migrations/typecheck/lint/build, Docker worker/private media/persistence/recovery at975e11a.
+- [x] Independent whole-branch review: no remaining actionable runtime issue; clean bounded5-file diff, implementation pushed and actual CI inspected. Final report-head CI must pass before ready transition; merge/deploy remain owner gates. Further audits stay separate.
 
 Self-review: one lifecycle root, existing reconciliation and shared retry, no new API/schema. Controls cover retry-first, edit-first, same timestamp, inactive targets, other-target history, protected outcomes, Redis failure/stale delivery, repeated preparation/restoration and deadline preservation. Native CI is required; local missing database is not evidence of a product regression.

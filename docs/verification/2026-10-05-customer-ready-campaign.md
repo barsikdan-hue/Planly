@@ -1,6 +1,6 @@
 # Customer-ready campaign — 2026-10-05
 
-STATUS: STOP_REGRESSION. Campaign is not complete; PR12 remains DRAFT and is NOT ready for merge.
+STATUS: READY_FOR_OWNER_MERGE_GATE for PR12 after final report-head checks. Bounded retry supersession correction verified; customer-ready campaign is not complete. No merge/deploy.
 CURRENT_MAIN: 95f53b7d18e656e0f8ceff5002b4c42af3d12251 (fresh fetch; PR9–11 merged).
 Authority: work/Planly, barsikdan-hue/Planly; isolated work/Planly-customer-ready. No merge/deploy/secrets/config changes or provider sends.
 
@@ -26,7 +26,7 @@ Authority: work/Planly, barsikdan-hue/Planly; isolated work/Planly-customer-read
 ## Prioritized backlog (independent roots; one PR per task)
 | ID | Priority | Root / evidence | Next |
 |---|---|---|---|
-| CR-01 | P0 proven | processor marks FAILED/TEMPORARY -> updatePost creates replacement -> retry helper unconditionally queues original -> two IDs deliver | native RED actually delivered Edited twice; first fix under review, STOP below |
+| CR-01 | P0 proven | processor marks FAILED/TEMPORARY -> updatePost creates replacement -> retry helper queues original -> two IDs deliver; chronology guard incorrectly suppresses equal-time valid retry | explicit cancellation implemented in PR12; owner merge/deploy gate follows verification |
 | CR-02 | P0 security candidate | loginFingerprint includes client-controlled User-Agent, rotating header resets bucket | native route RED before fixing; proxy trust not proven |
 | CR-03 | P1 release blocker | Composer concurrent addFiles calls each reset one busy boolean, first completion enables save while second pending | callback RED, wait for all active uploads |
 | CR-04 | P1 | Calendar passes date/time with draft status; Composer initializes mode only from status, hiding explicit schedule | reproduced production 2026-10-06 18:00 opens Now |
@@ -38,39 +38,48 @@ Authority: work/Planly, barsikdan-hue/Planly; isolated work/Planly-customer-read
 
 Accepted debt: free scheduler trigger precision, existing lint warnings. Additional networks/AI/analytics/automation remain excluded.
 
-## Task work log
-TASK: CR-01 superseded retry race
-PRIORITY: P0 proven
-ROOT_CAUSE: unconditional retry update ignores superseding publication lifecycle
-RED: CI37324764288 at80f1170, 453total/447PASS/6expectedFAIL/0skip; old446 allPASS, actual Edited twice
-FIX: d716dc5 serializes retry eligibility under owner/Post/history locks; provisional, NOT accepted
-FILES: lib/server/scheduler/retry.ts; tests/publication-retry-race.integration.test.ts; bounded plan; this report
-TARGETED: initial7 native cases GREEN atd716dc5; added8th regression pending nativeRED
-FULL: d716dc5 CI37325812261 success; final diagnostic commit intentionally expects one failing regression
-TYPECHECK: local d716dc5 PASS; native CI PASS
-LINT: local/native PASS, 0errors/13existingwarnings
-BUILD: local webpack PASS (optional valkey-glide warning), native standard Next build PASS
-RUNTIME: baseline self-host PASS; d716dc5 self-host pending at stop; patch not deployed
-REGRESSIONS: Important review finding: timestamp equality incorrectly suppresses a valid current TEMPORARY retry
-COMMIT: 80f1170 RED; d716dc5 provisional fix; diagnostic/report commit follows
-PR: https://github.com/barsikdan-hue/Planly/pull/12 (DRAFT)
-BACKLOG_FOUND: CR-02–08, GAP-01
-NEXT: owner decision to resume after explicit regression STOP; no further runtime changes
+## PR12 final contract and implementation
+TASK: CR-01, same bounded lifecycle P0; owner continuation starts from4adb69d. Intermediate review corrections are authorized within this root; merge/deploy remain owner gates.
+ROOT_CAUSE: retry originally ignored replacement lifecycle; provisional `createdAt >=` guard guessed causal order from timestamps and rejected a legitimate same-millisecond current failure.
+FINAL_INVARIANT: only the still-active FAILED/TEMPORARY publication of an active READY target can transition to QUEUED. Superseding reconciliation tombstones old safe failures as CANCELLED in the same transaction as replacement; chronology never determines retry eligibility.
+IMPLEMENTED:
+- `publications.ts::reconcilePostPublicationsInTx`: cancel safe FAILED/TEMPORARY except AMBIGUOUS_DELIVERY, clear nextRetryAt, preserve attempts/error/receipt history, emit queue removal before creating/reusing replacement. Draft and target deactivation use the same cancellation point.
+- `publications.ts::reconcilePostPublications`: acquire owner → Post → ordered publication history locks before calling shared reconciliation. updatePost already holds them; createPost owns its new Post/history under the owner lock.
+- `retry.ts::prepareTemporaryPublicationRetry`: same locked reread and conditional FAILED → QUEUED; remove chronology, retain active target/schedule, retry budget and target-scoped competing/unsafe outcome checks.
+- Existing queue mirroring removes obsolete jobs where possible. Failed Redis cleanup cannot undo PostgreSQL cancellation; existing processor terminal check and atomic claim refuse stale CANCELLED delivery.
+FILES_CHANGED: exactly5 — lib/server/publications.ts; lib/server/scheduler/retry.ts; tests/publication-retry-race.integration.test.ts; bounded plan; this report.
+UNRELATED_DIFF: none. No UI/auth/Library/Calendar/connector/processor/schema/API/infrastructure changes. tsconfig.tsbuildinfo restored after generated checks.
 
-## Independent review and required stop
-- Fresh whole-branch review found Important in retry.ts: `other.createdAt >= current.createdAt` treats older safe cancelled/failed history sharing a millisecond as superseding. Actual helper adapter probe allowed999<1000 and refused1000==1000. Native diagnostic regression added; no workaround shipped.
-- Dropping chronology alone is also insufficient: old TEMP failure A may requeue with an obsolete shorter provider deadline after edited replacement B fails with a longer deadline. Only one job remains, but B's retry deadline/budget can be lost.
-- User rule is explicit: new regression -> immediate STOP. Runtime modification stopped; native evidence/report only. PR remains DRAFT, merge/deploy unapproved.
-- Proposed bounded next revision, NOT implemented: reconciliation atomically CANCELS a replaced FAILED/TEMPORARY publication while preserving error fields; locked retry requires FAILED/TEMPORARY, so old completion sees CANCELLED. Remove timestamp heuristic; add latest-provider-deadline, retry-first->edit ID reuse, inactive/deleted/ambiguous controls. One lifecycle root, existing pipeline/schema.
-- Reviewer declined native concurrency/GREEN and production/provider verdicts; these require separate actual execution evidence. No other changes accepted from review.
+## RED evidence retained
+- Original [CI37324764288](https://github.com/barsikdan-hue/Planly/actions/runs/37324764288) at80f1170:453total/447PASS/6expectedFAIL/0skip; old446 pass, actual Edited delivered twice.
+- Same-timestamp [CI37326480638](https://github.com/barsikdan-hue/Planly/actions/runs/37326480638) at4adb69d:454total/453PASS/1FAIL/0skip, valid retry incorrectly refused.
+- Cancellation test-only8a9abaf [CI37330221618](https://github.com/barsikdan-hue/Planly/actions/runs/37330221618): four explicit FAILED-vs-CANCELLED failures. A raw BullMQ Job assertion caused the reporter to exhaust its heap; changed to a bounded boolean assertion, without changing runtime.
+- Test-onlyc4c8daa [CI37330744023](https://github.com/barsikdan-hue/Planly/actions/runs/37330744023):466total/458PASS/8FAIL/0skip. Six lifecycle/Redis/equal-time/direct-reconciliation failures; two test-barrier failures because PostgreSQL waiter chains require transitive blocker discovery. Reviewer correction uses a recursive pg_blocking_pids CTE, with no timing sleeps.
+
+## Verification and independent review
+GREEN: implementation commit975e11a78a581e55e15ebc197456333a503b17fe; native CI and Docker/runtime PASS. Final report-only HEAD must also pass both required workflows before PR leaves DRAFT.
+TARGETED:20/20 retry-race native cases PASS within the full suite, no skips, including real PostgreSQL contention and Redis job controls.
+FULL: [CI37331215108](https://github.com/barsikdan-hue/Planly/actions/runs/37331215108):466/466 PASS,0fail/0skip; migration drift and apply PASS.
+TYPECHECK: fresh local PASS, native PASS.
+LINT: fresh local/native PASS,0errors/13unchangedwarnings in untouched files.
+BUILD: fresh local webpack PASS; native standard production build PASS. Optional BullMQ valkey-glide local build warning unchanged.
+RUNTIME: [Self-host37331215119](https://github.com/barsikdan-hue/Planly/actions/runs/37331215119) PASS — Compose build/start, migrated web/worker, HTTP/private media, PostgreSQL/media persistence across stack recreation, Redis-loss scheduler restoration and honest unsupported-provider outcome. No production deployment or fresh provider sends; live workflow intentionally skipped.
+LOCAL_PROTECTED:277/277,0fail/0skip. Native PostgreSQL/Redis/Docker unavailable locally; native CI/runtime is authoritative for those checks.
+RACE_CONTROLS:
+- retry-first: real owner-lock barrier queues retry first and edit second; row reused, one edited delivery, duplicate successful delivery skipped.
+- edit-first: real lock barrier queues edit first; old failure CANCELLED, diagnostics preserved, stale preparation and duplicate processor deliveries refused; one replacement delivery.
+- same-timestamp: current safe failure remains eligible alongside cancelled history with identical createdAt.
+- stale-job: native Redis removal and PostgreSQL authority when cleanup throws; stale processor cannot send.
+- repeated-retry: queued PostgreSQL deadline remains exact; native Redis restoration keeps one job and its provider deadline (mirror timestamp tolerance100ms).
+- other-target history cannot suppress Telegram retry; inactive history cannot revive; PUBLISHED/PUBLISHING/REQUIRES_RECONNECT/AMBIGUOUS/CANCELLED remain unchanged by retry and protected history by reconciliation.
+REVIEW: independent adversarial source review found no remaining actionable runtime defect after test-barrier and coverage corrections. No reverse lock order found. Source review does not itself prove native/runtime/live behavior.
+REGRESSIONS: chronology and cancellation regressions resolved; zero failures in full native suite. Two test harness failures corrected and actual blocked lock orders GREEN. No known remaining regression in this bounded change.
 
 ## Owner checkpoint
-STATUS: STOP_REGRESSION / NOT_READY_FOR_MERGE
-CURRENT_MAIN: 95f53b7d18e656e0f8ceff5002b4c42af3d12251
-BRANCH: codex/customer-ready-retry-race
-PR: https://github.com/barsikdan-hue/Planly/pull/12 (DRAFT)
-PROBLEM: a real temporary rejection/edit/retry interleaving sends the same target twice
-IMPLEMENTED: provisional shared-helper guard only; known regression prevents readiness
-UNCHANGED: processor, connectors, Post API, DB/schema, infrastructure, production/main
-KNOWN_ISSUES: review regression; unmerged CR-01; CR-02 candidate and CR-03–08 backlog
-NEXT_RECOMMENDED_TASK: resume CR-01 with explicit lifecycle supersession; finish full checks/review before next fresh-main task
+STATUS: READY_FOR_OWNER_MERGE_GATE after exact report-head verification
+CURRENT_MAIN:95f53b7d18e656e0f8ceff5002b4c42af3d12251
+BRANCH:codex/customer-ready-retry-race
+PR:https://github.com/barsikdan-hue/Planly/pull/12 — mark ready only after final report-head CI/runtime pass
+HEAD:975e11a78a581e55e15ebc197456333a503b17fe (implementation; final report commit follows)
+BACKLOG_FOUND:CR-02 security candidate; CR-03–08 independent UI/Library/media issues; GAP-01 unproven crash diagnosis. None changed by PR12; campaign not complete.
+NEXT: owner merge/deploy decision after exact final-head checks and ready transition. Optional next independent P0/P1 audit in a separate branch; no permission to merge/deploy here. Production/live acceptance of this patch remains NOT PROVEN until authorized delivery.
