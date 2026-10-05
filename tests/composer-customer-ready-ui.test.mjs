@@ -1,5 +1,6 @@
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -50,4 +51,14 @@ test('scheduled post opens in Запланировать mode and keeps its sche
   assert.equal(html.includes('type="time"'), true);
   assert.equal(html.includes('Опубликовать сейчас'), false, 'Scheduled edit must not default to immediate publication action');
   assert.equal((html.match(/Запланировать/g) ?? []).length >= 2, true, 'Scheduled mode and scheduled action must both be present');
+});
+
+test('full Composer remounts when replaceEditor changes editor identity', () => {
+  const appSource = readFileSync(new URL('../components/planner/app.tsx', import.meta.url), 'utf8');
+
+  assert.equal(
+    appSource.includes('<Composer key={editorToken.current} {...composer}/>'),
+    true,
+    'Create Post must remount Composer when editorToken changes so local publish mode cannot leak between posts',
+  );
 });
