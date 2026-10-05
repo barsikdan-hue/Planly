@@ -1,7 +1,8 @@
 import { savePostInputSchema } from '../../../../lib/contracts/planner.ts';
 import { requireApiOwner } from '../../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../../lib/server/http.ts';
-import { deletePost, updatePost } from '../../../../lib/server/posts.ts';
+import { deletePost, listPlannerPosts, updatePost } from '../../../../lib/server/posts.ts';
+import { runDuePublications, shouldProcessImmediately } from '../../../../lib/server/scheduler/tick.ts';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -10,7 +11,12 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const owner = await requireApiOwner(request);
     const { id } = await context.params;
     const input = savePostInputSchema.parse(await readJson(request));
-    return json(await updatePost(owner.id, id, input));
+    const saved = await updatePost(owner.id, id, input);
+    if (!shouldProcessImmediately(input)) return json(saved);
+
+    await runDuePublications({ userId: owner.id, postId: saved.id, limit: Math.max(1, saved.targets.length) });
+    const refreshed = (await listPlannerPosts(owner.id)).find(post => post.id === saved.id) ?? saved;
+    return json(refreshed);
   } catch (error) {
     return apiError(error);
   }
