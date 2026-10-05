@@ -1,6 +1,6 @@
 # CR-02 login rate-limit identity evidence
 
-STATUS: VERIFYING / native behavioral RED proven, minimal fix implemented. No merge/deploy or production login requests performed.
+STATUS: implementation verified; exact final documentation HEAD checks and Orchestrator merge gate follow in PR13. No merge/deploy or production login requests performed.
 
 AUTHORITY: barsikdan-hue/Planly; fresh main95f53b7; work/Planly-login-rate-limit; branch codex/customer-ready-login-rate-limit. PR12 a3b8c31 remains READY, frozen, independent of this branch.
 
@@ -18,5 +18,11 @@ EXPECTED: five failed attempts for the same address accumulate across agent chan
 SCOPE: fingerprint only if proven; no schema, session, credential, middleware, proxy-trust, concurrent-admission or unrelated changes. Forwarded-header trust and actual production attack are NOT PROVEN here.
 REVIEW: test-only review found no blocking issue; added actual session-count and existing forwarded-first/X-Real-IP fallback controls. Rollout limitation: changing hashed fingerprint namespace makes old per-agent counters inaccessible, allowing a one-time fresh failure allowance after upgrade; no schema/migration or cross-version continuity claim. Existing fifteen-minute window remains. Merge/deploy gate must include this limitation.
 
-LOCAL_GREEN: fresh typecheck PASS; ESLint0errors/13existingwarnings; protected pure suite277/277PASS/0fail/0skip. Native database tests and standard build remain GitHub CI authority. Independent full-branch adversarial review of tests plus minimal runtime diff found no actionable issue.
-NEXT: verify local protected checks, push minimal fix, inspect native full GREEN and Docker runtime, then independent review and exact-final-HEAD evidence. GitHub stores evidence; browser ChatGPT receives gates only.
+LOCAL_GREEN: fresh typecheck PASS; ESLint0errors/13existingwarnings; protected pure suite277/277PASS/0fail/0skip; webpack production build PASS. Native database tests and standard build remain GitHub CI authority. Independent full-branch adversarial review of tests plus minimal runtime diff found no actionable issue.
+
+NATIVE_GREEN: implementation HEADbd4dc04e7b8a6203604c21d69bbcecaf29a7f703 [CI37338319814](https://github.com/barsikdan-hue/Planly/actions/runs/37338319814), job111858654729 completed SUCCESS:457/457PASS/0fail/0skip, targeted login11/11 within full suite; migration drift/apply, typecheck, lint0errors/13knownwarnings and standard production build PASS.
+
+RUNTIME_GREEN: same implementation HEAD [Self-host37338319497](https://github.com/barsikdan-hue/Planly/actions/runs/37338319497), job111858652723 completed SUCCESS. Docker web/worker, foundation HTTP/login/private media smoke, actual worker private bytes, stack recreation with PostgreSQL/media persistence, Redis-loss reconciliation, unsupported-provider result and packaged Next.js artifact PASS. Telegram-live job intentionally skipped; no provider messages. This is isolated self-host evidence, not Render/production acceptance.
+
+DELIVERY: one runtime file (login route), one integration test file, plan and this report. Clean tree after restoring generated tsconfig.tsbuildinfo; remote main95f53b7 and PR12a3b8c31 unchanged. Final docs commit repeats exact-HEAD native/Docker checks; links/results live in canonical PR13 body before READY. Production remains NOT PROVEN for this patch until Owner-approved merge/deploy and browser verification.
+NEXT: freeze PR13 READY only after exact final HEAD checks pass, send MERGE_DEPLOY gate through existing ChatGPT chat and read response. Owner must approve there before any gated operation. Continue independent P0/P1 separately; no additional production login testing or provider sends to prove this pre-merge fix.
