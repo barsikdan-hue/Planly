@@ -5,10 +5,12 @@ import { listPlannerPosts } from '../../../lib/server/posts.ts';
 import { getProfile } from '../../../lib/server/profile.ts';
 import { listSocialAccounts } from '../../../lib/server/social-accounts.ts';
 import { listLibraryItems } from '../../../lib/server/library-items.ts';
+import { runDuePublications } from '../../../lib/server/scheduler/tick.ts';
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const owner = await requireApiOwner(request);
+    await runDuePublications({ userId: owner.id, limit: 10 });
     const [profile, posts, media, socialAccounts, libraryItems] = await Promise.all([
       getProfile(owner.id),
       listPlannerPosts(owner.id),

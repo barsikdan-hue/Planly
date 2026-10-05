@@ -65,7 +65,7 @@ test('free production scheduler uses GitHub Actions ping, not paid Render worker
   const workflow = await read('.github/workflows/scheduler-tick.yml');
   const route = await read('app/api/scheduler/tick/route.ts');
 
-  assert.match(workflow, /cron:\s*'\*\/5 \* \* \* \*'/);
+  assert.match(workflow, /cron:\s*'2-59\/5 \* \* \* \*'/);
   assert.match(workflow, /https:\/\/planly-m4zq\.onrender\.com\/api\/scheduler\/tick/);
   assert.match(workflow, /secrets\.SCHEDULER_TICK_SECRET/);
   assert.match(workflow, /curl[\s\S]*Authorization: Bearer/);
