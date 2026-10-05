@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
-import { postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 
 export type PublicationQueueChange = {
   publicationId: string;
@@ -23,6 +23,10 @@ export async function reconcilePostPublicationsInTx(
   userId: string,
   postId: string,
 ): Promise<PublicationQueueChange[]> {
+  const [post] = await tx.select({ status: posts.status }).from(posts)
+    .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1);
+  if (!post) throw new Error('Post not found');
+
   const targetRows = await tx.select({ target: postTargets, account: socialAccounts })
     .from(postTargets)
     .innerJoin(socialAccounts, eq(postTargets.socialAccountId, socialAccounts.id))
@@ -46,7 +50,7 @@ export async function reconcilePostPublicationsInTx(
       changes.push({ publicationId: duplicate.id, action: 'remove' });
     }
 
-    if (!target.active || !target.scheduledAt) {
+    if (post.status !== 'READY' || !target.active || !target.scheduledAt) {
       if (keep) {
         await tx.update(publications)
           .set({ status: 'CANCELLED', nextRetryAt: null, updatedAt: now })
