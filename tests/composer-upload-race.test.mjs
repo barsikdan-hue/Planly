@@ -28,7 +28,7 @@ function text(node) {
 }
 function editor({ quick = false, scheduled = false, saving = false, accounts = { telegram: true, max: true } } = {}) {
   let draft = { ...blankPost(), text: 'Ready to publish', networks: ['telegram'], mediaIds: ['existing'],
-    date: day(new Date(Date.now() + 86_400_000)), status: scheduled ? 'scheduled' : 'draft' };
+    date: day(1), status: scheduled ? 'scheduled' : 'draft' };
   const uploads = [];
   const submissions = [];
   const harness = createHarness(() => Composer({ draft, quick, saving, accounts, media: [],
