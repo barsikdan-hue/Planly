@@ -1,9 +1,10 @@
 import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
 import { publications, socialAccounts, users } from '../db/schema.ts';
 import { reconcilePostPublications } from '../lib/server/publications.ts';
+import { lockOwnerSchedule } from '../lib/server/planner-slots.ts';
 import { applyPublicationQueueChanges, reconcileScheduledJobs } from '../lib/server/scheduler/reconcile.ts';
 import { closePublicationQueue, ensurePublicationJob, getPublicationQueue, removePublicationJob } from '../lib/server/scheduler/queue.ts';
 import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
@@ -41,6 +42,45 @@ async function failedPublication() {
 }
 async function history(postId: string) {
   return getDb().select().from(publications).where(eq(publications.postId, postId));
+}
+// Queue both contenders behind a real owner row lock, observing PostgreSQL's
+// wait queue before releasing it. No timing sleeps or mocked transaction locks.
+async function orderedRace(first: () => Promise<unknown>, second: () => Promise<unknown>) {
+  let release!: () => void;
+  let announce!: (pid: number) => void;
+  const released = new Promise<void>(resolve => { release = resolve; });
+  const ready = new Promise<number>(resolve => { announce = resolve; });
+  const gate = getDb().transaction(async tx => {
+    await lockOwnerSchedule(tx, owner);
+    const result = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+    announce(result.rows[0]!.pid);
+    await released;
+  });
+  const pid = await ready;
+  const tasks: Promise<unknown>[] = [];
+  async function waitForBlocked(count: number) {
+    const timeout = Date.now() + 5000;
+    while (Date.now() < timeout) {
+      const result = await getDb().execute<{ count: string }>(sql`
+        select count(*) from pg_stat_activity
+        where ${pid} = any(pg_blocking_pids(pid)) and wait_event_type = 'Lock'
+      `);
+      if (Number(result.rows[0]!.count) >= count) return;
+    }
+    assert.fail(`Expected ${count} PostgreSQL lock contenders`);
+  }
+  try {
+    tasks.push(first());
+    await waitForBlocked(1);
+    tasks.push(second());
+    await waitForBlocked(2);
+    release();
+    await gate;
+    await Promise.all(tasks);
+  } finally {
+    release();
+    await Promise.allSettled([gate, ...tasks]);
+  }
 }
 beforeEach(async () => {
   const db = getDb();
@@ -83,9 +123,14 @@ test('draft downgrade during retry gap cannot resurrect a failed job', async () 
 
 test('edit-first durably cancels old failure and stale duplicate deliveries cannot send', async () => {
   const { post, row } = await failedPublication();
+  const failed = (await history(post.id))[0]!;
   const changes: { publicationId: string; action: string }[] = [];
-  await updatePost(owner, post.id, input('Edit first'), { mirrorQueue: async value => { changes.push(...value); } });
-  assert.equal((await history(post.id)).find(item => item.id === row.id)!.status, 'CANCELLED');
+  await orderedRace(
+    () => updatePost(owner, post.id, input('Edit first'), { mirrorQueue: async value => { changes.push(...value); } }),
+    () => prepareTemporaryPublicationRetry(row.id, 5, [0]),
+  );
+  const cancelled = (await history(post.id)).find(item => item.id === row.id)!;
+  assert.deepEqual(cancelled, { ...failed, status: 'CANCELLED', nextRetryAt: null, updatedAt: cancelled.updatedAt });
   assert.ok(changes.some(item => item.publicationId === row.id && item.action === 'remove'));
   assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: false });
   await Promise.all([processPublication(row.id, resolver), processPublication(row.id, resolver)]);
@@ -96,8 +141,10 @@ test('edit-first durably cancels old failure and stale duplicate deliveries cann
 
 test('retry-first edit reuses the queued row without adding a replacement', async () => {
   const { post, row } = await failedPublication();
-  assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: true, delayMs: 0 });
-  await updatePost(owner, post.id, input('Retry first'), options);
+  await orderedRace(
+    async () => { assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: true, delayMs: 0 }); },
+    () => updatePost(owner, post.id, input('Retry first'), options),
+  );
   assert.equal((await history(post.id)).length, 1);
   assert.equal((await history(post.id))[0]!.id, row.id);
   await runDuePublications({ userId: owner, resolveConnector: resolver });
@@ -141,12 +188,13 @@ test('Redis removes superseded job and repeated restoration preserves one retry 
       for (const change of changes) ids.add(change.publicationId);
       await applyPublicationQueueChanges(changes);
     } });
-    assert.equal(await getPublicationQueue().getJob(row.id), undefined);
+    assert.ok(!(await getPublicationQueue().getJob(row.id)), 'Superseded Redis job must be removed');
     const replacement = (await history(post.id)).find(item => item.id !== row.id)!;
     assert.ok(await getPublicationQueue().getJob(replacement.id));
     // A safe rejection of the replacement must retain its own provider deadline.
     rejectNext = true;
     await processPublication(replacement.id, resolver);
+    assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: false });
     const now = new Date();
     await prepareTemporaryPublicationRetry(replacement.id, 5, [60_000], 120_000, now);
     await reconcileScheduledJobs();
@@ -177,7 +225,8 @@ for (const outcome of ['PUBLISHED', 'PUBLISHING', 'REQUIRES_RECONNECT', 'AMBIGUO
     }).where(eq(publications.id, row.id));
     const before = (await history(post.id))[0];
     assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: false });
-    assert.deepEqual((await history(post.id))[0], before);
+    await reconcilePostPublications(owner, post.id);
+    assert.deepEqual((await history(post.id)).find(item => item.id === row.id), before);
     assert.deepEqual(delivered, []);
   });
 }
