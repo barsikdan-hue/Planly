@@ -1,6 +1,6 @@
 # CR09 Composer upload continuation — representation proposal
 
-STATUS: PROPOSED_FOR_ORCHESTRATOR_REVIEW; not implementation approval.
+STATUS: APPROVED_OPTION_A_WITH_COMPLETION_ORDER_GUARD atae0d39a1784fefb5d8a94b1967f0d552eccaef8f via completed direct Orchestrator reply. Writing the plan is approved; runtime requires separate PLAN_REVIEW approval.
 
 ## Intent and proven root
 
@@ -22,6 +22,7 @@ C — Disable navigation while uploading. Avoids quick->full replacement but cha
 
 - Runtime App/Composer only, optional internal controlled interface; Dashboard uses existing descriptor. No server/API/DB/contracts, scheduler/providers/auth/infra, Composer UI mode representation, pending Post creation semantics, or Library recovery changes.
 - App owns active batches per captured owner/editor token/App generation. Multiple batches may overlap; busy is true while any active batch for current editor remains. Old cleanup cannot decrement or unlock newer editor batches.
+- Ordering approved explicitly: batches append in completion order; successful assets inside a batch preserve input file order; existing manually selected IDs stay first; first-occurrence deduplication. Existing[M1], batches A[A1,A2]/B[B1,B2], B completes first: [M1,B1,B2,A1,A2]. No sort by start time/name/ID.
 - Same-editor navigation changes child position but not editor identity: latest raw text/networks/overrides/date/time/media choices survive, successful assets merge into the latest same-token draft once and persist via existing setDraft outside React updater side effects.
 - New/edit/duplicate/clear identity invalidates old attachment continuation. Old successful upload can remain same-owner Media only; never writes current editor/recovery or emits stale editor result. Owner replacement/App unmount rejects old data/editor/cache continuations.
 - Save/publish callbacks require current editor uploads settled, not just disabled buttons, so stale captured enabled callbacks cannot submit incomplete media. Existing save/pending/account/read-only validation still applies. No publication/provider sends in tests or verification.
@@ -33,3 +34,5 @@ C — Disable navigation while uploading. Avoids quick->full replacement but cha
 Representation approval first, then proportionate written plan and implementation approval if Orchestrator selects architectural process. Extend RED for overlapping batches across remount, new token/owner/App unmount, late cleanup, partial success and direct stale submit callbacks. Protect existing raw recovery/pending save/lifecycle/read-only/saving/account/ordered media/standalone Composer behavior. RED->minimal implementation->focused/protected/full, typecheck/lint/build, fresh independent adversarial review, exact-final-head native PostgreSQL/Redis0FAIL/0SKIP and completed Docker SUCCESS. Then direct merge/deploy gate, real Owner approval, authorized production verification. Local hook harness is not browser acceptance.
 
 Self-review: Option A matches the proven lifetime mismatch and preserves the existing upload/explicit submit flow. Option B/C tradeoffs and owner/token/generation separation are explicit. No new product semantics or silent frozen-PR integration. Remaining details belong in a reviewed implementation plan; this proposal grants no runtime permission.
+
+Orchestrator hard guards: parent count for current token; callback-level Save/publish pending checks; same-token latest revision merge through existing setDraft; old-token messages rejected separately from same-owner global assets; other owner/generation/unmount rejects continuation; partial success/per-file errors and non-Composer callers preserved; frozen PR14 overlap compatible; no recovery/pending/UI-mode/server changes. Separate direct recovery RED was required before PLAN_REVIEW and now reaches the persisted media assertion (4total/1PASS/3expectedFAIL/0skip).

@@ -106,3 +106,12 @@ test('quick to full attaches completed asset to the surviving draft and recovery
   assert.deepEqual(value.props.draft.mediaIds, ['late'], 'same editor survives child replacement and must receive the asset');
   assert.deepEqual(JSON.parse(value.cache.get('planly:editor:v1:owner')).editor.mediaIds, ['late']);
 });
+test('quick to full independently persists received asset in the surviving editor recovery', async () => {
+  const value = await fixture(); value.begin(); await value.settle(); await value.expand();
+  value.finish(); await value.settle();
+  assert.ok(value.props.media.some(item => item.id === 'late'), 'actual upload completed into owner Media');
+  assert.equal(value.requests.length, 1, 'no Post or publication mutation');
+  const recovered = JSON.parse(value.cache.get('planly:editor:v1:owner')).editor;
+  assert.equal(recovered.text, 'Keep this text', 'same surviving editor recovery is read directly');
+  assert.deepEqual(recovered.mediaIds, ['late'], 'received ID must reach durable recovery independently of the earlier draft assertion');
+});
