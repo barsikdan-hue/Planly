@@ -18,9 +18,9 @@
 
 **Review focus:** READY immediate/future schedules still publish; stale jobs cannot send a draft; downgrade cancels open jobs; published/in-flight/uncertain history stays protected; owner isolation and edit locking stay intact.
 
-- [ ] Add regression cases: DRAFT/ARCHIVED with retained target schedules create no Publication; READY → non-ready cancels an open Publication and requests queue removal; a historical stale row is cancelled before any fixture connector call; READY still sends once; terminal history remains unchanged.
-- [ ] Observe RED in actual GitHub CI with native PostgreSQL/Redis before changing runtime code. Local DB infrastructure is unavailable; PGlite startup failed from host memory pressure.
-- [ ] In reconciliation, read the owned Post in the same transaction and treat non-READY as unscheduled, reusing existing cancellation/removal logic.
-- [ ] In the processor, after the atomic claim and fresh joined read, cancel a non-READY row before media preparation/connector handoff. Keep all existing terminal/PUBLISHING checks ahead of this guard.
-- [ ] Verify focused GREEN and full native CI, including existing published-edit guard, scheduler, idempotency, Phase 6 and PR #8 tests; typecheck, lint and standard build. Local webpack build is supporting evidence only because shared dependencies are outside Turbopack's worktree root.
-- [ ] Review, commit, push and stop at OWNER_MERGE_GATE with the PR and evidence. Provider acceptance of this fix requires a later authorized deployment and a minimal smoke.
+- [x] Add regression cases: DRAFT/ARCHIVED with retained target schedules create no Publication; READY → non-ready cancels an open Publication and requests queue removal; a historical stale row is cancelled before any fixture connector call; READY still sends once; terminal history remains unchanged.
+- [x] Observe RED in actual GitHub CI with native PostgreSQL/Redis before changing runtime code. Local DB infrastructure is unavailable; PGlite startup failed from host memory pressure.
+- [x] In reconciliation, read the owned Post in the same transaction and treat non-READY as unscheduled, reusing existing cancellation/removal logic.
+- [x] In the processor, after the atomic claim and fresh joined read, cancel a non-READY row before media preparation/connector handoff. Keep all existing terminal/PUBLISHING checks ahead of this guard.
+- [x] Verify focused GREEN and full native CI, including existing published-edit guard, scheduler, idempotency, Phase 6 and PR #8 tests; typecheck, lint and standard build. Local webpack build is supporting evidence only because shared dependencies are outside Turbopack's worktree root.
+- [x] Review, commit, push and stop at OWNER_MERGE_GATE with the PR and [evidence](../../verification/2026-10-05-mvp-release-candidate.md). Provider acceptance of this fix requires a later authorized deployment and a minimal smoke.
