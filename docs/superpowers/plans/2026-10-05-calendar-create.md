@@ -1,5 +1,7 @@
 # CR-04 — preserve Calendar scheduling intent
 
+STATUS: STOP_SPLIT. Minimal local experiment fixed initial Calendar mode but declared reload regression still failed because recovery drops status. Experiment reverted before push. See verification report for independent recovery trace, options and Orchestrator scope question. No further implementation until split/contract decision.
+
 Approved customer-ready campaign; systematic-debugging → TDD → minimal fix → verification/review. Fresh main95f53b7; separate codex/customer-ready-calendar-create. PR12/13/14 frozen READY, each pending Owner gate.
 
 Contract: creating from an explicitly chosen Calendar date/time opens unsaved Composer in scheduled mode with those fields visible. Generic new-post actions keep default Now. Preserve dirty replacement confirmation, session recovery, draft saving, future-time validation and no mutation until explicit save/publish.
