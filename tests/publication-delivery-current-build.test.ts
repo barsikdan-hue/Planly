@@ -15,6 +15,7 @@ let published: string[] = [];
 const connector: SocialConnector = {
   provider: 'TELEGRAM',
   async publish(input) {
+    assert.ok(input.destinationId);
     published.push(input.destinationId);
     return { ok: true, remoteId: `remote-${published.length}` };
   },
