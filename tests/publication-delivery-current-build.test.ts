@@ -6,6 +6,7 @@ import { posts, postTargets, publications, sessions, socialAccounts, users } fro
 import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
 import { createPost } from '../lib/server/posts.ts';
 import { runDuePublications, shouldProcessImmediately } from '../lib/server/scheduler/tick.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
 import type { SocialConnector } from '../lib/server/connectors/types.ts';
 import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
@@ -23,7 +24,10 @@ const connector: SocialConnector = {
   },
 };
 
-after(closeDb);
+after(async () => {
+  await closePublicationQueue();
+  await closeDb();
+});
 
 beforeEach(async () => {
   const db = getDb();
