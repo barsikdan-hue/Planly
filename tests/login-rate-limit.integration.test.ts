@@ -1,14 +1,14 @@
 import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { POST } from '../app/api/auth/login/route.ts';
 import { closeDb, getDb } from '../db/index.ts';
-import { loginRateLimits } from '../db/schema.ts';
+import { loginRateLimits, sessions } from '../db/schema.ts';
 
 // Disposable native CI database only; no production requests or credentials.
 const address = '198.51.100.24';
-function login(agent: string | null, ip: string | null = address, email = 'owner@example.test', password = 'wrong-fixture-password') {
-  const headers = new Headers({ 'content-type': 'application/json' });
+function login(agent: string | null, ip: string | null = address, email = 'owner@example.test', password = 'wrong-fixture-password', extraHeaders: Record<string, string> = {}) {
+  const headers = new Headers({ ...extraHeaders, 'content-type': 'application/json' });
   if (agent !== null) headers.set('user-agent', agent);
   if (ip !== null) headers.set('x-forwarded-for', ip);
   return POST(new Request('http://planly.test/api/auth/login', {
@@ -48,8 +48,25 @@ test('missing client address uses one stable fallback bucket across User-Agent c
 
 test('same-client sixth failure remains blocked and does not create a session', async () => {
   await rejectFive();
+  const [before] = await getDb().select({ value: count() }).from(sessions);
   assertBlocked(await login('fixture-agent'));
   assertBlocked(await login('fixture-agent', address, 'owner@example.test', 'ci-test-owner-password'));
+  const [after] = await getDb().select({ value: count() }).from(sessions);
+  assert.equal(after!.value, before!.value);
+});
+
+test('first forwarded address retains precedence over later hops and X-Real-IP', async () => {
+  await rejectFive();
+  assertBlocked(await login('fixture-agent', ` ${address} , 203.0.113.1`, 'owner@example.test', 'wrong-fixture-password', {
+    'x-real-ip': '198.51.100.25',
+  }));
+});
+
+test('X-Real-IP fallback has the same stable identity across agent changes', async () => {
+  for (let index = 0; index < 5; index += 1) {
+    assert.equal((await login('fixture-agent', null, 'owner@example.test', 'wrong-fixture-password', { 'x-real-ip': address })).status, 401);
+  }
+  assertBlocked(await login('new-agent', null, 'owner@example.test', 'wrong-fixture-password', { 'x-real-ip': address }));
 });
 
 test('another client address retains its independent failure allowance', async () => {
