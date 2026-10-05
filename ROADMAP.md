@@ -1,8 +1,8 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phase 5 Content Library DONE and deployed at owner checkpoint `49a16c977aed425c99e5fa81bcb3705526a5653c`.
-CURRENT MILESTONE: Phase 6 Swipe Planner implemented on `codex/phase6-swipe-planner`, pending CI/Self-host and owner merge/deploy gates. [Verification](docs/verification/2026-10-04-swipe-planner.md).
-NEXT MILESTONE: close Phase 6 through authorized delivery and production acceptance; additional networks require an explicit decision.
+CURRENT STATE: Phases 0–6 DONE for MVP. Phase 6 and PR #8 publication delivery are production accepted by the owner at checkpoint `c1dde2c966705d7f61fcbf4405d177ea3fe6f6c0` (2026-10-05). [Phase 6 branch verification](docs/verification/2026-10-04-swipe-planner.md).
+CURRENT MILESTONE: MVP RELEASE CANDIDATE / CUSTOMER-READY PLANLY — stability, clear publishing flow and focused release polish.
+NEXT MILESTONE: finish customer-ready acceptance within the existing product; Phase 7 remains HOLD until an explicit owner product decision.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -16,13 +16,19 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 3 | Scheduler core | DONE for MVP; timing is accepted debt until Phase 10 |
 | 4 | Telegram + MAX Functional MVP | DONE; scoped production acceptance below |
 | 5 | Content Library | DONE and deployed |
-| 6 | Smart Content Queue / Swipe Planner | Implemented; owner merge/deploy gate pending |
-| 7 | Additional networks | Only after an explicit owner decision |
+| 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
+| 7 | Additional networks | HOLD; requires an explicit owner product decision |
 | 8 | Analytics | Future |
 | 9 | Scheduling automation | Future |
-| 10 | Target hosting optimization | Future self-hosted/rented-server deployment and scheduler timing review |
+| 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
 
 AI is REMOVED from the product roadmap, not deferred or optional.
+
+## Current production acceptance — 2026-10-05
+
+- [PR #8](https://github.com/barsikdan-hue/Planly/pull/8) is merged at `c1dde2c966705d7f61fcbf4405d177ea3fe6f6c0`: Publish Now triggers immediate processing and the existing scheduler includes owner-scoped catch-up.
+- Owner-confirmed deployment and acceptance: Phase 6, Publish Now, Scheduled Publish, Telegram, MAX and `/api/health` PASS. This records the owner's acceptance; it is not a fresh agent provider test.
+- Preserve the existing publication pipeline and free scheduler architecture. Customer-ready work does not start Phase 7, add AI or migrate infrastructure.
 
 ## Historical Phase 4 acceptance — 2026-10-04
 
@@ -90,7 +96,7 @@ HISTORICAL IMPLEMENTATION PLAN: docs/superpowers/plans/2026-10-03-functional-mvp
 
 ## Phase 5 contract — Content Library
 
-Goal: conveniently store content prepared outside Planly. Inspect the existing implementation before choosing exact scope: prepared posts and media, search, useful filters/categories and simple import/add content. Introduce ready/scheduled/used/rejected states only where the UX requires them; do not over-engineer taxonomy. Implementation starts separately after documentation closure.
+Completed goal: conveniently store content prepared outside Planly. Prepared content, media, search and READY/USED/ARCHIVED lifecycle are implemented. Preserve the approved scope without expanding taxonomy during release polish.
 
 ## Phase 6 contract — Smart Content Queue / Swipe Planner
 
@@ -105,4 +111,4 @@ Goal: conveniently store content prepared outside Planly. Inspect the existing i
 - Phase 7 networks require an explicit owner decision; VK/Instagram are not automatic next work.
 - Phase 8 analytics follows a stable core product.
 - Phase 9 may add reusable slots, repeat content, better posting times and scheduling assistance, without AI.
-- Phase 10 moves to rented/self-hosted hosting, then revisits a permanent worker, Redis/BullMQ runtime, scheduler precision, backups, DNS/TLS and monitoring.
+- Phase 10 revisits hosting, a permanent worker, scheduler precision, backups, DNS/TLS and monitoring only when a real need is proven and the owner approves the infrastructure decision.
