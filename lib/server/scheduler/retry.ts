@@ -41,8 +41,10 @@ export async function prepareTemporaryPublicationRetry(
     const [target] = await tx.select().from(postTargets)
       .where(and(eq(postTargets.id, row.postTargetId), eq(postTargets.postId, identity.postId))).limit(1);
     if (!target?.active || !target.scheduledAt || target.scheduledAt.getTime() !== row.scheduledAt?.getTime()) return { scheduled: false };
+    // Supersession is durable CANCELLED state, never timestamp/ID chronology.
+    // Defend against competing open work or unsafe outcomes on this target.
     const superseded = history.some(item => item.id !== row.id && item.postTargetId === row.postTargetId &&
-      (item.createdAt >= row.createdAt || ['SCHEDULED', 'QUEUED', 'PUBLISHING', 'PUBLISHED', 'REQUIRES_RECONNECT'].includes(item.status) ||
+      (['SCHEDULED', 'QUEUED', 'PUBLISHING', 'PUBLISHED', 'REQUIRES_RECONNECT'].includes(item.status) ||
         item.providerErrorCode === 'AMBIGUOUS_DELIVERY'));
     if (superseded) return { scheduled: false };
 

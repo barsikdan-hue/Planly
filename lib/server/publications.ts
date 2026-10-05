@@ -1,7 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
 import { posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { lockOwnerSchedule } from './planner-slots.ts';
 
 export type PublicationQueueChange = {
   publicationId: string;
@@ -23,6 +24,8 @@ export async function reconcilePostPublicationsInTx(
   userId: string,
   postId: string,
 ): Promise<PublicationQueueChange[]> {
+  // Existing Post mutations hold owner -> Post -> history locks; createPost
+  // holds the owner lock and owns its newly inserted Post/history.
   const [post] = await tx.select({ status: posts.status }).from(posts)
     .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1);
   if (!post) throw new Error('Post not found');
@@ -42,6 +45,17 @@ export async function reconcilePostPublicationsInTx(
     const targetPublications = publicationRows.filter(row => row.postTargetId === target.id);
     const open = targetPublications.filter(row => openStatuses.has(row.status as 'SCHEDULED' | 'QUEUED'));
     const keep = open[0];
+
+    // Reconciliation makes the edited/replacement lifecycle authoritative in
+    // this transaction. Tombstone safe failures before creating/reusing work;
+    // preserve their diagnostics, and make stale queue delivery harmless.
+    for (const failed of targetPublications.filter(row => row.status === 'FAILED' &&
+      row.normalizedErrorType === 'TEMPORARY' && row.providerErrorCode !== 'AMBIGUOUS_DELIVERY')) {
+      await tx.update(publications)
+        .set({ status: 'CANCELLED', nextRetryAt: null, updatedAt: now })
+        .where(eq(publications.id, failed.id));
+      changes.push({ publicationId: failed.id, action: 'remove' });
+    }
 
     for (const duplicate of open.slice(1)) {
       await tx.update(publications)
@@ -108,5 +122,15 @@ export async function reconcilePostPublications(
   userId: string,
   postId: string,
 ): Promise<PublicationQueueChange[]> {
-  return getDb().transaction(tx => reconcilePostPublicationsInTx(tx, userId, postId));
+  return getDb().transaction(async tx => {
+    // Match updatePost and retry before reading replacement eligibility.
+    await lockOwnerSchedule(tx, userId);
+    const [post] = await tx.select({ id: posts.id }).from(posts)
+      .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1).for('update');
+    if (!post) throw new Error('Post not found');
+    await tx.select({ id: publications.id }).from(publications)
+      .where(and(eq(publications.postId, postId), eq(publications.userId, userId)))
+      .orderBy(asc(publications.id)).for('update');
+    return reconcilePostPublicationsInTx(tx, userId, postId);
+  });
 }

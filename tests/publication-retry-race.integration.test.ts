@@ -48,22 +48,28 @@ async function history(postId: string) {
 async function orderedRace(first: () => Promise<unknown>, second: () => Promise<unknown>) {
   let release!: () => void;
   let announce!: (pid: number) => void;
+  let rejectReady!: (error: unknown) => void;
   const released = new Promise<void>(resolve => { release = resolve; });
-  const ready = new Promise<number>(resolve => { announce = resolve; });
+  const ready = new Promise<number>((resolve, reject) => { announce = resolve; rejectReady = reject; });
   const gate = getDb().transaction(async tx => {
     await lockOwnerSchedule(tx, owner);
     const result = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
     announce(result.rows[0]!.pid);
     await released;
   });
+  void gate.catch(rejectReady);
   const pid = await ready;
   const tasks: Promise<unknown>[] = [];
   async function waitForBlocked(count: number) {
     const timeout = Date.now() + 5000;
     while (Date.now() < timeout) {
       const result = await getDb().execute<{ count: string }>(sql`
-        select count(*) from pg_stat_activity
-        where ${pid} = any(pg_blocking_pids(pid)) and wait_event_type = 'Lock'
+        with recursive blocked(pid) as (
+          select pid from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))
+          union
+          select activity.pid from pg_stat_activity activity
+          join blocked on blocked.pid = any(pg_blocking_pids(activity.pid))
+        ) select count(*) from blocked
       `);
       if (Number(result.rows[0]!.count) >= count) return;
     }
@@ -121,7 +127,7 @@ test('draft downgrade during retry gap cannot resurrect a failed job', async () 
   assert.deepEqual(delivered, []);
 });
 
-test('edit-first durably cancels old failure and stale duplicate deliveries cannot send', async () => {
+test('edit-first durably cancels old failure and stale duplicate deliveries cannot send', { timeout: 15_000 }, async () => {
   const { post, row } = await failedPublication();
   const failed = (await history(post.id))[0]!;
   const changes: { publicationId: string; action: string }[] = [];
@@ -139,7 +145,7 @@ test('edit-first durably cancels old failure and stale duplicate deliveries cann
   assert.deepEqual(delivered, ['Edit first']);
 });
 
-test('retry-first edit reuses the queued row without adding a replacement', async () => {
+test('retry-first edit reuses the queued row without adding a replacement', { timeout: 15_000 }, async () => {
   const { post, row } = await failedPublication();
   await orderedRace(
     async () => { assert.deepEqual(await prepareTemporaryPublicationRetry(row.id, 5, [0]), { scheduled: true, delayMs: 0 }); },
