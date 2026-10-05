@@ -11,7 +11,7 @@ Scope: one Composer pending-batch state; existing upload/API and draft merge ret
 - [x] Verify fresh clean main worktree; focused baseline16/16 PASS.
 - [x] Actual Composer callback regressions: same-render overlapping input/drop, both completion orders/layouts, empty/partial result, latest draft, single batch and saving/account guards; confirm meaningful RED10total/3PASS/7expectedFAIL.
 - [x] Minimal functional pending count, derive busy; mounted completion protection. Targeted GREEN26/26 including10race cases.
-- [ ] Full native CI/typecheck/lint/standard build and isolated Docker runtime; local protected verification. Independent adversarial review and exact final HEAD.
+- [x] Full native CI456/456/typecheck/lint/standard build and isolated Docker runtime; local protected287/287 + webpack build. Independent adversarial review; final documentation HEAD repeat recorded in canonical PR before READY.
 - [ ] Push/PR report READY, direct Orchestrator merge gate; no merge/deploy without Owner approval. Continue independent next P0/P1 separately.
 
 Human gates: new product/architecture scope, secrets/infra/destructive operation, merge/deploy. New independent root/regression → STOP/SPLIT rather than expand this fix.
