@@ -7,6 +7,7 @@ import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/sess
 import { createPost } from '../lib/server/posts.ts';
 import { runDuePublications, shouldProcessImmediately } from '../lib/server/scheduler/tick.ts';
 import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 import type { SocialConnector } from '../lib/server/connectors/types.ts';
 import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
@@ -26,6 +27,7 @@ const connector: SocialConnector = {
 
 after(async () => {
   await closePublicationQueue();
+  await closeRedisConnection();
   await closeDb();
 });
 
