@@ -3,7 +3,7 @@
 > **For agentic workers:** Use superpowers:executing-plans. Steps use checkbox tracking.
 
 **Goal:** A delayed retry must never resurrect a superseded or terminal publication.
-**Architecture:** Preserve the shared retry helper used by tick and BullMQ. Serialize retry eligibility with existing Post mutation locks; reread current history before changing FAILED to QUEUED.
+**Architecture:** Preserve the shared retry helper used by tick and BullMQ. Serialize retry and reconciliation with owner → Post → history locks. Reconciliation atomically cancels superseded FAILED/TEMPORARY history and emits queue removal; retry checks durable state, never timestamp chronology.
 **Tech Stack:** TypeScript, Drizzle, native PostgreSQL, node:test.
 **Spec:** Owner customer-ready campaign, 2026-10-05: root cause first, one bounded problem, duplicate-publication P0, no second pipeline, no merge/deploy.
 
@@ -20,12 +20,13 @@
 - Draft/inactive/deleted targets cannot be reactivated by stale completion.
 
 ## Task 1: Serialize retry eligibility
-Files: tests/publication-retry-race.integration.test.ts; lib/server/scheduler/retry.ts; new verification report.
+Files: tests/publication-retry-race.integration.test.ts; lib/server/scheduler/retry.ts; lib/server/publications.ts; bounded verification report.
 Consumes: prepareTemporaryPublicationRetry(id, limit, delays, providerDelay?, now?). Produces: unchanged scheduled/delay result.
-- [ ] Write native regression: real processor TEMPORARY rejection → updatePost → stale retry → tick. Assert exactly one successful delivery. Add unchanged/deadline/terminal/draft/repeated/concurrent controls.
-- [ ] Push test-only draft PR; verify actual CI RED for invariant violations, not setup errors.
-- [ ] In one transaction acquire existing owner/Post locks, lock/reread publication history, require FAILED TEMPORARY eligibility and active READY target without a replacement/unsafe receipt; conditionally queue original.
+- [x] Original native RED: real processor TEMPORARY rejection → updatePost → stale retry → tick delivered Edited twice; actual CI, no setup failures.
+- [x] Independent equal-timestamp regression retained at 4adb69d; owner authorized bounded correction, no merge/deploy.
+- [ ] Push cancellation/queue/protected-outcome controls before runtime correction; verify native RED.
+- [ ] Cancel superseded FAILED/TEMPORARY atomically during reconciliation, retain error history, emit queue removal, lock standalone reconciliation in the same order. Remove timestamp heuristic from locked retry.
 - [ ] Run targeted controls, full native suite, migrations/typecheck/lint/build, Docker worker/private media/persistence/recovery.
 - [ ] Independent whole-branch review, clean diff, commit/push actual CI, owner gate. Continue independent audit tasks in fresh branches.
 
-Self-review: one runtime root and one helper, no new API/schema. Tests assert actual delivery and durable state. Native CI is required; local missing database is not evidence of a product regression.
+Self-review: one lifecycle root, existing reconciliation and shared retry, no new API/schema. Controls cover retry-first, edit-first, same timestamp, inactive targets, other-target history, protected outcomes, Redis failure/stale delivery, repeated preparation/restoration and deadline preservation. Native CI is required; local missing database is not evidence of a product regression.
