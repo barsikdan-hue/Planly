@@ -11,6 +11,7 @@ import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
 
 const now = new Date('2026-10-05T06:00:00.000Z');
+const ownerEmail = process.env.OWNER_EMAIL ?? 'owner@example.test';
 let published: string[] = [];
 
 const connector: SocialConnector = {
@@ -34,7 +35,7 @@ beforeEach(async () => {
   await db.delete(users);
   published = [];
   await db.insert(users).values([
-    { id: 'owner-a', email: 'a@example.test', displayName: 'A' },
+    { id: 'owner-a', email: ownerEmail, displayName: 'A' },
     { id: 'owner-b', email: 'b@example.test', displayName: 'B' },
   ]);
   await db.insert(socialAccounts).values([
