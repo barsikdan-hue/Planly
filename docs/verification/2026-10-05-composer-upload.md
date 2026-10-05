@@ -1,6 +1,6 @@
 # CR-03 Composer upload race evidence
 
-STATUS: RED_CONFIRMED; test-only branch, no implementation/merge/deploy.
+STATUS: VERIFYING; minimal Composer fix implemented, no merge/deploy.
 AUTHORITY: barsikdan-hue/Planly; fresh origin/main95f53b7d18e656e0f8ceff5002b4c42af3d12251; work/Planly-composer-upload; codex/customer-ready-composer-upload. PR12a3b8c31 and PR13 8d9bb74 remain frozen READY and await Owner approval in the direct ChatGPT bridge.
 
 ROOT_CAUSE: components/planner/composer.tsx::addFiles → each overlapping upload sets the same busy boolean true → first finally sets false while another upload awaits → draft/schedule/publish Action controls enable → callbacks submit current mediaIds before remaining batch attaches. components/planner/app.tsx::upload handles individual errors and returns only successful assets, including [] for an entirely failed batch; that completion still triggered the premature unlock.
@@ -10,8 +10,15 @@ RED: tests/composer-upload-race.test.mjs actual component callbacks using existi
 
 FIXTURE_CORRECTION: first post-fix run passed pending-state assertions but four final scheduled submission checks failed because test supplied Date to day(offset). Corrected to day(1); restored only own uncommitted Composer fix and repeated valid-fixture RED10total/3PASS/7sameExpectedFAIL/0skip before reapplying the minimal fix. These setup/oracle corrections are not product regressions. Test-only955c914 native [CI37340921936](https://github.com/barsikdan-hue/Planly/actions/runs/37340921936) failed before the fix; full failure totals/logs inspected separately, no GREEN claimed.
 
+NATIVE_RED: test-only955c914 CI37340921936/job111867473768:456total/449PASS/7expectedFAIL/0skip; all446 baseline cases PASS and3newcontrolsPASS. Seven failures at pending assertion after first batch completion (disabled=false vs true), matching local RED. Native setup/typecheck/lint passed; build skipped after expected test failure. Corrected fixture local RED repeated before implementation; initial future-date fixture did not cause these seven pending-state assertions.
+
+IMPLEMENTATION: components/planner/composer.tsx only: functional pending-batch increment/decrement, busy=count>0, mounted completion guard. Existing setDraft functional merge, upload calls, Action guards/labels, per-file error handling, API and provider paths unchanged.
+LOCAL_GREEN: stable targeted26/26PASS/0skip, including10newrace cases and16protectedcontrols; fresh typecheck PASS. First parallel lint/reviewer process hit OS allocation failures; serial lint PASS0errors/13existingwarnings. Earlier protected283/287 run used stale invalid scheduled fixture (four final-submission failures), discarded and rerun on stable corrected worktree. No product regression claim from these test/environment failures. Independent adversarial source review found no actionable issue; separate fresh reviewer race suite10/10PASS.
+ENVIRONMENT: Git credential helper OutOfMemoryException prevented first cdb1cda push; no credential changes/secrets requested. Retry after own verification processes finish; confirm remote SHA before claiming push success.
+
 INDEPENDENT_PROBE: read-only reviewer reproduced full input+drop and quick input+input before rerender; enabled publish callback received only existing/manual plus first-finished ID, later draft contained both. Latest draft text/manual media survived existing functional merge. Actual PlannerApp.upload with mocked /api/media500 returned[] while another request awaited. No file edits/external requests/secrets in probe. Deterministic callback evidence, not browser/production proof.
 
 CONTRACT: keep all applicable submit controls disabled until every current Composer batch settles; preserve latest draft/media functional merge, concurrent batches, quick/full modes, per-file failure/partial-success/[] behavior and saving/account/unmount guards.
 SCOPE: Composer pending-batch state only; no auth/retry/scheduler/provider/API/Calendar/Library/recovery/infra changes or serialization policy.
-NEXT: minimal pending-count fix after this confirmed RED; targeted GREEN, local protected/type/lint/build, full native CI/Docker and independent review. Exact final HEAD evidence in PR body before READY. Owner gate through browser; production/provider acceptance remains NOT PROVEN and no messages are sent.
+BACKLOG_FOUND: reviewer identified existing quick→full navigation while upload pending discarding late attachment through unmount; separate CR-09 candidate, not fixed or browser-proven here. Existing CR04–08/GAP01 remain independent backlog; no new blanket customer-ready claim.
+NEXT: push minimal fix, complete stable local protected/build and full native CI/Docker. Exact final HEAD evidence in PR body before READY. Owner gate through browser; production/provider acceptance remains NOT PROVEN and no messages are sent.
