@@ -53,12 +53,13 @@ test('scheduled post opens in Запланировать mode and keeps its sche
   assert.equal((html.match(/Запланировать/g) ?? []).length >= 2, true, 'Scheduled mode and scheduled action must both be present');
 });
 
-test('full Composer remounts when replaceEditor changes editor identity', () => {
+test('full Composer remounts from render-safe state when editor identity changes', () => {
   const appSource = readFileSync(new URL('../components/planner/app.tsx', import.meta.url), 'utf8');
 
-  assert.equal(
-    appSource.includes('<Composer key={editorToken.current} {...composer}/>'),
-    true,
-    'Create Post must remount Composer when editorToken changes so local publish mode cannot leak between posts',
-  );
+  assert.equal(appSource.includes('const [editorKey, setEditorKey] = useState(initialEditorToken);'), true);
+  assert.equal(appSource.includes('const updateEditorToken = useCallback((token: string) => {'), true);
+  assert.equal(appSource.includes('editorToken.current = token;'), true);
+  assert.equal(appSource.includes('setEditorKey(token);'), true);
+  assert.equal(appSource.includes('<Composer key={editorKey} {...composer}/>'), true);
+  assert.equal(appSource.includes('key={editorToken.current}'), false, 'React refs must not be read during render');
 });
