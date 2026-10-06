@@ -1,8 +1,8 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phases 0–6 DONE for MVP. Phase 6 and PR #8 publication delivery are production accepted by the owner at checkpoint `c1dde2c966705d7f61fcbf4405d177ea3fe6f6c0` (2026-10-05). [Phase 6 branch verification](docs/verification/2026-10-04-swipe-planner.md).
-CURRENT MILESTONE: MVP RELEASE CANDIDATE / CUSTOMER-READY PLANLY — stability, clear publishing flow and focused release polish.
-NEXT MILESTONE: finish customer-ready acceptance within the existing product; Phase 7 remains HOLD until an explicit owner product decision.
+CURRENT STATE: Phases 0–6 DONE for MVP. Accepted production/main checkpoint: `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8` (2026-10-06), including merged CR11, CR09 and CR06. [Current closure evidence](docs/verification/2026-10-06-customer-ready-closure.md).
+CURRENT MILESTONE: MVP RELEASE CANDIDATE / CUSTOMER-READY PLANLY — the approved release scope is technically complete and production accepted; milestone closure awaits the Owner decision. Known P2 findings and unproven boundaries remain listed below.
+NEXT MILESTONE: none authorized. CR07 / CR08 / GAP01 are not started; Phase 7 remains HOLD pending an explicit Owner product decision.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -24,7 +24,15 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 
 AI is REMOVED from the product roadmap, not deferred or optional.
 
-## Current production acceptance — 2026-10-05
+## Current production acceptance — 2026-10-06
+
+- CR11 / [PR #19](https://github.com/barsikdan-hue/Planly/pull/19) merged at `4621cfdedef43b98a014a9f4c7e9ad83e9c435ba`; CR09 / [PR #18](https://github.com/barsikdan-hue/Planly/pull/18) merged at `49f9e7b09783ba1f420af3e6914f433abc2133be`. Their approved owner-lifetime/upload/recovery composition is included in current production; this is not a fresh exhaustive production owner-transition/upload fault campaign.
+- CR06 / [PR #20](https://github.com/barsikdan-hue/Planly/pull/20) merged at current production/main `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8`. Existing Render deploy `dep-db2ej3ks728c73c5rji0` is live at that exact SHA; migrations through 0005 and build/start succeeded.
+- CR06_PRODUCTION_ACCEPTED: normal App CREATE 201; explicit original durable key/payload API retries return the same item ID, including after reload; duplicates 0; changed payload under the same key 409; test-item DELETE 204; original replay 410 before/after reload; resurrection 0. Test item/client raw/attempt cleaned; required terminal history retained. Health 200; provider sends 0.
+- Exact-main native CI and Self-host succeeded; native suite 716 PASS / 0 FAIL / 0 SKIP. Historical provider acceptance retains its original scope; no fresh provider send was needed for CR06.
+- Temporary compatibility PR21 is superseded and closed without merge. No probe runtime was transferred into main. [Closure audit and scope boundaries](docs/verification/2026-10-06-customer-ready-closure.md).
+
+## Historical production acceptance — 2026-10-05
 
 - [PR #8](https://github.com/barsikdan-hue/Planly/pull/8) is merged at `c1dde2c966705d7f61fcbf4405d177ea3fe6f6c0`: Publish Now triggers immediate processing and the existing scheduler includes owner-scoped catch-up.
 - Owner-confirmed deployment and acceptance: Phase 6, Publish Now, Scheduled Publish, Telegram, MAX and `/api/health` PASS. This records the owner's acceptance; it is not a fresh agent provider test.
@@ -73,6 +81,9 @@ Functional MVP PASS combines the owner-confirmed production UI/media/MAX handoff
 
 ## Remaining limits
 
+- Known independent P2 findings remain outside the completed approved release scope: CR07 same-owner bootstrap can overwrite a newer acknowledged account toggle; CR08 WebP dimensions support VP8X only and reject valid VP8/VP8L inputs. Neither is repaired or declared accepted technical debt by this closure.
+- GAP01 crash/PUBLISHING diagnosis remains unproven. CR11/CR09 exclusions (including already-admitted continuations, child/account/reschedule paths and owner changes without scheduled polling) retain their recorded evidence boundaries. No new blocker is inferred from an unproven path; no defect-free certification is claimed.
+- CR07 / CR08 / GAP01 require a separately approved scope and are not started. Closure does not start additional networks, Analytics, AI or infrastructure migration.
 - Historical browser file assignment was blocked by tool permission handling; this was an automation limitation, not a Planly defect or localhost gate. Current production media acceptance is recorded in the report above.
 - Fresh final provider evidence covers the Telegram PNG and scheduled-text scenarios above; earlier accepted UI/media/MAX evidence retains its original scope.
 - Real analytics remains Phase 8. AI is excluded.
