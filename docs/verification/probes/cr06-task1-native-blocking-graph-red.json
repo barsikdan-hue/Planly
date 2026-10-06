@@ -1,0 +1,702 @@
+{
+  "source_head": "b3a40c1f7d10a3ed97c2858f37d423c6400a9650",
+  "runtime_checkpoint": "bf01f24c458a9760889568936adaa6eeb9e00641",
+  "run_id": 37445783831,
+  "job_id": 112210142263,
+  "counts": {
+    "total": 678,
+    "pass": 673,
+    "fail": 5,
+    "skip": 0
+  },
+  "note": "Actual native PostgreSQL pg_stat_activity/pg_locks; TAP backslash escaping decoded once. Query parameters remain placeholders. Original race observation/assertions unchanged in this RED checkpoint.",
+  "graphs": [
+    {
+      "label": "delete:mutation-first",
+      "phase": "operation-1:source-observed",
+      "gatePid": 165,
+      "nodes": [
+        {
+          "pid": 157,
+          "blockers": [
+            165
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 165,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1008"
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1009"
+        },
+        {
+          "pid": 157,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 40,
+          "transactionid": null
+        },
+        {
+          "pid": 165,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 165,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1008"
+        }
+      ]
+    },
+    {
+      "label": "delete:mutation-first",
+      "phase": "operation-2:source-not-observed",
+      "gatePid": 165,
+      "nodes": [
+        {
+          "pid": 157,
+          "blockers": [
+            165
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 159,
+          "blockers": [
+            157
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"users\" where \"users\".\"id\" = $1 limit $2 for update"
+        },
+        {
+          "pid": 165,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1008"
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1009"
+        },
+        {
+          "pid": 157,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 40,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1009"
+        },
+        {
+          "pid": 159,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "users",
+          "page": 0,
+          "tuple": 47,
+          "transactionid": null
+        },
+        {
+          "pid": 165,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 165,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1008"
+        }
+      ]
+    },
+    {
+      "label": "delete:conversion-first",
+      "phase": "operation-1:source-observed",
+      "gatePid": 173,
+      "nodes": [
+        {
+          "pid": 159,
+          "blockers": [
+            173
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\", \"user_id\", \"title\", \"body_text\", \"status\", \"created_at\", \"updated_at\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 173,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1016"
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1017"
+        },
+        {
+          "pid": 159,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 41,
+          "transactionid": null
+        },
+        {
+          "pid": 173,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 173,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1016"
+        }
+      ]
+    },
+    {
+      "label": "delete:conversion-first",
+      "phase": "operation-2:source-not-observed",
+      "gatePid": 173,
+      "nodes": [
+        {
+          "pid": 157,
+          "blockers": [
+            159
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"users\" where \"users\".\"id\" = $1 limit $2 for update"
+        },
+        {
+          "pid": 159,
+          "blockers": [
+            173
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\", \"user_id\", \"title\", \"body_text\", \"status\", \"created_at\", \"updated_at\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 173,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1017"
+        },
+        {
+          "pid": 157,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "users",
+          "page": 0,
+          "tuple": 49,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1016"
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1017"
+        },
+        {
+          "pid": 159,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 41,
+          "transactionid": null
+        },
+        {
+          "pid": 173,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 173,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1016"
+        }
+      ]
+    },
+    {
+      "label": "queue:delete-first",
+      "phase": "operation-1:source-observed",
+      "gatePid": 184,
+      "nodes": [
+        {
+          "pid": 157,
+          "blockers": [
+            184
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 184,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1043"
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1044"
+        },
+        {
+          "pid": 157,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 50,
+          "transactionid": null
+        },
+        {
+          "pid": 184,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 184,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1043"
+        }
+      ]
+    },
+    {
+      "label": "queue:delete-first",
+      "phase": "operation-2:source-not-observed",
+      "gatePid": 184,
+      "nodes": [
+        {
+          "pid": 157,
+          "blockers": [
+            184
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"library_items\" where (\"library_items\".\"id\" = $1 and \"library_items\".\"user_id\" = $2) limit $3 for update"
+        },
+        {
+          "pid": 159,
+          "blockers": [
+            157
+          ],
+          "wait_event_type": "Lock",
+          "wait_event": "transactionid",
+          "query": "select \"id\" from \"users\" where \"users\".\"id\" = $1 limit $2 for update"
+        },
+        {
+          "pid": 184,
+          "blockers": [],
+          "wait_event_type": null,
+          "wait_event": null,
+          "query": "\n    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query\n    FROM pg_stat_activity WHERE datname = current_database()\n      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid"
+        }
+      ],
+      "locks": [
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1043"
+        },
+        {
+          "pid": 157,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1044"
+        },
+        {
+          "pid": 157,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": 0,
+          "tuple": 50,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "users",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 159,
+          "locktype": "transactionid",
+          "mode": "ShareLock",
+          "granted": false,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1044"
+        },
+        {
+          "pid": 159,
+          "locktype": "tuple",
+          "mode": "AccessExclusiveLock",
+          "granted": true,
+          "relation": "users",
+          "page": 0,
+          "tuple": 55,
+          "transactionid": null
+        },
+        {
+          "pid": 184,
+          "locktype": "relation",
+          "mode": "RowShareLock",
+          "granted": true,
+          "relation": "library_items",
+          "page": null,
+          "tuple": null,
+          "transactionid": null
+        },
+        {
+          "pid": 184,
+          "locktype": "transactionid",
+          "mode": "ExclusiveLock",
+          "granted": true,
+          "relation": null,
+          "page": null,
+          "tuple": null,
+          "transactionid": "1043"
+        }
+      ]
+    }
+  ]
+}
