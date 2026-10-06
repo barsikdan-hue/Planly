@@ -9,8 +9,11 @@ import { toast } from 'sonner';
 import { Card, SocialIcon, Action, Empty } from './common';
 import { networkNames, type Post, type Network, type Media, type Status, validatePost } from '@/lib/planner';
 import { orderedPostMedia } from '@/lib/post-media';
+import type { EditorUiIntent } from '@/lib/client/editor-recovery';
 export type ComposerProps = {
     draft: Post;
+    publishMode?: EditorUiIntent['publishMode'];
+    onPublishModeChange?: (mode: EditorUiIntent['publishMode']) => void;
     setDraft: Dispatch<SetStateAction<Post>>;
     media: Media[];
     upload: (files: FileList | File[]) => Promise<Media[]>;
@@ -23,13 +26,15 @@ export type ComposerProps = {
     editBlockedReason?: string | null;
     duplicatePost?: (post: Post) => void;
 };
-export function Composer({ draft, setDraft, media, upload, save, publishNow, accounts, saving = false, quick = false, expand, editBlockedReason, duplicatePost }: ComposerProps) {
+export function Composer({ draft, publishMode: controlledMode, onPublishModeChange, setDraft, media, upload, save, publishNow, accounts, saving = false, quick = false, expand, editBlockedReason, duplicatePost }: ComposerProps) {
     const [preview, setPreview] = useState<Network>('telegram');
     const [variant, setVariant] = useState<Network | 'common'>('common');
     const [picker, setPicker] = useState(false);
     const [pendingUploads, setPendingUploads] = useState(0);
     const busy = pendingUploads > 0;
-    const [publishMode, setPublishMode] = useState<'now' | 'scheduled'>(() => draft.status === 'scheduled' ? 'scheduled' : 'now');
+    const [localPublishMode, setLocalPublishMode] = useState<'now' | 'scheduled'>(() => draft.status === 'scheduled' ? 'scheduled' : 'now');
+    const publishMode = controlledMode ?? localPublishMode;
+    const setPublishMode = onPublishModeChange ?? setLocalPublishMode;
     const input = useRef<HTMLInputElement>(null);
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
