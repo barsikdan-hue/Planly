@@ -59,6 +59,9 @@ type OwnerLifetime = { id: string; generation: object };
 
 const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [], libraryItems: [] };
 
+type ComposerUploadContext = { ownerId: string; token: string; generation: object | null };
+type ComposerUploadBatch = { id: string; context: ComposerUploadContext };
+
 function toUiMedia(item: MediaAssetWithPreview): Media {
     return { id: item.id, name: item.originalName, url: item.previewUrl, type: item.mimeType, size: item.byteSize };
 }
@@ -185,6 +188,28 @@ export default function PlannerApp() {
         persistLibraryEditor(next);
     }, [data.media, data.libraryItems, persistLibraryEditor]);
 
+    const composerBatches = useRef(new Map<string, ComposerUploadBatch>());
+    const removedMediaIds = useRef(new Set<string>());
+    const [composerUploads, setComposerUploads] = useState<{
+        ownerId: string | null; generation: object | null; batches: ComposerUploadBatch[];
+    }>({ ownerId: null, generation: null, batches: [] });
+    const publishComposerUploads = useCallback(() => {
+        if (!ownerMounted.current) return;
+        const lifetime = ownerLifetime.current;
+        setComposerUploads({ ownerId: lifetime?.id ?? null, generation: lifetime?.generation ?? null,
+            batches: Array.from(composerBatches.current.values()) });
+    }, []);
+    useEffect(() => {
+        const batches = composerBatches.current;
+        return () => { batches.clear(); };
+    }, []);
+    const isCurrentComposerOwner = (context: ComposerUploadContext) => !!context.generation &&
+        isOwnerCurrent({ id: context.ownerId, generation: context.generation });
+    const isCurrentComposerEditor = (context: ComposerUploadContext) =>
+        isCurrentComposerOwner(context) && editorToken.current === context.token;
+    const hasPendingComposerUpload = () => Array.from(composerBatches.current.values())
+        .some(batch => isCurrentComposerEditor(batch.context));
+
     const updateEditorToken = useCallback((token: string) => {
         editorToken.current = token;
         setEditorKey(token);
@@ -300,6 +325,7 @@ export default function PlannerApp() {
     const transitionOwner = useCallback((snapshot: Awaited<ReturnType<typeof loadPlanner>>): boolean => {
         if (ownerLifetime.current?.id === snapshot.profile.id) return false;
         ownerLifetime.current = null;
+        composerBatches.current.clear(); removedMediaIds.current.clear();
         const next = blankPost();
         assignEditorUi(initialEditorUi(next));
         draftRef.current = next; editorRevision.current += 1;
@@ -309,12 +335,13 @@ export default function PlannerApp() {
         updateEditorToken(crypto.randomUUID());
         const context = { id: snapshot.profile.id, generation: {} };
         ownerLifetime.current = context; setOwnerContext(context);
+        publishComposerUploads();
         setData({ posts: snapshot.posts.map(fromServerPost), media: snapshot.media.map(toUiMedia),
             name: snapshot.profile.displayName, socialAccounts: snapshot.socialAccounts, libraryItems: snapshot.libraryItems });
         hydrateComposerOwner(snapshot);
         bindLibraryOwner(snapshot.profile.id, snapshot.libraryItems, snapshot.media.map(toUiMedia));
         return true;
-    }, [hydrateComposerOwner, bindLibraryOwner, updateEditorToken, assignEditorUi]);
+    }, [hydrateComposerOwner, bindLibraryOwner, updateEditorToken, assignEditorUi, publishComposerUploads]);
 
     useEffect(() => {
         let active = true;
@@ -447,7 +474,7 @@ export default function PlannerApp() {
 
     const save = async (post: Post, status: Status) => {
         if (!isOwnerCurrent(ownerContext)) return;
-        if (saveLock.current) return;
+        if (saveLock.current || hasPendingComposerUpload()) return;
         if (status !== 'draft' && status !== 'scheduled') return;
         const blockedReason = editBlockedReasonFor(post);
         if (!creationPending && blockedReason) { toast.error(blockedReason); return; }
@@ -610,7 +637,7 @@ export default function PlannerApp() {
         }
     };
 
-    const upload = async (files: FileList | File[], canApply?: () => boolean): Promise<Media[]> => {
+    const upload = async (files: FileList | File[], canApply?: () => boolean, canNotify?: () => boolean): Promise<Media[]> => {
         const context = ownerContext;
         const permitted = () => isOwnerCurrent(context) && (!canApply || canApply());
         const added: Media[] = [];
@@ -619,15 +646,16 @@ export default function PlannerApp() {
             try {
                 const item = toUiMedia(await uploadMediaApi(file));
                 if (!permitted()) break;
+                removedMediaIds.current.delete(item.id);
                 added.push(item);
                 mediaRevision.current += 1;
                 setData(current => ({ ...current, media: [...current.media.filter(media => media.id !== item.id), item] }));
             } catch (error) {
                 // The controlled Library editor owns its token-scoped messages.
-                if (permitted() && !canApply) toast.error(`${file.name}: ${errorMessage(error, 'не удалось загрузить файл')}`);
+                if (permitted() && (canNotify ? canNotify() : !canApply)) toast.error(`${file.name}: ${errorMessage(error, 'не удалось загрузить файл')}`);
             }
         }
-        if (permitted() && added.length && !canApply) toast.success(`Добавлено файлов: ${added.length}`);
+        if (permitted() && added.length && (canNotify ? canNotify() : !canApply)) toast.success(`Добавлено файлов: ${added.length}`);
         return added;
     };
 
@@ -697,10 +725,32 @@ export default function PlannerApp() {
         cancel: () => { if (libraryControlActive()) cancelLibraryEditor(libraryToken); },
     };
 
+    const uploadComposerEditor = async (files: FileList | File[], context: ComposerUploadContext): Promise<void> => {
+        if (!isCurrentComposerEditor(context) || !files.length) return;
+        const batch: ComposerUploadBatch = { id: crypto.randomUUID(), context };
+        // Register before awaiting: direct submit callbacks consult this map.
+        composerBatches.current.set(batch.id, batch);
+        publishComposerUploads();
+        try {
+            const added = await upload(files, () => isCurrentComposerOwner(context), () => isCurrentComposerEditor(context));
+            if (added.length && isCurrentComposerEditor(context)) {
+                // A whole batch appends on completion; its files retain input order.
+                const addedIds = added.filter(item => !removedMediaIds.current.has(item.id)).map(item => item.id);
+                setDraft(current => ({ ...current,
+                    mediaIds: [...new Set([...current.mediaIds, ...addedIds])] }));
+            }
+        } catch (error) {
+            if (isCurrentComposerEditor(context)) toast.error(errorMessage(error, 'Не удалось загрузить файлы.'));
+        } finally {
+            composerBatches.current.delete(batch.id);
+            if (isCurrentComposerOwner(context)) publishComposerUploads();
+        }
+    };
+
     const details = data.posts.find(p => p.id === detailId);
     const publishNow = async(post:Post)=>{
         if (!isOwnerCurrent(ownerContext)) return;
-        if (saveLock.current) return;
+        if (saveLock.current || hasPendingComposerUpload()) return;
         const blockedReason = editBlockedReasonFor(post);
         if (!creationPending && blockedReason) { toast.error(blockedReason); return; }
         const error = validatePost(post,'draft');
@@ -725,6 +775,7 @@ export default function PlannerApp() {
 
     const retryCreation = async () => {
         if (!isOwnerCurrent(ownerContext)) return;
+        if (hasPendingComposerUpload()) return;
         const storage = sessionRecoveryStorage();
         if (!storage || !ownerLifetime.current?.id) return;
         try {
@@ -749,8 +800,18 @@ export default function PlannerApp() {
     const changePublishModeForOwner = (mode: EditorUiIntent['publishMode']) => {
         if (isOwnerCurrent(ownerContext)) changePublishMode(mode);
     };
-    const composer = { draft, setDraft: setDraftForOwner, publishMode: editorUi.publishMode, onPublishModeChange: changePublishModeForOwner,
-        media: data.media, upload, save, publishNow, saving: saveBusy, accounts,
+    const composerContext: ComposerUploadContext = {
+        ownerId: composerUploads.ownerId ?? '', token: editorKey, generation: composerUploads.generation,
+    };
+    const composer = { draft, setDraft: setDraftForOwner, publishMode: editorUi.publishMode, onPublishModeChange: changePublishModeForOwner, media: data.media, upload,
+        uploadControl: {
+            busy: composerUploads.batches.some(batch => batch.context.ownerId === composerContext.ownerId &&
+                batch.context.generation === composerContext.generation && batch.context.token === composerContext.token),
+            addFiles: (files: FileList | File[]) => uploadComposerEditor(files, composerContext),
+        },
+        save: (post: Post, status: Status) => { if (isCurrentComposerEditor(composerContext)) return save(post, status); },
+        publishNow: (post: Post) => { if (isCurrentComposerEditor(composerContext)) return publishNow(post); },
+        saving: saveBusy, accounts,
         editBlockedReason: editorBlockedReason, duplicatePost: () => duplicatePost(draftRef.current, true) };
 
     const updateAccount = async (id: string, enabled: boolean) => {
@@ -788,6 +849,8 @@ export default function PlannerApp() {
             } else {
                 await removeMediaApi(selected.id);
                 mediaRevision.current += 1;
+                // A pending batch may still hold this earlier successful upload.
+                removedMediaIds.current.add(selected.id);
                 setData(current => ({ ...current, media: current.media.filter(media => media.id !== selected.id) }));
                 setDraft(current => ({ ...current, mediaIds: current.mediaIds.filter(id => id !== selected.id) }));
             }
@@ -798,5 +861,5 @@ export default function PlannerApp() {
         }
     };
 
-    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && reviewing && <SwipePlanner items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => setReviewing(false)} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && <ContentLibrary editorControl={libraryEditorControl} startReview={() => setReviewing(true)} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
+    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy || composer.uploadControl.busy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && reviewing && <SwipePlanner items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => setReviewing(false)} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && <ContentLibrary editorControl={libraryEditorControl} startReview={() => setReviewing(true)} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
 }
