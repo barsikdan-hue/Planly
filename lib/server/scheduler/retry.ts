@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
-import { publications } from '../../../db/schema.ts';
+import { posts, postTargets, publications } from '../../../db/schema.ts';
+import { lockOwnerSchedule } from '../planner-slots.ts';
 
 export const DEFAULT_RETRY_DELAYS_MS = [60_000, 300_000, 900_000, 3_600_000] as const;
 
@@ -17,20 +18,45 @@ export async function prepareTemporaryPublicationRetry(
   providerDelayMs = 0,
   now = new Date(),
 ): Promise<{ scheduled: boolean; delayMs?: number }> {
-  const [row] = await getDb().select({ attemptCount: publications.attemptCount })
+  const db = getDb();
+  const [identity] = await db.select({ userId: publications.userId, postId: publications.postId })
     .from(publications)
     .where(eq(publications.id, publicationId))
     .limit(1);
-  if (!row || row.attemptCount >= attemptLimit) return { scheduled: false };
+  if (!identity) return { scheduled: false };
 
-  const delayMs = Math.max(
-    retryDelayMs(row.attemptCount, delays),
-    Number.isFinite(providerDelayMs) ? Math.max(0, Math.min(providerDelayMs, 86_400_000)) : 0,
-  );
-  await getDb().update(publications).set({
-    status: 'QUEUED',
-    nextRetryAt: new Date(now.getTime() + delayMs),
-    updatedAt: now,
-  }).where(eq(publications.id, publicationId));
-  return { scheduled: true, delayMs };
+  return db.transaction(async tx => {
+    // Match updatePost's lock order: owner -> Post -> publication history.
+    // An edit may have superseded this failure while provider work completed.
+    await lockOwnerSchedule(tx, identity.userId);
+    const [post] = await tx.select({ status: posts.status }).from(posts)
+      .where(and(eq(posts.id, identity.postId), eq(posts.userId, identity.userId))).limit(1).for('update');
+    if (!post || post.status !== 'READY') return { scheduled: false };
+    const history = await tx.select().from(publications)
+      .where(and(eq(publications.postId, identity.postId), eq(publications.userId, identity.userId)))
+      .orderBy(asc(publications.id)).for('update');
+    const row = history.find(item => item.id === publicationId);
+    if (!row || row.status !== 'FAILED' || row.normalizedErrorType !== 'TEMPORARY' ||
+      row.providerErrorCode === 'AMBIGUOUS_DELIVERY' || row.attemptCount >= attemptLimit) return { scheduled: false };
+    const [target] = await tx.select().from(postTargets)
+      .where(and(eq(postTargets.id, row.postTargetId), eq(postTargets.postId, identity.postId))).limit(1);
+    if (!target?.active || !target.scheduledAt || target.scheduledAt.getTime() !== row.scheduledAt?.getTime()) return { scheduled: false };
+    // Supersession is durable CANCELLED state, never timestamp/ID chronology.
+    // Defend against competing open work or unsafe outcomes on this target.
+    const superseded = history.some(item => item.id !== row.id && item.postTargetId === row.postTargetId &&
+      (['SCHEDULED', 'QUEUED', 'PUBLISHING', 'PUBLISHED', 'REQUIRES_RECONNECT'].includes(item.status) ||
+        item.providerErrorCode === 'AMBIGUOUS_DELIVERY'));
+    if (superseded) return { scheduled: false };
+
+    const delayMs = Math.max(
+      retryDelayMs(row.attemptCount, delays),
+      Number.isFinite(providerDelayMs) ? Math.max(0, Math.min(providerDelayMs, 86_400_000)) : 0,
+    );
+    await tx.update(publications).set({
+      status: 'QUEUED',
+      nextRetryAt: new Date(now.getTime() + delayMs),
+      updatedAt: now,
+    }).where(and(eq(publications.id, publicationId), eq(publications.status, 'FAILED')));
+    return { scheduled: true, delayMs };
+  });
 }

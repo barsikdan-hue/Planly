@@ -20,8 +20,8 @@ const loginSchema = z.object({
 function loginFingerprint(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   const ip = forwarded || request.headers.get('x-real-ip') || 'unknown';
-  const agent = request.headers.get('user-agent')?.slice(0, 200) || 'unknown';
-  return `${ip}|${agent}`;
+  // Changing a caller-controlled User-Agent must not grant another failure allowance.
+  return ip;
 }
 
 export async function POST(request: Request) {

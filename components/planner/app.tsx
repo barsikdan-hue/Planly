@@ -17,7 +17,10 @@ import { SwipePlanner } from './swipe-planner';
 import { submitSwipeApproval, retrySwipeApproval, type SwipeApproval } from '@/lib/client/swipe-planner';
 import { Settings, Analytics } from './settings';
 import { normalizePlannerView } from '@/lib/planner-navigation';
-import { clearSavedRecovery, editorFields, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields } from '@/lib/client/editor-recovery';
+import { clearSavedRecovery, editorFields, initialEditorUi, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields, type EditorUiIntent } from '@/lib/client/editor-recovery';
+import { libraryRecoveryStorage, libraryEditorFields, readLibraryEditorRecovery, writeLibraryEditorRecovery,
+    clearSavedLibraryEditorRecovery, discardLibraryEditorRecovery, restoreLibraryEditorRecovery,
+    type LibraryEditorFields, type LibraryEditorSnapshot } from '@/lib/client/library-editor-recovery';
 import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
 import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type ComposerPostInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
@@ -52,7 +55,12 @@ type PlannerData = {
     libraryItems: LibraryItemDto[];
 };
 
+type OwnerLifetime = { id: string; generation: object };
+
 const initial: PlannerData = { posts: [], media: [], name: 'Данил', socialAccounts: [], libraryItems: [] };
+
+type ComposerUploadContext = { ownerId: string; token: string; generation: object | null };
+type ComposerUploadBatch = { id: string; context: ComposerUploadContext };
 
 function toUiMedia(item: MediaAssetWithPreview): Media {
     return { id: item.id, name: item.originalName, url: item.previewUrl, type: item.mimeType, size: item.byteSize };
@@ -78,20 +86,129 @@ export default function PlannerApp() {
     const [reviewing, setReviewing] = useState(false);
     const [draft, setDraftState] = useState<Post>(blankPost);
     const draftRef = useRef(draft);
+    const [editorUi, setEditorUiState] = useState<EditorUiIntent>(() => initialEditorUi(draft));
+    const editorUiRef = useRef(editorUi);
     const editorRevision = useRef(0);
     const [initialEditorToken] = useState(() => crypto.randomUUID());
     const editorToken = useRef(initialEditorToken);
     const [editorKey, setEditorKey] = useState(initialEditorToken);
     const [creationPending, setCreationPending] = useState(false);
-    const recoveryOwner = useRef<string | null>(null);
+    const ownerLifetime = useRef<OwnerLifetime | null>(null);
+    const [ownerContext, setOwnerContext] = useState<OwnerLifetime | null>(null);
+    const ownerMounted = useRef(true);
+    const isOwnerCurrent = useCallback((context: OwnerLifetime | null): boolean => ownerMounted.current && !!context &&
+        ownerLifetime.current?.id === context.id && ownerLifetime.current.generation === context.generation, []);
+    useEffect(() => {
+        ownerMounted.current = true;
+        return () => { ownerMounted.current = false; ownerLifetime.current = null; };
+    }, []);
     const persistedEditor = useRef<EditorFields | null>(null);
+    const persistedEditorUi = useRef<EditorUiIntent | null>(null);
     const recoveryErrorShown = useRef(false);
     const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
     const [detailId, setDetailId] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<{ type: 'post' | 'media'; id: string; label: string } | null>(null);
     const saveLock = useRef(false);
     const libraryRevision = useRef(0);
+    const mediaRevision = useRef(0);
     const [saveBusy, setSaveBusy] = useState(false);
+    const dataRef = useRef(data);
+    useEffect(() => { dataRef.current = data; }, [data]);
+    const [libraryEditor, setLibraryEditor] = useState<LibraryEditorSnapshot | null>(null);
+    const libraryEditorRef = useRef<LibraryEditorSnapshot | null>(null);
+    const libraryOwner = useRef<string | null>(null);
+    const libraryGeneration = useRef<object>({});
+    const [libraryContext, setLibraryContext] = useState<{ owner: string | null; generation: object }>({ owner: null, generation: {} });
+    const libraryMounted = useRef(true);
+    const libraryPersisted = useRef<LibraryEditorSnapshot | null>(null);
+    const libraryOperation = useRef<object | null>(null);
+    const [libraryBusy, setLibraryBusy] = useState(false);
+    const [libraryError, setLibraryError] = useState<string | null>(null);
+    const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
+    const libraryStorageWarning = 'Восстановление заготовки после обновления страницы недоступно. Не закрывай вкладку до подтверждения сохранения.';
+
+    useEffect(() => {
+        libraryMounted.current = true;
+        return () => { libraryMounted.current = false; libraryGeneration.current = {}; };
+    }, []);
+    const persistLibraryEditor = useCallback((snapshot: LibraryEditorSnapshot): boolean => {
+        const storage = libraryRecoveryStorage();
+        const durable = !!storage && !!libraryOwner.current && writeLibraryEditorRecovery(storage, libraryOwner.current, snapshot);
+        libraryPersisted.current = durable ? snapshot : null;
+        if (!durable) setLibraryNotice(libraryStorageWarning);
+        return durable;
+    }, []);
+    const bindLibraryOwner = useCallback((owner: string, items: LibraryItemDto[], media: Media[]) => {
+        if (libraryOwner.current === owner) { setLibraryContext({ owner, generation: libraryGeneration.current }); return; }
+        libraryOwner.current = owner; libraryGeneration.current = {};
+        setLibraryContext({ owner, generation: libraryGeneration.current });
+        libraryOperation.current = null; setLibraryBusy(false); setLibraryError(null); setLibraryNotice(null);
+        libraryPersisted.current = null; libraryEditorRef.current = null; setLibraryEditor(null);
+        const storage = libraryRecoveryStorage();
+        if (!storage) { setLibraryNotice(libraryStorageWarning); return; }
+        const cached = readLibraryEditorRecovery(storage, owner);
+        if (cached.unavailable) { setLibraryNotice(libraryStorageWarning); return; }
+        if (cached.invalid) { setLibraryError('Локальная заготовка повреждена и не восстановлена.'); return; }
+        if (!cached.snapshot) return;
+        const restored = restoreLibraryEditorRecovery(cached.snapshot, items, media);
+        const snapshot = restored.missingMediaCount ? { ...restored.snapshot, revision: restored.snapshot.revision + 1 } : restored.snapshot;
+        libraryEditorRef.current = snapshot; setLibraryEditor(snapshot);
+        setLibraryNotice(`Несохранённая заготовка восстановлена в этой вкладке.${restored.missingMediaCount ? ` Удалённые файлы исключены: ${restored.missingMediaCount}.` : ''}`);
+        persistLibraryEditor(snapshot);
+    }, [persistLibraryEditor]);
+    const cancelLibraryEditor = (expectedToken: string | null) => {
+        const current = libraryEditorRef.current;
+        if (!libraryMounted.current || !libraryOwner.current || !current || current.token !== expectedToken) return;
+        const storage = libraryRecoveryStorage();
+        if (!storage || !discardLibraryEditorRecovery(storage, libraryOwner.current, current.token)) {
+            setLibraryError('Не удалось удалить локальную заготовку. Форма сохранена — повтори отмену.'); return;
+        }
+        libraryEditorRef.current = null; libraryPersisted.current = null; setLibraryEditor(null);
+        libraryOperation.current = null; setLibraryBusy(false); setLibraryError(null); setLibraryNotice(null);
+    };
+    const changeLibraryEditor = (update: SetStateAction<LibraryEditorFields | null>, expectedToken: string | null) => {
+        const current = libraryEditorRef.current;
+        if (!libraryMounted.current || !libraryOwner.current || (current?.token ?? null) !== expectedToken) return;
+        const fields = typeof update === 'function' ? update(current?.editor ?? null) : update;
+        if (!fields) { cancelLibraryEditor(expectedToken); return; }
+        const sameIdentity = typeof update === 'function' && !!current;
+        const next: LibraryEditorSnapshot = { version: 1, token: sameIdentity ? current.token : crypto.randomUUID(),
+            revision: sameIdentity ? current.revision + 1 : 0, editor: libraryEditorFields(fields) };
+        if (!sameIdentity) { libraryOperation.current = null; setLibraryBusy(false); setLibraryNotice(null); }
+        libraryEditorRef.current = next; setLibraryEditor(next); setLibraryError(null); persistLibraryEditor(next);
+    };
+    useEffect(() => {
+        const current = libraryEditorRef.current;
+        if (!current || !libraryMounted.current || !libraryOwner.current) return;
+        const restored = restoreLibraryEditorRecovery(current, data.libraryItems, data.media);
+        if (!restored.missingMediaCount) return;
+        const next = { ...restored.snapshot, revision: current.revision + 1 };
+        libraryEditorRef.current = next; setLibraryEditor(next);
+        setLibraryNotice(`Удалённые файлы исключены: ${restored.missingMediaCount}. Текст заготовки сохранён.`);
+        persistLibraryEditor(next);
+    }, [data.media, data.libraryItems, persistLibraryEditor]);
+
+    const composerBatches = useRef(new Map<string, ComposerUploadBatch>());
+    const removedMediaIds = useRef(new Set<string>());
+    const [composerUploads, setComposerUploads] = useState<{
+        ownerId: string | null; generation: object | null; batches: ComposerUploadBatch[];
+    }>({ ownerId: null, generation: null, batches: [] });
+    const publishComposerUploads = useCallback(() => {
+        if (!ownerMounted.current) return;
+        const lifetime = ownerLifetime.current;
+        setComposerUploads({ ownerId: lifetime?.id ?? null, generation: lifetime?.generation ?? null,
+            batches: Array.from(composerBatches.current.values()) });
+    }, []);
+    useEffect(() => {
+        const batches = composerBatches.current;
+        return () => { batches.clear(); };
+    }, []);
+    const isCurrentComposerOwner = (context: ComposerUploadContext) => !!context.generation &&
+        isOwnerCurrent({ id: context.ownerId, generation: context.generation });
+    const isCurrentComposerEditor = (context: ComposerUploadContext) =>
+        isCurrentComposerOwner(context) && editorToken.current === context.token;
+    const hasPendingComposerUpload = () => Array.from(composerBatches.current.values())
+        .some(batch => isCurrentComposerEditor(batch.context));
 
     const updateEditorToken = useCallback((token: string) => {
         editorToken.current = token;
@@ -104,6 +221,33 @@ export default function PlannerApp() {
         toast.error('Восстановление после обновления страницы недоступно. Не закрывай вкладку до подтверждения сохранения.');
     }, []);
 
+    const assignEditorUi = useCallback((ui: EditorUiIntent) => {
+        editorUiRef.current = { ...ui };
+        setEditorUiState(editorUiRef.current);
+    }, []);
+    const persistEditor = useCallback((next: Post) => {
+        const ownerId = ownerLifetime.current?.id;
+        if (!ownerId) return;
+        const storage = sessionRecoveryStorage();
+        if (!storage || !writeRecovery(storage, ownerId, next, editorUiRef.current)) {
+            persistedEditor.current = null;
+            persistedEditorUi.current = null;
+            warnRecoveryUnavailable();
+        } else {
+            persistedEditor.current = editorFields(next);
+            persistedEditorUi.current = { ...editorUiRef.current };
+        }
+    }, [warnRecoveryUnavailable]);
+    const isCurrentEditorDurable = () => persistedEditor.current !== null &&
+        persistedEditorUi.current?.publishMode === editorUiRef.current.publishMode &&
+        JSON.stringify(persistedEditor.current) === JSON.stringify(editorFields(draftRef.current));
+    const changePublishMode = useCallback((publishMode: EditorUiIntent['publishMode']) => {
+        if ((publishMode !== 'now' && publishMode !== 'scheduled') || publishMode === editorUiRef.current.publishMode) return;
+        assignEditorUi({ publishMode });
+        editorRevision.current += 1;
+        persistEditor(draftRef.current);
+    }, [assignEditorUi, persistEditor]);
+
     // Persist outside React updater functions, which Strict Mode may run twice.
     const setDraft: Dispatch<SetStateAction<Post>> = useCallback(update => {
         const updated = typeof update === 'function' ? update(draftRef.current) : update;
@@ -111,20 +255,19 @@ export default function PlannerApp() {
         draftRef.current = next;
         editorRevision.current += 1;
         setDraftState(next);
-        if (!recoveryOwner.current) return;
-        const storage = sessionRecoveryStorage();
-        if (!storage || !writeRecovery(storage, recoveryOwner.current, next)) warnRecoveryUnavailable();
-        else persistedEditor.current = editorFields(next);
-    }, [warnRecoveryUnavailable]);
+        persistEditor(next);
+    }, [persistEditor]);
 
     const clearSubmittedEditor = (post: Post, revision: number): boolean => {
         if (editorRevision.current !== revision) return false;
-        if (recoveryOwner.current) {
+        const ownerId = ownerLifetime.current?.id;
+        if (ownerId) {
             const storage = sessionRecoveryStorage();
-            if (!storage || !clearSavedRecovery(storage, recoveryOwner.current, persistedEditor.current ?? post)) { warnRecoveryUnavailable(); return false; }
-            else persistedEditor.current = null;
+            if (!storage || !isCurrentEditorDurable() || !clearSavedRecovery(storage, ownerId, persistedEditor.current ?? post, editorUiRef.current)) { warnRecoveryUnavailable(); return false; }
+            else { persistedEditor.current = null; persistedEditorUi.current = null; }
         }
         const next = blankPost();
+        assignEditorUi(initialEditorUi(next));
         draftRef.current = next;
         editorRevision.current += 1;
         updateEditorToken(crypto.randomUUID());
@@ -133,59 +276,78 @@ export default function PlannerApp() {
         return true;
     };
 
+    // Bootstrap and owner replacement share the same recovery/pending precedence.
+    const hydrateComposerOwner = useCallback((snapshot: Awaited<ReturnType<typeof loadPlanner>>) => {
+        const posts = snapshot.posts.map(fromServerPost);
+        const media = snapshot.media.map(toUiMedia);
+        const storage = sessionRecoveryStorage();
+        if (!storage) warnRecoveryUnavailable();
+        else {
+            const cached = readRecovery(storage, snapshot.profile.id);
+            if (cached.unavailable) warnRecoveryUnavailable();
+            else if (cached.invalid) toast.error('Локальный черновик повреждён и не восстановлен.');
+            else if (cached.editor) {
+                const restored = restoreRecovery(cached.editor, posts, media);
+                assignEditorUi(cached.ui ?? initialEditorUi(restored.draft));
+                draftRef.current = restored.draft;
+                editorRevision.current += 1;
+                setDraftState(restored.draft);
+                setRecoveryNotice(`${restored.missingPost ? 'Исходный пост удалён. Текст восстановлен как новый черновик.' : 'Несохранённый пост восстановлен в этой вкладке.'}${restored.missingMediaCount ? ` Удалённые файлы исключены: ${restored.missingMediaCount}.` : ''}`);
+                persistEditor(restored.draft);
+            }
+            try {
+                const pending = readPendingCreation(storage, snapshot.profile.id);
+                if (pending) {
+                    if (pending.origin !== 'swipe-planner') updateEditorToken(pending.activeEditorToken);
+                    setCreationPending(true);
+                    if (pending.origin !== 'swipe-planner' && !cached.editor && pending.editorToken === pending.activeEditorToken) {
+                        const restored = restoreRecovery(pending.editor, posts, media);
+                        assignEditorUi(pending.editorUi ?? initialEditorUi(restored.draft));
+                        draftRef.current = restored.draft;
+                        editorRevision.current += 1;
+                        setDraftState(restored.draft);
+                        persistEditor(restored.draft);
+                    }
+                    if (pending.origin !== 'swipe-planner' && pending.acknowledgedId && pending.editorToken === editorToken.current) {
+                        const next = { ...draftRef.current, id: pending.acknowledgedId, sourceLibraryItemId: null };
+                        draftRef.current = next; setDraftState(next);
+                        persistEditor(next);
+                    }
+                    setRecoveryNotice('Предыдущее создание поста ещё не завершено в этой вкладке. Повтори сохранение, чтобы проверить его результат.');
+                }
+            } catch (error) {
+                setCreationPending(true);
+                setRecoveryNotice(errorMessage(error, 'Не удалось восстановить предыдущее сохранение.'));
+            }
+        }
+    }, [updateEditorToken, warnRecoveryUnavailable, assignEditorUi, persistEditor]);
+
+    const transitionOwner = useCallback((snapshot: Awaited<ReturnType<typeof loadPlanner>>): boolean => {
+        if (ownerLifetime.current?.id === snapshot.profile.id) return false;
+        ownerLifetime.current = null;
+        composerBatches.current.clear(); removedMediaIds.current.clear();
+        const next = blankPost();
+        assignEditorUi(initialEditorUi(next));
+        draftRef.current = next; editorRevision.current += 1;
+        setDraftState(next); persistedEditor.current = null; persistedEditorUi.current = null;
+        setCreationPending(false); setRecoveryNotice(null); recoveryErrorShown.current = false;
+        setConfirm(current => current?.type === 'media' ? null : current);
+        updateEditorToken(crypto.randomUUID());
+        const context = { id: snapshot.profile.id, generation: {} };
+        ownerLifetime.current = context; setOwnerContext(context);
+        publishComposerUploads();
+        setData({ posts: snapshot.posts.map(fromServerPost), media: snapshot.media.map(toUiMedia),
+            name: snapshot.profile.displayName, socialAccounts: snapshot.socialAccounts, libraryItems: snapshot.libraryItems });
+        hydrateComposerOwner(snapshot);
+        bindLibraryOwner(snapshot.profile.id, snapshot.libraryItems, snapshot.media.map(toUiMedia));
+        return true;
+    }, [hydrateComposerOwner, bindLibraryOwner, updateEditorToken, assignEditorUi, publishComposerUploads]);
+
     useEffect(() => {
         let active = true;
         loadPlanner().then(snapshot => {
             if (!active) return;
-            const posts = snapshot.posts.map(fromServerPost);
-            const media = snapshot.media.map(toUiMedia);
-            setData({
-                posts,
-                media,
-                name: snapshot.profile.displayName,
-                socialAccounts: snapshot.socialAccounts,
-                libraryItems: snapshot.libraryItems,
-            });
-            recoveryOwner.current = snapshot.profile.id;
-            const storage = sessionRecoveryStorage();
-            if (!storage) warnRecoveryUnavailable();
-            else {
-                const cached = readRecovery(storage, snapshot.profile.id);
-                if (cached.unavailable) warnRecoveryUnavailable();
-                else if (cached.invalid) toast.error('Локальный черновик повреждён и не восстановлен.');
-                else if (cached.editor) {
-                    persistedEditor.current = cached.editor;
-                    const restored = restoreRecovery(cached.editor, posts, media);
-                    draftRef.current = restored.draft;
-                    editorRevision.current += 1;
-                    setDraftState(restored.draft);
-                    setRecoveryNotice(`${restored.missingPost ? 'Исходный пост удалён. Текст восстановлен как новый черновик.' : 'Несохранённый пост восстановлен в этой вкладке.'}${restored.missingMediaCount ? ` Удалённые файлы исключены: ${restored.missingMediaCount}.` : ''}`);
-                    if (!writeRecovery(storage, snapshot.profile.id, restored.draft)) warnRecoveryUnavailable();
-                    else persistedEditor.current = editorFields(restored.draft);
-                }
-                try {
-                    const pending = readPendingCreation(storage, snapshot.profile.id);
-                    if (pending) {
-                        if (pending.origin !== 'swipe-planner') updateEditorToken(pending.activeEditorToken);
-                        setCreationPending(true);
-                        if (pending.origin !== 'swipe-planner' && !cached.editor && pending.editorToken === pending.activeEditorToken) {
-                            const restored = restoreRecovery(pending.editor, posts, media);
-                            draftRef.current = restored.draft;
-                            editorRevision.current += 1;
-                            setDraftState(restored.draft);
-                        }
-                        if (pending.origin !== 'swipe-planner' && pending.acknowledgedId && pending.editorToken === editorToken.current) {
-                            const next = { ...draftRef.current, id: pending.acknowledgedId, sourceLibraryItemId: null };
-                            draftRef.current = next; setDraftState(next);
-                            if (writeRecovery(storage, snapshot.profile.id, next)) persistedEditor.current = editorFields(next);
-                        }
-                        setRecoveryNotice('Предыдущее создание поста ещё не завершено в этой вкладке. Повтори сохранение, чтобы проверить его результат.');
-                    }
-                } catch (error) {
-                    setCreationPending(true);
-                    setRecoveryNotice(errorMessage(error, 'Не удалось восстановить предыдущее сохранение.'));
-                }
-            }
+            transitionOwner(snapshot);
             setLoadError(false);
         }).catch(error => {
             if (!active) return;
@@ -193,7 +355,7 @@ export default function PlannerApp() {
             toast.error(errorMessage(error, 'Не удалось загрузить данные Planly.'));
         }).finally(() => { if (active) setReady(true); });
         return () => { active = false; };
-    }, [warnRecoveryUnavailable, updateEditorToken]);
+    }, [transitionOwner]);
 
     useEffect(() => {
         const sync = () => {
@@ -226,15 +388,22 @@ export default function PlannerApp() {
             if (busy || document.hidden || saveLock.current) return;
             busy=true;
             const revision = libraryRevision.current;
+            const mediaVersion = mediaRevision.current;
             try {
                 const snapshot=await loadPlanner();
-                if (active && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts,libraryItems:revision === libraryRevision.current ? snapshot.libraryItems : current.libraryItems}));
+                if (active && !saveLock.current) {
+                    const ownerChanged = !!snapshot.profile?.id && transitionOwner(snapshot);
+                    if (!ownerChanged) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts,
+                        ...(snapshot.media && (ownerChanged || mediaVersion === mediaRevision.current) ? { media: snapshot.media.map(toUiMedia) } : {}),
+                        ...(ownerChanged ? { name: snapshot.profile.displayName } : {}),
+                        libraryItems:ownerChanged || revision === libraryRevision.current ? snapshot.libraryItems : current.libraryItems}));
+                }
             } catch { /* Initial loading and mutations already display errors; polling remains quiet. */ }
             finally {busy=false;}
         };
         const timer=setInterval(()=>{void poll();},5000);
         return ()=>{active=false;clearInterval(timer);};
-    },[ready,hasScheduledPosts,data.posts]);
+    },[ready,hasScheduledPosts,data.posts,transitionOwner]);
 
     const connectSocial = async(id:string,destinationId:string)=>{
         try {
@@ -254,13 +423,13 @@ export default function PlannerApp() {
 
     const submitEditor = async (post: Post, input: () => ComposerPostInput, intent: CreationIntent, token: string) => {
         const storage = sessionRecoveryStorage();
-        const owner = recoveryOwner.current;
+        const owner = ownerLifetime.current?.id;
         const pending = storage && owner ? readPendingCreation(storage, owner) : null;
         if (pending?.origin === 'swipe-planner') throw new Error('Сначала восстанови предыдущее одобрение в Swipe Planner.');
         if (post.id && !pending) return { saved: await savePostApi(input(), post.id), pending: null, belongsToEditor: true, updateError: undefined };
         if (!storage || !owner) throw new Error('Не удалось сохранить повторяемый запрос в этой вкладке. Новый пост не отправлен.');
         try {
-            const result = await submitPendingCreation(storage, owner, token, post, input, intent);
+            const result = await submitPendingCreation(storage, owner, token, post, input, intent, { editorUi: editorUiRef.current });
             setCreationPending(true);
             return result;
         } catch (error) {
@@ -281,13 +450,11 @@ export default function PlannerApp() {
             }
         }
         const storage = sessionRecoveryStorage();
-        if (result.pending && storage && recoveryOwner.current) {
+        if (result.pending && storage && ownerLifetime.current?.id) {
             // Persist the acknowledged ID before discarding the durable original request.
-            const differentEditor = !result.belongsToEditor || editorToken.current !== token;
-            const editorDurable = cleared || persistedEditor.current?.id === result.saved.id ||
-                (differentEditor && JSON.stringify(persistedEditor.current) === JSON.stringify(editorFields(draftRef.current)));
+            const editorDurable = cleared || isCurrentEditorDurable();
             if (editorDurable) {
-                try { completePendingCreation(storage, recoveryOwner.current, result.pending.key); setCreationPending(false); }
+                try { completePendingCreation(storage, ownerLifetime.current?.id, result.pending.key); setCreationPending(false); }
                 catch { warnRecoveryUnavailable(); }
             }
         }
@@ -306,7 +473,8 @@ export default function PlannerApp() {
     };
 
     const save = async (post: Post, status: Status) => {
-        if (saveLock.current) return;
+        if (!isOwnerCurrent(ownerContext)) return;
+        if (saveLock.current || hasPendingComposerUpload()) return;
         if (status !== 'draft' && status !== 'scheduled') return;
         const blockedReason = editBlockedReasonFor(post);
         if (!creationPending && blockedReason) { toast.error(blockedReason); return; }
@@ -336,9 +504,9 @@ export default function PlannerApp() {
 
     const replaceEditor = (next: Post, preservesCurrent = false): boolean => {
         const storage = sessionRecoveryStorage();
-        if (storage && recoveryOwner.current) {
+        if (storage && ownerLifetime.current?.id) {
             try {
-                if (readPendingCreation(storage, recoveryOwner.current)) {
+                if (readPendingCreation(storage, ownerLifetime.current?.id)) {
                     toast.error('Сначала повтори предыдущее сохранение, чтобы восстановить его результат.');
                     return false;
                 }
@@ -347,6 +515,7 @@ export default function PlannerApp() {
         }
         if (!preservesCurrent && shouldReplaceEditor(draftRef.current, next, data.posts) && !window.confirm('В редакторе есть несохранённые изменения. Заменить их другим постом?')) return false;
         const nextToken = crypto.randomUUID();
+        assignEditorUi(initialEditorUi(next));
         updateEditorToken(nextToken);
         setDraft(next);
         setRecoveryNotice(null);
@@ -364,7 +533,7 @@ export default function PlannerApp() {
             toast.info('Копия открыта в редакторе. Сохрани её как новый пост.');
         }
     };
-    const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date } : {}), ...(time ? { time } : {}) }); };
+    const createPost = (date?: string, time?: string) => { replaceEditor({ ...blankPost(), ...(date ? { date, status: 'scheduled' as const } : {}), ...(time ? { time } : {}) }); };
 
     const createFromLibrary = (item: LibraryItemDto) => {
         const source = data.libraryItems.find(current => current.id === item.id);
@@ -373,9 +542,13 @@ export default function PlannerApp() {
     };
 
     const saveLibraryItem = async (input: CreateLibraryItemInput & { status?: 'READY' | 'ARCHIVED' }, id?: string) => {
+        const owner = libraryOwner.current, generation = libraryGeneration.current;
         const saved = id ? await updateLibraryItem(id, { ...input, status: input.status ?? 'READY' }) : await createLibraryItem(input);
+        if (!saved || typeof saved.id !== 'string' || !saved.id.trim()) throw new Error('Сервер не подтвердил сохранение заготовки.');
+        if (!libraryMounted.current || libraryOwner.current !== owner || libraryGeneration.current !== generation) return saved;
         libraryRevision.current += 1;
         setData(current => ({ ...current, libraryItems: [saved, ...current.libraryItems.filter(item => item.id !== saved.id)] }));
+        return saved;
     };
     const deleteLibraryItem = async (id: string) => {
         await removeLibraryItem(id);
@@ -405,8 +578,8 @@ export default function PlannerApp() {
         setData(current => ({ ...current, posts: current.posts.some(post => post.id === saved.id)
             ? current.posts.map(post => post.id === saved.id ? saved : post) : [saved, ...current.posts] }));
         const storage = sessionRecoveryStorage();
-        if (!storage || !recoveryOwner.current) throw new Error('Не удалось завершить восстановление. Повтори сохранение.');
-        completePendingCreation(storage, recoveryOwner.current, result.pending.key);
+        if (!storage || !ownerLifetime.current?.id) throw new Error('Не удалось завершить восстановление. Повтори сохранение.');
+        completePendingCreation(storage, ownerLifetime.current?.id, result.pending.key);
         setCreationPending(false); setRecoveryNotice(null);
         await refreshSourceLibrary({ ...blankPost(), sourceLibraryItemId: result.pending.input.sourceLibraryItemId }, result);
         return { id: saved.id, scheduledAt: result.saved.targets.find(target => target.scheduledAt)?.scheduledAt ?? null };
@@ -424,7 +597,7 @@ export default function PlannerApp() {
 
     const approveQueueItem = async (item: LibraryItemDto, approval: SwipeApproval) => {
         if (saveLock.current || creationPending) throw new Error('Сначала восстанови предыдущее сохранение.');
-        const storage = sessionRecoveryStorage(); const owner = recoveryOwner.current;
+        const storage = sessionRecoveryStorage(); const owner = ownerLifetime.current?.id;
         if (!storage || !owner) throw new Error('Повторяемый запрос недоступен. Новый пост не отправлен.');
         saveLock.current = true; setSaveBusy(true);
         try { return await acknowledgeQueue(await submitSwipeApproval(storage, owner, item, approval)); }
@@ -464,24 +637,120 @@ export default function PlannerApp() {
         }
     };
 
-    const upload = async (files: FileList | File[]): Promise<Media[]> => {
+    const upload = async (files: FileList | File[], canApply?: () => boolean, canNotify?: () => boolean): Promise<Media[]> => {
+        const context = ownerContext;
+        const permitted = () => isOwnerCurrent(context) && (!canApply || canApply());
         const added: Media[] = [];
         for (const file of Array.from(files)) {
+            if (!permitted()) break;
             try {
                 const item = toUiMedia(await uploadMediaApi(file));
+                if (!permitted()) break;
+                removedMediaIds.current.delete(item.id);
                 added.push(item);
+                mediaRevision.current += 1;
                 setData(current => ({ ...current, media: [...current.media.filter(media => media.id !== item.id), item] }));
             } catch (error) {
-                toast.error(`${file.name}: ${errorMessage(error, 'не удалось загрузить файл')}`);
+                // The controlled Library editor owns its token-scoped messages.
+                if (permitted() && (canNotify ? canNotify() : !canApply)) toast.error(`${file.name}: ${errorMessage(error, 'не удалось загрузить файл')}`);
             }
         }
-        if (added.length) toast.success(`Добавлено файлов: ${added.length}`);
+        if (permitted() && added.length && (canNotify ? canNotify() : !canApply)) toast.success(`Добавлено файлов: ${added.length}`);
         return added;
+    };
+
+    const saveLibraryEditor = async (fields: LibraryEditorFields, expectedToken: string | null) => {
+        const submitted = libraryEditorRef.current, owner = libraryOwner.current, generation = libraryGeneration.current;
+        if (!libraryMounted.current || !owner || !submitted || submitted.token !== expectedToken || libraryOperation.current) return;
+        if (JSON.stringify(libraryEditorFields(fields)) !== JSON.stringify(libraryEditorFields(submitted.editor))) return;
+        const source = submitted.editor.id ? dataRef.current.libraryItems.find(item => item.id === submitted.editor.id) : null;
+        if (submitted.editor.id && !source) { setLibraryError('Исходная заготовка удалена. Сохранение недоступно.'); return; }
+        const title = submitted.editor.title.trim(), text = submitted.editor.text.trim();
+        if (!text && !submitted.editor.mediaIds.length) { setLibraryError('Добавь текст заготовки или медиа.'); return; }
+        if (title.length > 200 || text.length > 20000 || submitted.editor.mediaIds.length > 20) { setLibraryError('Максимум: 200 символов в названии, 20 000 в тексте и 20 файлов.'); return; }
+        const operation = {};
+        libraryOperation.current = operation; setLibraryBusy(true); setLibraryError(null);
+        const belongs = () => libraryMounted.current && libraryOwner.current === owner && libraryGeneration.current === generation && libraryEditorRef.current?.token === submitted.token;
+        try {
+            const saved = await saveLibraryItem({ title: title || null, text, mediaIds: [...submitted.editor.mediaIds],
+                ...(source ? { status: source.status === 'ARCHIVED' ? 'ARCHIVED' : 'READY' } : {}) }, submitted.editor.id);
+            if (!belongs()) return;
+            const current = libraryEditorRef.current!;
+            const storage = libraryRecoveryStorage();
+            const unchanged = JSON.stringify(current) === JSON.stringify(submitted);
+            const durable = unchanged && JSON.stringify(libraryPersisted.current) === JSON.stringify(current);
+            if (durable && storage && clearSavedLibraryEditorRecovery(storage, owner, submitted)) {
+                libraryEditorRef.current = null; libraryPersisted.current = null; setLibraryEditor(null); setLibraryNotice(null);
+            } else {
+                const next = { ...current, revision: current.revision + 1, editor: libraryEditorFields({ ...current.editor, id: saved.id }) };
+                libraryEditorRef.current = next; setLibraryEditor(next);
+                if (unchanged) setLibraryNotice(libraryStorageWarning);
+                persistLibraryEditor(next);
+            }
+        } catch (error) { if (belongs()) setLibraryError(errorMessage(error, 'Не удалось сохранить заготовку. Текст остался в редакторе.')); }
+        finally { if (libraryMounted.current && libraryOperation.current === operation) { libraryOperation.current = null; setLibraryBusy(false); } }
+    };
+    const uploadLibraryEditor = async (files: FileList | File[], expectedToken: string | null) => {
+        const current = libraryEditorRef.current, owner = libraryOwner.current, generation = libraryGeneration.current;
+        if (!libraryMounted.current || !owner || !current || current.token !== expectedToken || libraryOperation.current) return;
+        if (current.editor.mediaIds.length + files.length > 20) { setLibraryError('К заготовке можно добавить до 20 файлов.'); return; }
+        const operation = {};
+        libraryOperation.current = operation; setLibraryBusy(true); setLibraryError(null);
+        const activeOwner = () => libraryMounted.current && libraryOwner.current === owner && libraryGeneration.current === generation;
+        const belongs = () => activeOwner() && libraryEditorRef.current?.token === current.token;
+        try {
+            const added = await upload(files, activeOwner);
+            if (!belongs()) return;
+            const latest = libraryEditorRef.current!;
+            const next = { ...latest, revision: latest.revision + 1, editor: { ...latest.editor,
+                mediaIds: [...new Set([...latest.editor.mediaIds, ...added.map(item => item.id)])].slice(0, 20) } };
+            libraryEditorRef.current = next; setLibraryEditor(next); persistLibraryEditor(next);
+            if (added.length < files.length) setLibraryError('Часть файлов не удалось загрузить. Загруженные файлы добавлены к заготовке.');
+        } catch (error) { if (belongs()) setLibraryError(errorMessage(error, 'Не удалось загрузить медиа заготовки.')); }
+        finally { if (libraryMounted.current && libraryOperation.current === operation) { libraryOperation.current = null; setLibraryBusy(false); } }
+    };
+    const libraryToken = libraryEditor?.token ?? null;
+    const libraryControlOwner = libraryContext.owner, libraryControlGeneration = libraryContext.generation;
+    const libraryControlActive = () => libraryMounted.current && libraryOwner.current === libraryControlOwner && libraryGeneration.current === libraryControlGeneration;
+    const libraryEditorControl = {
+        editor: libraryEditor?.editor ?? null, busy: libraryBusy, error: libraryError, notice: libraryNotice,
+        blockedReason: libraryEditor?.editor.id && !data.libraryItems.some(item => item.id === libraryEditor.editor.id)
+            ? 'Исходная заготовка удалена. Сохранение недоступно.' : null,
+        onChange: (update: SetStateAction<LibraryEditorFields | null>) => { if (libraryControlActive()) changeLibraryEditor(update, libraryToken); },
+        onError: (message: string | null) => {
+            if (libraryControlActive() && (libraryEditorRef.current?.token ?? null) === libraryToken) setLibraryError(message);
+        },
+        save: (fields: LibraryEditorFields) => libraryControlActive() ? saveLibraryEditor(fields, libraryToken) : Promise.resolve(),
+        upload: (files: FileList | File[]) => libraryControlActive() ? uploadLibraryEditor(files, libraryToken) : Promise.resolve(),
+        cancel: () => { if (libraryControlActive()) cancelLibraryEditor(libraryToken); },
+    };
+
+    const uploadComposerEditor = async (files: FileList | File[], context: ComposerUploadContext): Promise<void> => {
+        if (!isCurrentComposerEditor(context) || !files.length) return;
+        const batch: ComposerUploadBatch = { id: crypto.randomUUID(), context };
+        // Register before awaiting: direct submit callbacks consult this map.
+        composerBatches.current.set(batch.id, batch);
+        publishComposerUploads();
+        try {
+            const added = await upload(files, () => isCurrentComposerOwner(context), () => isCurrentComposerEditor(context));
+            if (added.length && isCurrentComposerEditor(context)) {
+                // A whole batch appends on completion; its files retain input order.
+                const addedIds = added.filter(item => !removedMediaIds.current.has(item.id)).map(item => item.id);
+                setDraft(current => ({ ...current,
+                    mediaIds: [...new Set([...current.mediaIds, ...addedIds])] }));
+            }
+        } catch (error) {
+            if (isCurrentComposerEditor(context)) toast.error(errorMessage(error, 'Не удалось загрузить файлы.'));
+        } finally {
+            composerBatches.current.delete(batch.id);
+            if (isCurrentComposerOwner(context)) publishComposerUploads();
+        }
     };
 
     const details = data.posts.find(p => p.id === detailId);
     const publishNow = async(post:Post)=>{
-        if (saveLock.current) return;
+        if (!isOwnerCurrent(ownerContext)) return;
+        if (saveLock.current || hasPendingComposerUpload()) return;
         const blockedReason = editBlockedReasonFor(post);
         if (!creationPending && blockedReason) { toast.error(blockedReason); return; }
         const error = validatePost(post,'draft');
@@ -505,16 +774,18 @@ export default function PlannerApp() {
     };
 
     const retryCreation = async () => {
+        if (!isOwnerCurrent(ownerContext)) return;
+        if (hasPendingComposerUpload()) return;
         const storage = sessionRecoveryStorage();
-        if (!storage || !recoveryOwner.current) return;
+        if (!storage || !ownerLifetime.current?.id) return;
         try {
-            const pending = readPendingCreation(storage, recoveryOwner.current);
+            const pending = readPendingCreation(storage, ownerLifetime.current?.id);
             if (!pending) return;
             if (pending.origin === 'swipe-planner') {
                 if (saveLock.current) return;
                 saveLock.current = true; setSaveBusy(true);
-                try { await acknowledgeQueue(await retrySwipeApproval(storage, recoveryOwner.current)); }
-                finally { setCreationPending(!!readPendingCreation(storage, recoveryOwner.current)); saveLock.current = false; setSaveBusy(false); }
+                try { await acknowledgeQueue(await retrySwipeApproval(storage, ownerLifetime.current?.id)); }
+                finally { setCreationPending(!!readPendingCreation(storage, ownerLifetime.current?.id)); saveLock.current = false; setSaveBusy(false); }
                 return;
             }
             if (pending.intent === 'now') await publishNow(draftRef.current);
@@ -523,7 +794,24 @@ export default function PlannerApp() {
     };
 
     const editorBlockedReason = editBlockedReasonFor(draft);
-    const composer = { draft, setDraft, media: data.media, upload, save, publishNow, saving: saveBusy, accounts,
+    const setDraftForOwner: Dispatch<SetStateAction<Post>> = update => {
+        if (isOwnerCurrent(ownerContext)) setDraft(update);
+    };
+    const changePublishModeForOwner = (mode: EditorUiIntent['publishMode']) => {
+        if (isOwnerCurrent(ownerContext)) changePublishMode(mode);
+    };
+    const composerContext: ComposerUploadContext = {
+        ownerId: composerUploads.ownerId ?? '', token: editorKey, generation: composerUploads.generation,
+    };
+    const composer = { draft, setDraft: setDraftForOwner, publishMode: editorUi.publishMode, onPublishModeChange: changePublishModeForOwner, media: data.media, upload,
+        uploadControl: {
+            busy: composerUploads.batches.some(batch => batch.context.ownerId === composerContext.ownerId &&
+                batch.context.generation === composerContext.generation && batch.context.token === composerContext.token),
+            addFiles: (files: FileList | File[]) => uploadComposerEditor(files, composerContext),
+        },
+        save: (post: Post, status: Status) => { if (isCurrentComposerEditor(composerContext)) return save(post, status); },
+        publishNow: (post: Post) => { if (isCurrentComposerEditor(composerContext)) return publishNow(post); },
+        saving: saveBusy, accounts,
         editBlockedReason: editorBlockedReason, duplicatePost: () => duplicatePost(draftRef.current, true) };
 
     const updateAccount = async (id: string, enabled: boolean) => {
@@ -537,12 +825,15 @@ export default function PlannerApp() {
     };
 
     const updateName = async (name: string) => {
+        const context = ownerContext;
+        if (!isOwnerCurrent(context)) return;
         try {
             const saved = await saveProfileApi({ displayName: name });
+            if (!isOwnerCurrent(context)) return;
             setData(current => ({ ...current, name: saved.displayName }));
             toast.success('Имя сохранено');
         } catch (error) {
-            toast.error(errorMessage(error, 'Не удалось сохранить имя.'));
+            if (isOwnerCurrent(context)) toast.error(errorMessage(error, 'Не удалось сохранить имя.'));
         }
     };
 
@@ -557,6 +848,9 @@ export default function PlannerApp() {
                 setDetailId(null);
             } else {
                 await removeMediaApi(selected.id);
+                mediaRevision.current += 1;
+                // A pending batch may still hold this earlier successful upload.
+                removedMediaIds.current.add(selected.id);
                 setData(current => ({ ...current, media: current.media.filter(media => media.id !== selected.id) }));
                 setDraft(current => ({ ...current, mediaIds: current.mediaIds.filter(id => id !== selected.id) }));
             }
@@ -567,5 +861,5 @@ export default function PlannerApp() {
         }
     };
 
-    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && reviewing && <SwipePlanner items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => setReviewing(false)} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && <ContentLibrary startReview={() => setReviewing(true)} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
+    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy || composer.uploadControl.busy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && <Dashboard createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {view === 'content' && reviewing && <SwipePlanner items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => setReviewing(false)} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && <ContentLibrary editorControl={libraryEditorControl} startReview={() => setReviewing(true)} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics posts={data.posts}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
 }

@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { createPostSourceSchema, savePostInputSchema } from '../contracts/planner.ts';
 import type { ComposerPostInput } from '../planner.ts';
 import { canonicalCreationInput } from '../post-creation.ts';
-import { editorFields, editorFieldsSchema, type EditorFields, type RecoveryStorage } from './editor-recovery.ts';
+import { editorFields, editorFieldsSchema, optionalEditorUiSchema, type EditorFields, type EditorUiIntent, type RecoveryStorage } from './editor-recovery.ts';
 import { PlanlyApiError, savePost } from './planly-api.ts';
 
 const creationInputSchema = savePostInputSchema.and(createPostSourceSchema);
 const pendingSchema = z.object({ version: z.literal(1), key: z.string().uuid(),
-  input: creationInputSchema, editor: editorFieldsSchema,
+  input: creationInputSchema, editor: editorFieldsSchema, editorUi: optionalEditorUiSchema,
   intent: z.enum(['draft', 'scheduled', 'now']), editorToken: z.string().uuid(), activeEditorToken: z.string().uuid(),
   acknowledgedId: z.string().min(1).optional(), origin: z.enum(['composer', 'swipe-planner']).optional() });
 export type PendingCreation = z.infer<typeof pendingSchema>;
@@ -37,11 +37,12 @@ export function replacePendingEditor(storage: RecoveryStorage, ownerId: string, 
 
 // No submission occurs during hydration. The caller invokes this only for an explicit save/retry.
 export async function submitPendingCreation(storage: RecoveryStorage, ownerId: string, editorToken: string,
-  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent, options: { origin?: 'composer' | 'swipe-planner' } = {}) {
+  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent, options: { origin?: 'composer' | 'swipe-planner'; editorUi?: EditorUiIntent } = {}) {
   let pending = readPendingCreation(storage, ownerId);
   if (!pending) {
+    const editorUi = options.origin === 'swipe-planner' ? undefined : optionalEditorUiSchema.parse(options.editorUi);
     pending = { version: 1, key: crypto.randomUUID(), input: creationInputSchema.parse(input()),
-      editor: editorFields(editor), intent, editorToken, activeEditorToken: editorToken, ...(options.origin ? {origin:options.origin} : {}) };
+      editor: editorFields(editor), ...(editorUi ? { editorUi } : {}), intent, editorToken, activeEditorToken: editorToken, ...(options.origin ? {origin:options.origin} : {}) };
     // If persistence fails, never dispatch an unrepeatable creation request.
     writePendingCreation(storage, ownerId, pending);
   }
