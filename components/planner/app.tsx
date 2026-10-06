@@ -17,7 +17,7 @@ import { SwipePlanner } from './swipe-planner';
 import { submitSwipeApproval, retrySwipeApproval, type SwipeApproval } from '@/lib/client/swipe-planner';
 import { Settings, Analytics } from './settings';
 import { normalizePlannerView } from '@/lib/planner-navigation';
-import { clearSavedRecovery, editorFields, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields } from '@/lib/client/editor-recovery';
+import { clearSavedRecovery, editorFields, initialEditorUi, readRecovery, restoreRecovery, sessionRecoveryStorage, shouldReplaceEditor, writeRecovery, type EditorFields, type EditorUiIntent } from '@/lib/client/editor-recovery';
 import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
 import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type ComposerPostInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
@@ -78,6 +78,8 @@ export default function PlannerApp() {
     const [reviewing, setReviewing] = useState(false);
     const [draft, setDraftState] = useState<Post>(blankPost);
     const draftRef = useRef(draft);
+    const [editorUi, setEditorUiState] = useState<EditorUiIntent>(() => initialEditorUi(draft));
+    const editorUiRef = useRef(editorUi);
     const editorRevision = useRef(0);
     const [initialEditorToken] = useState(() => crypto.randomUUID());
     const editorToken = useRef(initialEditorToken);
@@ -85,6 +87,7 @@ export default function PlannerApp() {
     const [creationPending, setCreationPending] = useState(false);
     const recoveryOwner = useRef<string | null>(null);
     const persistedEditor = useRef<EditorFields | null>(null);
+    const persistedEditorUi = useRef<EditorUiIntent | null>(null);
     const recoveryErrorShown = useRef(false);
     const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
     const [detailId, setDetailId] = useState<string | null>(null);
@@ -104,6 +107,33 @@ export default function PlannerApp() {
         toast.error('Восстановление после обновления страницы недоступно. Не закрывай вкладку до подтверждения сохранения.');
     }, []);
 
+    const assignEditorUi = useCallback((ui: EditorUiIntent) => {
+        editorUiRef.current = { ...ui };
+        setEditorUiState(editorUiRef.current);
+    }, []);
+    const persistEditor = useCallback((next: Post) => {
+        if (!recoveryOwner.current) return;
+        const storage = sessionRecoveryStorage();
+        if (!storage || !writeRecovery(storage, recoveryOwner.current, next, editorUiRef.current)) {
+            // An older successful write cannot prove the current pair durable.
+            persistedEditor.current = null;
+            persistedEditorUi.current = null;
+            warnRecoveryUnavailable();
+        } else {
+            persistedEditor.current = editorFields(next);
+            persistedEditorUi.current = { ...editorUiRef.current };
+        }
+    }, [warnRecoveryUnavailable]);
+    const isCurrentEditorDurable = () => persistedEditor.current !== null &&
+        persistedEditorUi.current?.publishMode === editorUiRef.current.publishMode &&
+        JSON.stringify(persistedEditor.current) === JSON.stringify(editorFields(draftRef.current));
+    const changePublishMode = useCallback((publishMode: EditorUiIntent['publishMode']) => {
+        if ((publishMode !== 'now' && publishMode !== 'scheduled') || publishMode === editorUiRef.current.publishMode) return;
+        assignEditorUi({ publishMode });
+        editorRevision.current += 1;
+        persistEditor(draftRef.current);
+    }, [assignEditorUi, persistEditor]);
+
     // Persist outside React updater functions, which Strict Mode may run twice.
     const setDraft: Dispatch<SetStateAction<Post>> = useCallback(update => {
         const updated = typeof update === 'function' ? update(draftRef.current) : update;
@@ -111,20 +141,18 @@ export default function PlannerApp() {
         draftRef.current = next;
         editorRevision.current += 1;
         setDraftState(next);
-        if (!recoveryOwner.current) return;
-        const storage = sessionRecoveryStorage();
-        if (!storage || !writeRecovery(storage, recoveryOwner.current, next)) warnRecoveryUnavailable();
-        else persistedEditor.current = editorFields(next);
-    }, [warnRecoveryUnavailable]);
+        persistEditor(next);
+    }, [persistEditor]);
 
     const clearSubmittedEditor = (post: Post, revision: number): boolean => {
         if (editorRevision.current !== revision) return false;
         if (recoveryOwner.current) {
             const storage = sessionRecoveryStorage();
-            if (!storage || !clearSavedRecovery(storage, recoveryOwner.current, persistedEditor.current ?? post)) { warnRecoveryUnavailable(); return false; }
-            else persistedEditor.current = null;
+            if (!storage || !isCurrentEditorDurable() || !clearSavedRecovery(storage, recoveryOwner.current, persistedEditor.current ?? post, editorUiRef.current)) { warnRecoveryUnavailable(); return false; }
+            else { persistedEditor.current = null; persistedEditorUi.current = null; }
         }
         const next = blankPost();
+        assignEditorUi(initialEditorUi(next));
         draftRef.current = next;
         editorRevision.current += 1;
         updateEditorToken(crypto.randomUUID());
@@ -154,14 +182,13 @@ export default function PlannerApp() {
                 if (cached.unavailable) warnRecoveryUnavailable();
                 else if (cached.invalid) toast.error('Локальный черновик повреждён и не восстановлен.');
                 else if (cached.editor) {
-                    persistedEditor.current = cached.editor;
                     const restored = restoreRecovery(cached.editor, posts, media);
+                    assignEditorUi(cached.ui ?? initialEditorUi(restored.draft));
                     draftRef.current = restored.draft;
                     editorRevision.current += 1;
                     setDraftState(restored.draft);
                     setRecoveryNotice(`${restored.missingPost ? 'Исходный пост удалён. Текст восстановлен как новый черновик.' : 'Несохранённый пост восстановлен в этой вкладке.'}${restored.missingMediaCount ? ` Удалённые файлы исключены: ${restored.missingMediaCount}.` : ''}`);
-                    if (!writeRecovery(storage, snapshot.profile.id, restored.draft)) warnRecoveryUnavailable();
-                    else persistedEditor.current = editorFields(restored.draft);
+                    persistEditor(restored.draft);
                 }
                 try {
                     const pending = readPendingCreation(storage, snapshot.profile.id);
@@ -170,14 +197,16 @@ export default function PlannerApp() {
                         setCreationPending(true);
                         if (pending.origin !== 'swipe-planner' && !cached.editor && pending.editorToken === pending.activeEditorToken) {
                             const restored = restoreRecovery(pending.editor, posts, media);
+                            assignEditorUi(pending.editorUi ?? initialEditorUi(restored.draft));
                             draftRef.current = restored.draft;
                             editorRevision.current += 1;
                             setDraftState(restored.draft);
+                            persistEditor(restored.draft);
                         }
                         if (pending.origin !== 'swipe-planner' && pending.acknowledgedId && pending.editorToken === editorToken.current) {
                             const next = { ...draftRef.current, id: pending.acknowledgedId, sourceLibraryItemId: null };
                             draftRef.current = next; setDraftState(next);
-                            if (writeRecovery(storage, snapshot.profile.id, next)) persistedEditor.current = editorFields(next);
+                            persistEditor(next);
                         }
                         setRecoveryNotice('Предыдущее создание поста ещё не завершено в этой вкладке. Повтори сохранение, чтобы проверить его результат.');
                     }
@@ -193,7 +222,7 @@ export default function PlannerApp() {
             toast.error(errorMessage(error, 'Не удалось загрузить данные Planly.'));
         }).finally(() => { if (active) setReady(true); });
         return () => { active = false; };
-    }, [warnRecoveryUnavailable, updateEditorToken]);
+    }, [warnRecoveryUnavailable, updateEditorToken, assignEditorUi, persistEditor]);
 
     useEffect(() => {
         const sync = () => {
@@ -260,7 +289,7 @@ export default function PlannerApp() {
         if (post.id && !pending) return { saved: await savePostApi(input(), post.id), pending: null, belongsToEditor: true, updateError: undefined };
         if (!storage || !owner) throw new Error('Не удалось сохранить повторяемый запрос в этой вкладке. Новый пост не отправлен.');
         try {
-            const result = await submitPendingCreation(storage, owner, token, post, input, intent);
+            const result = await submitPendingCreation(storage, owner, token, post, input, intent, { editorUi: editorUiRef.current });
             setCreationPending(true);
             return result;
         } catch (error) {
@@ -283,9 +312,7 @@ export default function PlannerApp() {
         const storage = sessionRecoveryStorage();
         if (result.pending && storage && recoveryOwner.current) {
             // Persist the acknowledged ID before discarding the durable original request.
-            const differentEditor = !result.belongsToEditor || editorToken.current !== token;
-            const editorDurable = cleared || persistedEditor.current?.id === result.saved.id ||
-                (differentEditor && JSON.stringify(persistedEditor.current) === JSON.stringify(editorFields(draftRef.current)));
+            const editorDurable = cleared || isCurrentEditorDurable();
             if (editorDurable) {
                 try { completePendingCreation(storage, recoveryOwner.current, result.pending.key); setCreationPending(false); }
                 catch { warnRecoveryUnavailable(); }
@@ -347,6 +374,7 @@ export default function PlannerApp() {
         }
         if (!preservesCurrent && shouldReplaceEditor(draftRef.current, next, data.posts) && !window.confirm('В редакторе есть несохранённые изменения. Заменить их другим постом?')) return false;
         const nextToken = crypto.randomUUID();
+        assignEditorUi(initialEditorUi(next));
         updateEditorToken(nextToken);
         setDraft(next);
         setRecoveryNotice(null);
@@ -523,7 +551,7 @@ export default function PlannerApp() {
     };
 
     const editorBlockedReason = editBlockedReasonFor(draft);
-    const composer = { draft, setDraft, media: data.media, upload, save, publishNow, saving: saveBusy, accounts,
+    const composer = { draft, setDraft, publishMode: editorUi.publishMode, onPublishModeChange: changePublishMode, media: data.media, upload, save, publishNow, saving: saveBusy, accounts,
         editBlockedReason: editorBlockedReason, duplicatePost: () => duplicatePost(draftRef.current, true) };
 
     const updateAccount = async (id: string, enabled: boolean) => {
