@@ -1,6 +1,6 @@
 # CR06 Library creation intent — complete spec for review
 
-STATUS: SPEC_REVIEW_REQUIRED. Representation decision: direct Orchestrator `APPROVE_OPTION_B_WITH_EXPLICIT_TERMINAL_SEMANTICS`. This document proposes the complete technical contract; it is not implementation authorization. Runtime and implementation-plan work remain prohibited until their respective reviews.
+STATUS: SPEC_APPROVED_WITH_GUARDS / WRITING_PLAN_AUTHORIZED. Direct Orchestrator representation decision `APPROVE_OPTION_B_WITH_EXPLICIT_TERMINAL_SEMANTICS` and complete-spec decision `SPEC_APPROVED_WITH_GUARDS → WRITING_PLAN_AUTHORIZED` approve this contract with the canonical projection and visible unresolved-intent notice below. Runtime remains prohibited before prerequisite release and subsequent PLAN_REVIEW.
 
 ## Purpose and evidence
 
@@ -29,7 +29,7 @@ Each distinct explicit create intent gets a fresh UUID. It is not the editor tok
 
 Follow existing Post transport conventions: Library collection POST requires an `Idempotency-Key` UUID header; body remains `CreateLibraryItemInput`. Missing/malformed key yields422 before persistence. Actual Planly Library client creation requires the explicit durable key argument and never generates an ad hoc key inside the API helper. No browser create path may fall back to unkeyed POST. Internal CRUD helpers may keep their existing unkeyed signature for deliberately independent server/test creations; they are not exposed as an unprotected user POST.
 
-Server canonicalizes with existing Library validation: trimmed title/text, absent/null title encoded as null, empty title preserved if the current contract permits it, ordered mediaIds unchanged. Hash an explicit JSON projection `{title,text,mediaIds}`. Do not sort media, include lifecycle/provenance, accept a caller's hash or make content the identity. A replay is checked against the originally committed hash, not current mutable item content.
+After `createLibraryItemInputSchema.parse(raw)`, the hash projection is literally `{ title: parsed.title ?? null, text: parsed.text, mediaIds: parsed.mediaIds }`, in that property order. The existing schema performs trim. Undefined title becomes null; supplied empty title remains empty. Ordered mediaIds remain in their original order. No additional client/server normalization rules are introduced; the server alone computes SHA256 of JSON.stringify of this projection. Do not sort media, include lifecycle/provenance, accept a caller's hash or make content the identity. A replay is checked against the originally committed hash, not current mutable item content.
 
 ## Atomic create/replay and concurrency
 
@@ -85,13 +85,13 @@ If terminal410 arrives, preserve raw and do not attach deleted ID or create anyt
 
 ## Explicit raw Cancel, editor replacement and stale callbacks
 
-PR17 raw Cancel does not itself delete server items or silently discard a separate unresolved creation attempt. Replacement edits never overwrite an envelope bound to a different editor token. This spec proposes the following complete continuation policy for review:
+PR17 raw Cancel does not itself delete server items or silently discard a separate unresolved creation attempt. Replacement edits never overwrite an envelope bound to a different editor token. Orchestrator approves this continuation policy:
 
-- If another editor has replaced/cancelled the envelope's editor, the next explicit Save first resolves the old frozen create only. Same-owner result may update the Library list, but its item ID is not attached to the replacement editor. The replacement raw work stays unsaved.
+- A replacement editor may open and accept edits while an owner-scoped notice visibly explains that the previous creation still needs to be checked. If another editor has replaced/cancelled the envelope's editor, the next explicit Save first resolves the old frozen create only. Same-owner result may update the Library list, but its item ID is not attached to the replacement editor. The replacement raw work stays unsaved.
 - After exact durable cleanup of that resolved old attempt, return with a clear recovery notice; a subsequent separate Save creates the replacement's independent new intent/key. A terminal deleted outcome follows the same no-create-in-this-call rule.
 - A response from an obsolete operation cannot clear replacement raw, delete a newer envelope, unlock another operation or apply messages in a different lifetime. Ordinary successful acknowledgement/new editor uses a fresh token and key; captured first-intent callbacks cannot silently create another intent after cleanup. Admission includes the rendered editor/attempt generation and current operation identity.
 
-This avoids permanent blocking after raw Cancel, hidden ID transfer and accidental overwrite of an unknown attempt. It is an explicit spec-review proposal beyond the representation decision; no runtime choice is made before that review.
+This avoids permanent blocking after raw Cancel, hidden ID transfer and accidental overwrite of an unknown attempt. CREATED and DELETED both resolve only the old intent in that click; the notice must make the separate subsequent Save understandable.
 
 ## Owner isolation, PR17 and CR11
 
@@ -101,7 +101,7 @@ Owner A→B invalidates A before applying B, preserves durable A keys, and B rea
 
 ## Delivery, migration and rollback safety
 
-Current PR20 stays diagnostic/spec-only on main; do not copy frozen PR17/PR19 runtime into it. The proposal is one integrated CR06 runtime task on actual fresh main after Owner-approved prerequisite release through PR17 and CR11/#19 integration. Mandatory keyed user POST must be deployed with its durable client, never as a server-only contract break against the current client. PR18 is separately preserved; run its existing compatibility where shared App changes overlap, without assuming it merged or extending Composer scope.
+Current PR20 stays diagnostic/spec/plan-only on main; do not copy frozen PR17/PR19 runtime into it. One integrated CR06 runtime task requires actual fresh main after Owner-approved prerequisite release through PR17 and CR11/#19 integration. Execution precondition: PR12–17 merged and verified → CR11/#19 rebased, exact-head nativeCI/Docker GREEN and merged → fetch fresh main → re-inspect actual Library/App/API/schema paths → confirm spec assumptions still hold → execute only after PLAN_REVIEW. A materially changed contract is `PLAN_STALE / STOP`. Before prerequisites, only plan/test design/read-only inspection/disposable compatibility probes without product runtime commits are allowed. Mandatory keyed user POST must be deployed with its durable client, never as a server-only contract break against the current client. PR18 is separately preserved; run its existing compatibility where shared App changes overlap, without assuming it merged or extending Composer scope.
 
 Add one table/enum/index migration through existing Drizzle generation/journal workflow. It is additive: no destructive backfill, no changes to existing Library/Post rows, no provider/env/paid resources. Pre-existing items remain ordinary unkeyed items; fresh protected creates populate attempts. Apply migrations only in disposable native/Docker verification until authorized production delivery.
 
@@ -122,4 +122,4 @@ Archive the exact original main-based diagnostic observations as historical exec
 
 One problem only: Library creation intent and its acknowledgement. Exclude Post pending/idempotency rewrite, scheduler/connector/provider changes, CR07/CR08/GAP01, new networks/AI/analytics, automatic retries/background resolution, TTL/cleanup jobs, content deduplication, unrelated UI/state resets and speculative security layers.
 
-Next direct gate: `SPEC_REVIEW / CR06`. Request approval of this complete contract, especially replacement/Cancel acknowledgement policy and dependency-bound atomic client/server delivery. Written implementation plan and runtime remain prohibited until later approvals.
+Next direct gate: `PLAN_REVIEW / CR06 LIBRARY CREATE IDEMPOTENCY`. Written plan is authorized; runtime implementation, production migration, merge and deploy are not authorized. Delivery remains prerequisite-bound.

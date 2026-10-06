@@ -1,6 +1,6 @@
 # CR06 Library creation ambiguity — diagnostic checkpoint
 
-STATUS: ROOT_CAUSE_PROVEN_SPEC_REVIEW_REQUIRED. Exact diagnostic/setup head verified; subsequent spec/evidence changes are docs-only. No runtime implementation or readiness claim.
+STATUS: ROOT_CAUSE_PROVEN_PLAN_REVIEW_REQUIRED / EXECUTION_BLOCKED_ON_PREREQUISITE_RELEASE. Exact diagnostic/setup/spec heads verified; subsequent plan/evidence changes are docs-only. No runtime implementation or readiness claim.
 
 Authority: `barsikdan-hue/Planly`; fresh main `95f53b7d18e656e0f8ceff5002b4c42af3d12251`; branch `codex/customer-ready-library-idempotency`; worktree `work/Planly-library-idempotency`. Direct Orchestrator `CR06_DIAGNOSTIC_APPROVED` permits diagnostics/spec only. PR12–19 retain frozen heads, bases and gates. No Owner release approval observed; no merge/deploy/provider sends.
 
@@ -61,4 +61,8 @@ Completed direct architecture decision: `APPROVE_OPTION_B_WITH_EXPLICIT_TERMINAL
 
 Fresh exact diagnostic/setup head `47334055ee49a55e5cae278ac62411dc65c8980a`: [CI37414483040](https://github.com/barsikdan-hue/Planly/actions/runs/37414483040), job112109949733,454total/452PASS/2same semanticFAIL/0skip,446baseline+6controlsPASS. Drift/migrations/type/lintPASS; standardCIbuildSKIPPED. [Self-host37414483079](https://github.com/barsikdan-hue/Planly/actions/runs/37414483079), job112109949937, completedSUCCESS for required build/HTTP/private-worker/persistence/Redis-recovery/package steps; liveSKIPPED. New written spec/evidence commits do not alter the tested diagnostic blob or runtime; their workflows are tracked separately, never inferredPASS.
 
-Next: direct `SPEC_REVIEW / CR06` of complete `docs/superpowers/specs/2026-10-06-library-create-idempotency-design.md`. Its rawCancel/replacement continuation and atomic fresh-main client/server delivery are explicit review proposals. Release gate remains Owner approval; PR12–19 unchanged. No runtime fix or implementation plan before subsequent review.
+Completed direct SPEC_REVIEW: `SPEC_APPROVED_WITH_GUARDS → WRITING_PLAN_AUTHORIZED`. Mandatory guards incorporated: literal parsed canonical hash projection, and visible owner-scoped unresolved-attempt notice after Cancel/replacement. Runtime execution explicitly requires actual verified PR12–17 plus merged verified CR11/#19, followed by fresh-main reinspection; no synthetic future baseline. Written plan `docs/superpowers/plans/2026-10-06-library-create-idempotency.md` awaits direct PLAN_REVIEW.
+
+Exact docs-only spec head `6e715983c3595a1e2ea8d632a803180c9a75898f`: nativeCI37415492425/job112113074874 again454total/452PASS/2same declaredsemanticFAIL/0skip; drift/migrations/types/lintPASS and standardBuildSKIPPED. Self-host37415492382 completedSUCCESS; liveSKIPPED. Diagnostic/runtime blobs unchanged.
+
+Next: direct `PLAN_REVIEW / CR06 LIBRARY CREATE IDEMPOTENCY`. Release gate remains Owner approval; PR12–19 unchanged. No runtime fix before reviewed plan AND prerequisite release.
