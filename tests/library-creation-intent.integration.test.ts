@@ -17,6 +17,15 @@ const create = (who:string, body:CreateLibraryItemInput, key:string) => service.
   ? service.createLibraryItemForIntent(who, body, key) : library.createLibraryItem(who, body);
 const count = async () => (await getDb().select().from(libraryItems).where(eq(libraryItems.userId, owner))).length;
 const attempts = async () => (await getDb().execute(sql`select * from library_creation_attempts where user_id=${owner}`)).rows;
+async function blockedOwners(count:number) {
+  const end=Date.now()+5000;
+  while(Date.now()<end) {
+    const rows=(await getDb().execute(sql`select count(*)::int as n from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%"users"%'`)).rows;
+    if(Number(rows[0].n)>=count) return;
+    await new Promise(resolve=>setTimeout(resolve,10));
+  }
+  assert.fail(`Expected ${count} requests waiting on actual owner lock`);
+}
 beforeEach(async () => {
   const db=getDb(); await db.delete(users);
   await db.insert(users).values([{id:owner,email:'intent@example.test',displayName:'A'}, {id:other,email:'intent-other@example.test',displayName:'B'}]);
@@ -35,7 +44,8 @@ test('native owner lock barrier converges three same-key requests, distinct keys
   const barrier=getDb().transaction(async tx=>{await tx.select().from(users).where(eq(users.id,owner)).for('update');locked();await gate;});
   await entered;
   const pending=[create(owner,input,key),create(owner,input,key),create(owner,input,key)];
-  release(); await barrier; const results=await Promise.all(pending);
+  try { await blockedOwners(3); } finally { release(); }
+  await barrier; const results=await Promise.all(pending);
   assert.equal(await count(),1); assert.equal(new Set(results.map(value=>value.id)).size,1);
   await create(owner,input,randomUUID()); assert.equal(await count(),2);
 });
@@ -74,12 +84,32 @@ test('delete retains terminal result after pool restart, changed deleted body co
   await assert.rejects(()=>create(owner,{...input,text:'Changed'},key),{name:'LibraryCreationConflictError'});
   assert.equal(await count(),0); assert.equal((await attempts())[0].state,'DELETED');
 });
+test('missing mapped item is terminal fail-closed even if history still says CREATED', async () => {
+  const key=randomUUID(), first=await create(owner,input,key);
+  await getDb().delete(libraryItems).where(eq(libraryItems.id,first.id));
+  await assert.rejects(()=>create(owner,input,key),{name:'LibraryCreationDeletedError'});
+  assert.equal(await count(),0); assert.equal((await attempts()).length,1);
+});
 test('foreign/missing and legacy deletes preserve owned intent history', async () => {
   const key=randomUUID(), first=await create(owner,input,key);
   await assert.rejects(()=>library.deleteLibraryItem(other,first.id),/not found/i);
   await assert.rejects(()=>library.deleteLibraryItem(owner,'missing'),/not found/i);
   const legacy=await library.createLibraryItem(owner,{text:'Legacy',mediaIds:[]}); await library.deleteLibraryItem(owner,legacy.id);
   assert.equal((await create(owner,input,key)).id,first.id); assert.equal((await attempts())[0].state,'CREATED');
+});
+for(const replayFirst of [true,false]) test(`native queued owner-lock order ${replayFirst?'replay then delete':'delete then replay'} cannot resurrect`, async () => {
+  const key=randomUUID(), first=await create(owner,input,key); let release!:()=>void, entered!:()=>void;
+  const ready=new Promise<void>(resolve=>{entered=resolve;}), gate=new Promise<void>(resolve=>{release=resolve;});
+  const barrier=getDb().transaction(async tx=>{await tx.select().from(users).where(eq(users.id,owner)).for('update');entered();await gate;});
+  await ready;
+  const replay=()=>create(owner,input,key).then(value=>({value,error:null}),error=>({value:null,error}));
+  const deletion=()=>library.deleteLibraryItem(owner,first.id);
+  const earlier=replayFirst?replay():deletion(); let later;
+  try { await blockedOwners(1); later=replayFirst?deletion():replay(); await blockedOwners(2); } finally { release(); }
+  await barrier; const results=await Promise.all([earlier,later]);
+  const outcome=results[replayFirst?0:1] as {value:LibraryItemDto|null;error:Error|null};
+  if(replayFirst) assert.equal(outcome.value?.id,first.id); else assert.equal(outcome.error?.name,'LibraryCreationDeletedError');
+  assert.equal(await count(),0); assert.equal((await attempts())[0].state,'DELETED');
 });
 test('test-only transaction constraint rolls back item/media/mapping together', async () => {
   const db=getDb();

@@ -1,22 +1,24 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
-import { libraryItemMedia, libraryItems, mediaAssets, posts } from '../../db/schema.ts';
+import { libraryCreationAttempts, libraryItemMedia, libraryItems, mediaAssets, posts } from '../../db/schema.ts';
 import {
   createLibraryItemInputSchema,
+  canonicalLibraryCreateInput,
+  libraryCreationKeySchema,
   archiveLibraryItemInputSchema,
   updateLibraryItemInputSchema,
   type CreateLibraryItemInput,
   type LibraryItemDto,
   type UpdateLibraryItemInput,
 } from '../contracts/library.ts';
-import { LibrarySourceStaleError } from './planner-slots.ts';
+import { LibrarySourceStaleError, lockOwnerSchedule } from './planner-slots.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
+import { LibraryCreationConflictError, LibraryCreationDeletedError, libraryCreationInputHash } from './library-creation.ts';
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
-async function readOwnedLibraryItem(userId: string, id: string): Promise<LibraryItemDto> {
-  const db = getDb();
+async function readOwnedLibraryItem(userId: string, id: string, db: ReturnType<typeof getDb> | Transaction = getDb()): Promise<LibraryItemDto> {
   const [item] = await db.select().from(libraryItems)
     .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1);
   if (!item) throw new Error('Library item not found');
@@ -68,6 +70,34 @@ export async function createLibraryItem(userId: string, raw: CreateLibraryItemIn
   return readOwnedLibraryItem(userId, id);
 }
 
+export async function createLibraryItemForIntent(userId: string, raw: CreateLibraryItemInput, creationKey: string): Promise<LibraryItemDto> {
+  const key = libraryCreationKeySchema.parse(creationKey);
+  const input = canonicalLibraryCreateInput(raw), inputHash = libraryCreationInputHash(input);
+  return getDb().transaction(async tx => {
+    await lockOwnerSchedule(tx, userId);
+    const [attempt] = await tx.select().from(libraryCreationAttempts).where(and(
+      eq(libraryCreationAttempts.userId, userId), eq(libraryCreationAttempts.creationKey, key),
+    )).limit(1).for('update');
+    if (attempt) {
+      if (attempt.inputHash !== inputHash) throw new LibraryCreationConflictError();
+      if (attempt.state === 'DELETED') throw new LibraryCreationDeletedError();
+      const [item] = await tx.select({ id: libraryItems.id }).from(libraryItems).where(and(
+        eq(libraryItems.userId, userId), eq(libraryItems.id, attempt.itemId),
+      )).limit(1).for('update');
+      if (!item) throw new LibraryCreationDeletedError();
+      return readOwnedLibraryItem(userId, item.id, tx);
+    }
+    await validateMedia(tx, userId, input.mediaIds);
+    const id = randomUUID(), now = new Date();
+    await tx.insert(libraryItems).values({ id, userId, title: input.title, bodyText: input.text,
+      status: 'READY', createdAt: now, updatedAt: now });
+    if (input.mediaIds.length) await tx.insert(libraryItemMedia).values(input.mediaIds.map((mediaId, position) => ({ libraryItemId: id, mediaId, position })));
+    await tx.insert(libraryCreationAttempts).values({ userId, creationKey: key, inputHash, itemId: id,
+      state: 'CREATED', createdAt: now, updatedAt: now });
+    return readOwnedLibraryItem(userId, id, tx);
+  });
+}
+
 export async function updateLibraryItem(userId: string, id: string, raw: UpdateLibraryItemInput): Promise<LibraryItemDto> {
   const input = updateLibraryItemInputSchema.parse(raw);
   await getDb().transaction(async tx => {
@@ -94,9 +124,17 @@ export async function updateLibraryItem(userId: string, id: string, raw: UpdateL
 
 export async function deleteLibraryItem(userId: string, id: string): Promise<void> {
   await getDb().transaction(async tx => {
+    await lockOwnerSchedule(tx, userId);
+    await tx.select().from(libraryCreationAttempts).where(and(
+      eq(libraryCreationAttempts.userId, userId), eq(libraryCreationAttempts.itemId, id),
+    )).for('update');
     const [owned] = await tx.select({ id: libraryItems.id }).from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
     if (!owned) throw new Error('Library item not found');
+    await tx.update(libraryCreationAttempts).set({ state: 'DELETED', updatedAt: new Date() }).where(and(
+      eq(libraryCreationAttempts.userId, userId), eq(libraryCreationAttempts.itemId, id),
+      eq(libraryCreationAttempts.state, 'CREATED'),
+    ));
     await tx.delete(libraryItems).where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));
   });
 }
