@@ -73,7 +73,7 @@ test('Library CRUD uses collection GET/POST and encoded item PATCH/DELETE', asyn
     return init?.method === 'DELETE' ? new Response(null, { status:204 }) : Response.json(init ? item : [item]);
   });
   assert.deepEqual(await api.loadLibraryItems(), [item]);
-  assert.deepEqual(await api.createLibraryItem({ title: null, text: 'Prepared', mediaIds: [] }), item);
+  assert.deepEqual(await api.createLibraryItem({ title: null, text: 'Prepared', mediaIds: [] }, 'c0600000-0000-4000-8000-000000000001'), item);
   await api.updateLibraryItem(item.id, { title: 'Edited', text: 'Prepared', mediaIds: [], status: 'ARCHIVED' });
   assert.equal(await api.removeLibraryItem(item.id), undefined);
   assert.deepEqual(calls, [

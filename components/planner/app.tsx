@@ -22,6 +22,8 @@ import { libraryRecoveryStorage, libraryEditorFields, readLibraryEditorRecovery,
     clearSavedLibraryEditorRecovery, discardLibraryEditorRecovery, restoreLibraryEditorRecovery,
     type LibraryEditorFields, type LibraryEditorSnapshot } from '@/lib/client/library-editor-recovery';
 import { completePendingCreation, readPendingCreation, submitPendingCreation, type CreationIntent } from '@/lib/client/pending-creation';
+import { readLibraryCreationAttempt, writeLibraryCreationAttempt, clearLibraryCreationAttempt, type LibraryCreationAttempt } from '@/lib/client/library-creation-attempt';
+import { canonicalLibraryCreateInput } from '@/lib/contracts/library';
 import { SocialIcon, Poster, StatusBadge, Action, dateLabel } from './common';
 import { blankPost, validatePost, movePost, networkNames, fromServerPost, toSavePostInput, toPublishNowInput, hasPendingPublications, type ComposerPostInput, type Post, type Media, type Network, type Status } from '@/lib/planner';
 import type { SocialAccountDto } from '@/lib/contracts/planner';
@@ -125,6 +127,9 @@ export default function PlannerApp() {
     const [libraryBusy, setLibraryBusy] = useState(false);
     const [libraryError, setLibraryError] = useState<string | null>(null);
     const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
+    const libraryAttemptGeneration = useRef<object>({});
+    const [libraryCreationNotice, setLibraryCreationNotice] = useState<string | null>(null);
+    const unresolvedLibraryNotice = 'Результат предыдущего создания заготовки ещё не подтверждён. Сохранение сначала проверит его; новая заготовка сохранится отдельным следующим нажатием.';
     const libraryStorageWarning = 'Восстановление заготовки после обновления страницы недоступно. Не закрывай вкладку до подтверждения сохранения.';
 
     useEffect(() => {
@@ -133,7 +138,9 @@ export default function PlannerApp() {
     }, []);
     const persistLibraryEditor = useCallback((snapshot: LibraryEditorSnapshot): boolean => {
         const storage = libraryRecoveryStorage();
-        const durable = !!storage && !!libraryOwner.current && writeLibraryEditorRecovery(storage, libraryOwner.current, snapshot);
+        const owner = libraryOwner.current;
+        const durable = !!storage && !!owner && writeLibraryEditorRecovery(storage, owner, snapshot) &&
+            JSON.stringify(readLibraryEditorRecovery(storage, owner).snapshot) === JSON.stringify(snapshot) && libraryEditorRef.current === snapshot;
         libraryPersisted.current = durable ? snapshot : null;
         if (!durable) setLibraryNotice(libraryStorageWarning);
         return durable;
@@ -141,11 +148,15 @@ export default function PlannerApp() {
     const bindLibraryOwner = useCallback((owner: string, items: LibraryItemDto[], media: Media[]) => {
         if (libraryOwner.current === owner) { setLibraryContext({ owner, generation: libraryGeneration.current }); return; }
         libraryOwner.current = owner; libraryGeneration.current = {};
+        libraryAttemptGeneration.current = {}; setLibraryCreationNotice(null);
         setLibraryContext({ owner, generation: libraryGeneration.current });
         libraryOperation.current = null; setLibraryBusy(false); setLibraryError(null); setLibraryNotice(null);
         libraryPersisted.current = null; libraryEditorRef.current = null; setLibraryEditor(null);
         const storage = libraryRecoveryStorage();
         if (!storage) { setLibraryNotice(libraryStorageWarning); return; }
+        const creation = readLibraryCreationAttempt(storage, owner);
+        if (creation.attempt) setLibraryCreationNotice(unresolvedLibraryNotice);
+        if (creation.invalid || creation.unavailable) setLibraryCreationNotice('Не удалось прочитать предыдущее создание заготовки. Новое создание недоступно; локальный текст сохранён.');
         const cached = readLibraryEditorRecovery(storage, owner);
         if (cached.unavailable) { setLibraryNotice(libraryStorageWarning); return; }
         if (cached.invalid) { setLibraryError('Локальная заготовка повреждена и не восстановлена.'); return; }
@@ -541,11 +552,14 @@ export default function PlannerApp() {
         replaceEditor({ ...blankPost(), text: source.text, mediaIds: [...source.mediaIds], sourceLibraryItemId: source.id });
     };
 
-    const saveLibraryItem = async (input: CreateLibraryItemInput & { status?: 'READY' | 'ARCHIVED' }, id?: string) => {
+    const saveLibraryItem = async (input: CreateLibraryItemInput & { status?: 'READY' | 'ARCHIVED' }, id?: string, creationKey?: string, canApply?: () => boolean) => {
         const owner = libraryOwner.current, generation = libraryGeneration.current;
-        const saved = id ? await updateLibraryItem(id, { ...input, status: input.status ?? 'READY' }) : await createLibraryItem(input);
+        const context = ownerContext;
+        if (!isOwnerCurrent(context)) throw new Error('Редактор больше не активен.');
+        if (!id && !creationKey) throw new Error('Новую заготовку нужно сохранить через редактор с подтверждённым локальным созданием.');
+        const saved = id ? await updateLibraryItem(id, { ...input, status: input.status ?? 'READY' }) : await createLibraryItem(input, creationKey!);
         if (!saved || typeof saved.id !== 'string' || !saved.id.trim()) throw new Error('Сервер не подтвердил сохранение заготовки.');
-        if (!libraryMounted.current || libraryOwner.current !== owner || libraryGeneration.current !== generation) return saved;
+        if (!isOwnerCurrent(context) || !libraryMounted.current || libraryOwner.current !== owner || libraryGeneration.current !== generation || canApply && !canApply()) return saved;
         libraryRevision.current += 1;
         setData(current => ({ ...current, libraryItems: [saved, ...current.libraryItems.filter(item => item.id !== saved.id)] }));
         return saved;
@@ -659,35 +673,93 @@ export default function PlannerApp() {
         return added;
     };
 
-    const saveLibraryEditor = async (fields: LibraryEditorFields, expectedToken: string | null) => {
+    const saveLibraryEditor = async (fields: LibraryEditorFields, expectedToken: string | null, expectedAttemptGeneration: object) => {
         const submitted = libraryEditorRef.current, owner = libraryOwner.current, generation = libraryGeneration.current;
-        if (!libraryMounted.current || !owner || !submitted || submitted.token !== expectedToken || libraryOperation.current) return;
+        const context = ownerContext;
+        if (!isOwnerCurrent(context) || !libraryMounted.current || !owner || !submitted || submitted.token !== expectedToken || libraryOperation.current || libraryAttemptGeneration.current !== expectedAttemptGeneration) return;
         if (JSON.stringify(libraryEditorFields(fields)) !== JSON.stringify(libraryEditorFields(submitted.editor))) return;
+        const storage = libraryRecoveryStorage();
+        const cached = storage ? readLibraryCreationAttempt(storage, owner) : { attempt: null, invalid: false, unavailable: true };
+        // A known unrelated item can still be PATCHed when creation storage is unavailable.
+        let attempt: LibraryCreationAttempt | null = cached.attempt && (!submitted.editor.id || cached.attempt.editorToken === submitted.token) ? cached.attempt : null;
+        if (!submitted.editor.id && (cached.invalid || cached.unavailable)) {
+            setLibraryError('Не удалось подтвердить локальное создание заготовки. Новое создание не отправлено.'); return;
+        }
         const source = submitted.editor.id ? dataRef.current.libraryItems.find(item => item.id === submitted.editor.id) : null;
-        if (submitted.editor.id && !source) { setLibraryError('Исходная заготовка удалена. Сохранение недоступно.'); return; }
+        if (!attempt && submitted.editor.id && !source) { setLibraryError('Исходная заготовка удалена. Сохранение недоступно.'); return; }
         const title = submitted.editor.title.trim(), text = submitted.editor.text.trim();
-        if (!text && !submitted.editor.mediaIds.length) { setLibraryError('Добавь текст заготовки или медиа.'); return; }
-        if (title.length > 200 || text.length > 20000 || submitted.editor.mediaIds.length > 20) { setLibraryError('Максимум: 200 символов в названии, 20 000 в тексте и 20 файлов.'); return; }
+        if (!attempt && !text && !submitted.editor.mediaIds.length) { setLibraryError('Добавь текст заготовки или медиа.'); return; }
+        if (!attempt && (title.length > 200 || text.length > 20000 || submitted.editor.mediaIds.length > 20)) { setLibraryError('Максимум: 200 символов в названии, 20 000 в тексте и 20 файлов.'); return; }
+        if (!attempt && !submitted.editor.id) {
+            attempt = { version: 1, creationKey: crypto.randomUUID(), editorToken: submitted.token, editorRevision: submitted.revision,
+                input: { title: title || null, text, mediaIds: [...submitted.editor.mediaIds] } };
+            if (!storage || !writeLibraryCreationAttempt(storage, owner, attempt)) {
+                setLibraryError('Не удалось сохранить локальное создание заготовки. Запрос не отправлен; текст остался в редакторе.'); return;
+            }
+        }
+        if (attempt) setLibraryCreationNotice(unresolvedLibraryNotice);
         const operation = {};
         libraryOperation.current = operation; setLibraryBusy(true); setLibraryError(null);
-        const belongs = () => libraryMounted.current && libraryOwner.current === owner && libraryGeneration.current === generation && libraryEditorRef.current?.token === submitted.token;
+        const active = () => isOwnerCurrent(context) && libraryMounted.current && libraryOwner.current === owner && libraryGeneration.current === generation && libraryOperation.current === operation && libraryAttemptGeneration.current === expectedAttemptGeneration;
+        const belongs = () => active() && libraryEditorRef.current?.token === submitted.token;
+        const clearAttempt = (): boolean => {
+            if (!active() || !attempt || !storage || !clearLibraryCreationAttempt(storage, owner, attempt) || !active()) return false;
+            libraryAttemptGeneration.current = {}; setLibraryCreationNotice(null); return true;
+        };
+        const rawDurable = (snapshot: LibraryEditorSnapshot): boolean => !!storage &&
+            JSON.stringify(readLibraryEditorRecovery(storage, owner).snapshot) === JSON.stringify(snapshot) && libraryEditorRef.current === snapshot;
         try {
-            const saved = await saveLibraryItem({ title: title || null, text, mediaIds: [...submitted.editor.mediaIds],
-                ...(source ? { status: source.status === 'ARCHIVED' ? 'ARCHIVED' : 'READY' } : {}) }, submitted.editor.id);
+            const saved = attempt ? await saveLibraryItem(attempt.input, undefined, attempt.creationKey, active)
+                : await saveLibraryItem({ title: title || null, text, mediaIds: [...submitted.editor.mediaIds],
+                    ...(source ? { status: source.status === 'ARCHIVED' ? 'ARCHIVED' : 'READY' } : {}) }, submitted.editor.id, undefined, active);
             if (!belongs()) return;
             const current = libraryEditorRef.current!;
-            const storage = libraryRecoveryStorage();
+            // Cancel/replacement resolves only the old intent. Never attach its ID to the replacement.
+            if (attempt && current.token !== attempt.editorToken) {
+                if (rawDurable(current) && clearAttempt()) setLibraryNotice('Предыдущее создание проверено. Новая заготовка ещё не сохранена — нажми «Сохранить» отдельно.');
+                else setLibraryNotice(libraryStorageWarning);
+                return;
+            }
             const unchanged = JSON.stringify(current) === JSON.stringify(submitted);
-            const durable = unchanged && JSON.stringify(libraryPersisted.current) === JSON.stringify(current);
-            if (durable && storage && clearSavedLibraryEditorRecovery(storage, owner, submitted)) {
+            const originalRevision = !attempt || current.revision === attempt.editorRevision;
+            const dtoMatches = !attempt || JSON.stringify(canonicalLibraryCreateInput(saved)) === JSON.stringify(attempt.input);
+            const durable = unchanged && originalRevision && dtoMatches && rawDurable(current);
+            const cleared = durable && storage && clearSavedLibraryEditorRecovery(storage, owner, current);
+            const remaining = cleared && storage ? readLibraryEditorRecovery(storage, owner) : null;
+            if (remaining && !remaining.unavailable && !remaining.invalid && !remaining.snapshot && libraryEditorRef.current === current && active()) {
                 libraryEditorRef.current = null; libraryPersisted.current = null; setLibraryEditor(null); setLibraryNotice(null);
+                if (attempt && !clearAttempt()) {
+                    // Failed envelope cleanup must keep an explicit retry control, with a known ID.
+                    const next = { ...current, revision: current.revision + 1, editor: libraryEditorFields({ ...current.editor, id: saved.id }) };
+                    libraryEditorRef.current = next; setLibraryEditor(next); persistLibraryEditor(next); setLibraryNotice(libraryStorageWarning);
+                }
             } else {
-                const next = { ...current, revision: current.revision + 1, editor: libraryEditorFields({ ...current.editor, id: saved.id }) };
+                const latest = libraryEditorRef.current;
+                if (!latest || latest.token !== current.token || !active()) return;
+                const next = { ...latest, revision: latest.revision + 1, editor: libraryEditorFields({ ...latest.editor, id: saved.id }) };
                 libraryEditorRef.current = next; setLibraryEditor(next);
                 if (unchanged) setLibraryNotice(libraryStorageWarning);
-                persistLibraryEditor(next);
+                const persisted = persistLibraryEditor(next);
+                if (attempt && (durable || !persisted || !rawDurable(next) || !clearAttempt())) setLibraryNotice(libraryStorageWarning);
+                else if (attempt) setLibraryNotice('Результат создания подтверждён. Текущие изменения сохранены локально; отправь их отдельным нажатием «Сохранить».');
             }
-        } catch (error) { if (belongs()) setLibraryError(errorMessage(error, 'Не удалось сохранить заготовку. Текст остался в редакторе.')); }
+        } catch (error) {
+            if (!belongs()) return;
+            const code = error instanceof PlanlyApiError && error.body && typeof error.body === 'object' && 'code' in error.body ? error.body.code : null;
+            if (attempt && error instanceof PlanlyApiError && error.status === 410 && code === 'LIBRARY_CREATION_RESULT_DELETED') {
+                const current = libraryEditorRef.current!;
+                // The old ID may have been attached after a previous cleanup failure; remove only that editor's ID.
+                const next = current.token === attempt.editorToken && current.editor.id
+                    ? { ...current, revision: current.revision + 1, editor: libraryEditorFields({ title: current.editor.title, text: current.editor.text, mediaIds: current.editor.mediaIds }) } : current;
+                if (next !== current) { libraryEditorRef.current = next; setLibraryEditor(next); }
+                if (persistLibraryEditor(next) && rawDurable(next) && clearAttempt()) setLibraryNotice('Предыдущая заготовка была создана и затем удалена. Текст сохранён; новое создание возможно отдельным нажатием «Сохранить».');
+                else setLibraryNotice(libraryStorageWarning);
+            } else if (attempt && error instanceof PlanlyApiError && [400,404,422].includes(error.status)) {
+                // These route responses are definitively precommit. Correction gets its own explicit intent.
+                if (!clearAttempt()) setLibraryNotice(libraryStorageWarning);
+                setLibraryError(errorMessage(error, 'Заготовка не создана. Исправь данные и повтори сохранение.'));
+            } else setLibraryError(errorMessage(error, 'Не удалось сохранить заготовку. Текст остался в редакторе.'));
+        }
         finally { if (libraryMounted.current && libraryOperation.current === operation) { libraryOperation.current = null; setLibraryBusy(false); } }
     };
     const uploadLibraryEditor = async (files: FileList | File[], expectedToken: string | null) => {
@@ -710,17 +782,18 @@ export default function PlannerApp() {
         finally { if (libraryMounted.current && libraryOperation.current === operation) { libraryOperation.current = null; setLibraryBusy(false); } }
     };
     const libraryToken = libraryEditor?.token ?? null;
+    const renderedLibraryAttemptGeneration = libraryAttemptGeneration.current;
     const libraryControlOwner = libraryContext.owner, libraryControlGeneration = libraryContext.generation;
-    const libraryControlActive = () => libraryMounted.current && libraryOwner.current === libraryControlOwner && libraryGeneration.current === libraryControlGeneration;
+    const libraryControlActive = () => isOwnerCurrent(ownerContext) && libraryMounted.current && libraryOwner.current === libraryControlOwner && libraryGeneration.current === libraryControlGeneration;
     const libraryEditorControl = {
-        editor: libraryEditor?.editor ?? null, busy: libraryBusy, error: libraryError, notice: libraryNotice,
-        blockedReason: libraryEditor?.editor.id && !data.libraryItems.some(item => item.id === libraryEditor.editor.id)
+        editor: libraryEditor?.editor ?? null, busy: libraryBusy, error: libraryError, notice: [libraryCreationNotice, libraryNotice].filter(Boolean).join(' ') || null,
+        blockedReason: libraryEditor?.editor.id && libraryCreationNotice !== unresolvedLibraryNotice && !data.libraryItems.some(item => item.id === libraryEditor.editor.id)
             ? 'Исходная заготовка удалена. Сохранение недоступно.' : null,
         onChange: (update: SetStateAction<LibraryEditorFields | null>) => { if (libraryControlActive()) changeLibraryEditor(update, libraryToken); },
         onError: (message: string | null) => {
             if (libraryControlActive() && (libraryEditorRef.current?.token ?? null) === libraryToken) setLibraryError(message);
         },
-        save: (fields: LibraryEditorFields) => libraryControlActive() ? saveLibraryEditor(fields, libraryToken) : Promise.resolve(),
+        save: (fields: LibraryEditorFields) => libraryControlActive() ? saveLibraryEditor(fields, libraryToken, renderedLibraryAttemptGeneration) : Promise.resolve(),
         upload: (files: FileList | File[]) => libraryControlActive() ? uploadLibraryEditor(files, libraryToken) : Promise.resolve(),
         cancel: () => { if (libraryControlActive()) cancelLibraryEditor(libraryToken); },
     };

@@ -6,6 +6,7 @@ import type {
   UpdateProfileInput,
 } from '../contracts/planner.ts';
 import type { CreateLibraryItemInput, LibraryItemDto, UpdateLibraryItemInput } from '../contracts/library.ts';
+import { libraryCreationKeySchema } from '../contracts/library.ts';
 import type { ComposerPostInput } from '../planner.ts';
 import type { SlotQuery } from '../contracts/swipe-planner.ts';
 
@@ -93,8 +94,15 @@ export function archiveLibraryItem(id: string, expectedUpdatedAt: string): Promi
   return request(`/api/library-items/${encodeURIComponent(id)}`,jsonRequest('PATCH',{status:'ARCHIVED',expectedUpdatedAt}));
 }
 
-export function createLibraryItem(input: CreateLibraryItemInput): Promise<LibraryItemDto> {
-  return request('/api/library-items', jsonRequest('POST', input));
+export async function createLibraryItem(input: CreateLibraryItemInput, creationKey: string): Promise<LibraryItemDto> {
+  const key = libraryCreationKeySchema.parse(creationKey);
+  const init = jsonRequest('POST', input);
+  init.headers = { ...init.headers, 'idempotency-key': key };
+  const saved = await request<LibraryItemDto>('/api/library-items', init);
+  if (!saved || typeof saved.id !== 'string' || !saved.id.trim()) {
+    throw new PlanlyApiError('Сервер не подтвердил сохранение заготовки. Повтори сохранение для проверки результата.', 502);
+  }
+  return saved;
 }
 
 export function updateLibraryItem(id: string, input: UpdateLibraryItemInput): Promise<LibraryItemDto> {

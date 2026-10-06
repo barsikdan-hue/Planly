@@ -1,7 +1,7 @@
 // Actual App callbacks; HTTP commit/loss is modeled here, native API tests prove DB commit.
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { fixture, storage, cleanup, item, asset, deferred, libraryKey } from './helpers/library-editor-fixture.mjs';
+import { fixture, cleanup, item, deferred, libraryKey } from './helpers/library-editor-fixture.mjs';
 afterEach(cleanup);
 const attemptKey = owner => `planly:library-create:v1:${owner}`;
 const attempt = value => JSON.parse(value.cache.getItem(attemptKey(value.snapshot.profile.id)) ?? 'null');
@@ -97,9 +97,9 @@ test('Captured first-intent control after cleanup cannot dispatch another create
 });
 for (const reject of [false,true]) test(`First-A ${reject?'error':'success'} after A→B→A is quiet and preserves new A lifetime envelope`, async () => {
   const old = deferred(), newer = deferred(), value = fixture({scheduled:true,mutation:(_request,count)=>count===1?old.promise:newer.promise}); await open(value); const oldControl=value.control(); await save(value);
-  const frozen=attempt(value); value.snapshot.profile.id='B'; await value.poll(); await value.open(); await value.change('library-text','B raw'); assert.equal(attempt(value),null);
+  const frozen=attempt(value); assert.ok(frozen); value.snapshot.profile.id='B'; await value.poll(); await value.open(); await value.change('library-text','B raw'); assert.equal(attempt(value),null);
   value.snapshot.profile.id='owner'; await value.poll(); const before=value.cached(); await oldControl.save({...oldControl.editor}); await save(value);
-  reject?old.reject(Error('stale')):old.resolve(Response.json({...item('old'),title:null,text:'Original'})); await value.settle();
+  if (reject) old.reject(Error('stale')); else old.resolve(Response.json({...item('old'),title:null,text:'Original'})); await value.settle();
   assert.deepEqual(value.cached(),before); assert.deepEqual(attempt(value),frozen); assert.equal(value.control().busy,true); assert.equal(value.control().error,null); assert.equal(value.props().items.some(row=>row.id==='old'),false);
   newer.resolve(Response.json({...item('new'),title:null,text:'Original'})); await value.settle(); assert.equal(value.requests.length,2);
 });
@@ -109,9 +109,9 @@ test('Silent owner poll and malformed acknowledgement retain identity without au
 });
 test('New raw interleaved with acknowledgement storage write survives; stale raw never permits cleanup', async () => {
   const pending=deferred(),value=fixture({mutation:()=>pending.promise}); await open(value); await save(value);
-  value.cache.onWrite=(key)=>{ if(key!==libraryKey('owner'))return;value.cache.onWrite=null;value.control().onChange(current=>({...current,text:'Interleaved'})); };
   // Force known-ID persistence by advancing the raw revision before the reply.
   value.control().onChange(current=>({...current,text:'New'})); await value.settle();
+  value.cache.onWrite=(key)=>{ if(key!==libraryKey('owner'))return;value.cache.onWrite=null;value.control().onChange(current=>({...current,text:'Interleaved'})); };
   pending.resolve(Response.json({...item('ack'),title:null,text:'Original'}));await value.settle();
   assert.equal(value.control().editor.text,'Interleaved');assert.equal(value.cached().editor.text,'Interleaved');assert.equal(value.control().editor.id,'ack');assert.ok(attempt(value));
 });
