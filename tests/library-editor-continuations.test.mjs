@@ -51,7 +51,7 @@ test('Deferred successful Save survives child remount, holds parent lock, clears
   await value.navigate('calendar'); await value.navigate('content');
   assert.equal(value.button('Сохранить')?.props.disabled, true, 'remount must retain operation lock');
   value.button('Сохранить').props.onClick(); staleSave(); await value.settle(); assert.equal(value.requests.length, 1);
-  await value.navigate('calendar'); pending.resolve(Response.json(item('created'))); await value.settle(); await value.navigate('content');
+  await value.navigate('calendar'); pending.resolve(Response.json({ ...item('created'), title: null, text: 'raw work' })); await value.settle(); await value.navigate('content');
   assert.equal(value.cached(), null); assert.equal(value.field('library-text'), null);
   assert.equal(value.props().items.some(i => i.id === 'created'), true);
 });
@@ -65,12 +65,12 @@ test('Known create acknowledgement preserves newer same-token work and next Save
   assert.equal(value.requests[1].url, '/api/library-items/created'); assert.equal(value.requests[1].body.text, 'newer work');
 });
 test('Old cache is not current Save durability after write failure; explicit Cancel can remove same token', async () => {
-  const value = fixture({ mutation: response }); await open(value, 'old'); value.cache.failWrite = true;
+  const value = fixture({ mutation: response }); await open(value, 'old'); value.cache.failWriteKey = libraryKey('owner');
   await value.change('library-text', 'new work'); await startSave(value);
   assert.equal(value.field('library-text')?.props.value, 'new work'); assert.equal(value.control().editor.id, 'created');
   assert.equal(value.cached().editor.text, 'old');
   value.button('Отмена').props.onClick(); await value.settle(); assert.equal(value.field('library-text'), null);
-  value.cache.failWrite = false; assert.equal(value.cached(), null);
+  value.cache.failWriteKey = ''; assert.equal(value.cached(), null);
 });
 test('Failed saved cache removal keeps acknowledged ID and form; failed Cancel keeps error', async () => {
   const value = fixture({ mutation: response }); await open(value); value.cache.failRemove = true; await startSave(value);
@@ -86,13 +86,15 @@ test('Lost Save response retains raw work without automatic second POST after na
   assert.equal(reload.requests.length, 0); assert.equal(reload.field('library-text')?.props.value, ' raw ');
 });
 test('Token replacement rejects old Save cleanup/error and old finally cannot unlock new Save', async () => {
-  const old = deferred(), newer = deferred(), value = fixture({ mutation: (_request, count) => count === 1 ? old.promise : newer.promise }); await open(value);
+  const old = deferred(), newer = deferred(), value = fixture({ items: [item()], mutation: (_request, count) => count === 1 ? old.promise : newer.promise }); await open(value);
+  // Ordinary known-item PATCH can be superseded while unresolved CREATE must be resolved first (covered by CR06).
+  value.control().onChange({ id: 'existing', title: 'Server title', text: 'raw work', mediaIds: [] }); await value.settle();
   const oldControl = value.control(); assert.ok(oldControl, 'parent owns editor'); await startSave(value);
   oldControl.onChange({ title: 'another', text: 'another', mediaIds: [] }); await value.settle();
   const before = value.cached(); await startSave(value); assert.equal(value.requests.length, 2);
   old.reject(Error('old failure')); await value.settle();
   assert.deepEqual(value.cached(), before); assert.equal(value.control().error, null); assert.equal(value.control().busy, true);
-  newer.resolve(Response.json(item('newer'))); await value.settle(); assert.equal(value.cached(), null);
+  newer.resolve(Response.json({ ...item('newer'), title: 'another', text: 'another' })); await value.settle(); assert.equal(value.cached(), null);
 });
 test('Old Save after full App unmount cannot alter replacement owner cache or server list', async () => {
   const old = deferred(), first = fixture({ mutation: () => old.promise }); await open(first); await startSave(first); first.unmount();
@@ -147,7 +149,7 @@ test('Owner replacement observed by poll rejects old Save and cannot unlock the 
   assert.deepEqual(value.cached('other'), before); assert.equal(value.control().busy, true);
   assert.equal(value.props().items.some(i => i.id === 'old-created'), false);
   assert.deepEqual(value.props().media.map(m => m.id), ['other-media']);
-  newer.resolve(Response.json(item('other-created'))); await value.settle(); assert.equal(value.cached('other'), null);
+  newer.resolve(Response.json({ ...item('other-created'), title: null, text: 'other work' })); await value.settle(); assert.equal(value.cached('other'), null);
 });
 test('Current poll lifecycle controls existing Save without replaying cached status or provenance', async () => {
   const value = fixture({ items: [item('existing', 'USED')], scheduled: true, mutation: response }); await value.settle();

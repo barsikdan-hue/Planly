@@ -24,6 +24,22 @@ async function api(path, init = {}) {
   headers.set('cookie', cookie);
   return fetch(`${base}${path}`, { ...init, headers, signal: AbortSignal.timeout(10000) });
 }
+const libraryInput = { title: null, text: 'isolated durable Library intent', mediaIds: [] };
+const libraryKey = crypto.randomUUID(), deletedLibraryKey = crypto.randomUUID();
+const createLibrary = key => api('/api/library-items', { method: 'POST',
+  headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify(libraryInput) });
+const libraryResponse = await createLibrary(libraryKey);
+assert.equal(libraryResponse.status, 201);
+const libraryItem = await libraryResponse.json();
+const libraryReplay = await createLibrary(libraryKey);
+assert.equal(libraryReplay.status, 201); assert.equal((await libraryReplay.json()).id, libraryItem.id);
+const terminalResponse = await createLibrary(deletedLibraryKey);
+assert.equal(terminalResponse.status, 201);
+const terminalItem = await terminalResponse.json();
+assert.equal((await api(`/api/library-items/${terminalItem.id}`, { method: 'DELETE' })).status, 204);
+const terminalReplay = await createLibrary(deletedLibraryKey);
+assert.equal(terminalReplay.status, 410); assert.equal((await terminalReplay.json()).code, 'LIBRARY_CREATION_RESULT_DELETED');
+console.log('PASS keyed Library replay and terminal history before restart');
 async function waitFor(check, message, timeout = 60000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
@@ -81,6 +97,13 @@ compose('up', '-d', '--wait', '--wait-timeout', '120');
 await waitFor(async () => (await fetch(`${base}/api/health`)).ok, 'web did not recover');
 
 const snapshot = await (await api('/api/bootstrap')).json();
+const restartedLibrary = await createLibrary(libraryKey);
+assert.equal(restartedLibrary.status, 201); assert.equal((await restartedLibrary.json()).id, libraryItem.id);
+assert.equal(snapshot.libraryItems.filter(item => item.id === libraryItem.id).length, 1);
+const restartedTerminal = await createLibrary(deletedLibraryKey);
+assert.equal(restartedTerminal.status, 410); assert.equal((await restartedTerminal.json()).code, 'LIBRARY_CREATION_RESULT_DELETED');
+assert.equal(snapshot.libraryItems.some(item => item.id === terminalItem.id), false);
+console.log('PASS Library intent mapping and terminal history survive full stack recreation');
 assert.ok(snapshot.posts.some(post => post.id === future.id), 'schedule must survive full stack recreation');
 const restoredMedia = snapshot.media.find(item => item.id === media.id);
 assert.ok(restoredMedia, 'media metadata must survive');
@@ -102,4 +125,5 @@ assert.match(compose('logs', '--no-color', 'worker'), /Planly publication worker
 console.log('PASS real worker runtime and honest unsupported-provider result');
 
 for (const id of [future.id, due.id]) assert.equal((await api(`/api/posts/${id}`, { method: 'DELETE' })).status, 204);
+assert.equal((await api(`/api/library-items/${libraryItem.id}`, { method: 'DELETE' })).status, 204);
 assert.equal((await api(`/api/media/${media.id}`, { method: 'DELETE' })).status, 204);

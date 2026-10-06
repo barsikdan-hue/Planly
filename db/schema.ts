@@ -17,6 +17,7 @@ export const socialProviderEnum = pgEnum('social_provider', ['TELEGRAM', 'MAX'])
 export const socialConnectionStatusEnum = pgEnum('social_connection_status', ['DISCONNECTED', 'CONNECTED', 'ERROR']);
 export const postStatusEnum = pgEnum('post_status', ['DRAFT', 'READY', 'ARCHIVED']);
 export const libraryItemStatusEnum = pgEnum('library_item_status', ['READY', 'USED', 'ARCHIVED']);
+export const libraryCreationStateEnum = pgEnum('library_creation_state', ['CREATED', 'DELETED']);
 export const mediaSourceEnum = pgEnum('media_source', ['UPLOAD', 'AI_GENERATED']);
 export const publicationStatusEnum = pgEnum('publication_status', [
   'SCHEDULED',
@@ -85,6 +86,20 @@ export const libraryItems = pgTable('library_items', {
   updatedAt,
 }, (table) => [
   index('library_items_user_id_idx').on(table.userId),
+]);
+
+export const libraryCreationAttempts = pgTable('library_creation_attempts', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  creationKey: text('creation_key').notNull(),
+  inputHash: text('input_hash').notNull(),
+  // Deliberately retained after item deletion; no cascading item FK.
+  itemId: text('item_id').notNull(),
+  state: libraryCreationStateEnum('state').notNull().default('CREATED'),
+  createdAt,
+  updatedAt,
+}, table => [
+  primaryKey({ columns: [table.userId, table.creationKey] }),
+  index('library_creation_attempts_owner_item_idx').on(table.userId, table.itemId),
 ]);
 
 export const posts = pgTable('posts', {

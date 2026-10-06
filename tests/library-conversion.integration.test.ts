@@ -248,12 +248,28 @@ test('a key bound to another source while USED conversion waits must conflict af
   }
 });
 
-// The gate holds the real source row. Each operation must reach SELECT FOR
-// UPDATE before release; an FK insert wait cannot satisfy this assertion.
-async function orderedRace(id: string, first: () => Promise<unknown>, second: () => Promise<unknown>) {
+// The gate holds the real source row. Operation1 must reach its SELECT FOR
+// UPDATE; operation2 must wait on that source or the owner held by operation1.
+// Require a concrete blocker path to that same source gate, never an FK insert.
+async function raceGraph(gate: Client, gatePid: number, label: string, phase: string) {
+  await gate.query('SELECT pg_stat_clear_snapshot()');
+  const activity = await gate.query<{ pid: number; blockers: number[]; wait_event_type: string | null; wait_event: string | null; query: string }>(`
+    SELECT pid, pg_blocking_pids(pid) AS blockers, wait_event_type, wait_event, query
+    FROM pg_stat_activity WHERE datname = current_database()
+      AND (pid = $1 OR (wait_event_type = 'Lock' AND query ILIKE '%for update%')) ORDER BY pid`, [gatePid]);
+  const pids = activity.rows.map(row => row.pid);
+  const locks = await gate.query(`SELECT pid, locktype, mode, granted, relation::regclass::text AS relation,
+      page, tuple, transactionid::text AS transactionid FROM pg_locks
+    WHERE pid = ANY($1::int[]) AND (locktype = 'transactionid'
+      OR relation IN ('users'::regclass, 'library_items'::regclass))
+    ORDER BY pid, locktype, relation, granted`, [pids]);
+  console.log('CR06_BLOCKING_GRAPH ' + JSON.stringify({ label, phase, gatePid, nodes: activity.rows, locks: locks.rows }));
+}
+async function orderedRace(id: string, first: () => Promise<unknown>, second: () => Promise<unknown>, label: string) {
   const gate = new Client({ connectionString: process.env.DATABASE_URL });
   await gate.connect();
   const running: Promise<PromiseSettledResult<unknown>>[] = [];
+  let firstSourcePid: number | null = null;
   const settle = (operation: () => Promise<unknown>) => operation().then(
     value => ({ status: 'fulfilled' as const, value }), reason => ({ status: 'rejected' as const, reason }),
   );
@@ -267,21 +283,32 @@ async function orderedRace(id: string, first: () => Promise<unknown>, second: ()
       let observed = false;
       while (Date.now() < deadline) {
         await gate.query('SELECT pg_stat_clear_snapshot()');
-        const waiting = await gate.query<{ pid: number; blockers: number[] }>(`SELECT pid, pg_blocking_pids(pid) AS blockers FROM pg_stat_activity
+        const waiting = await gate.query<{ pid: number; blockers: number[]; query: string }>(`SELECT pid, pg_blocking_pids(pid) AS blockers, query FROM pg_stat_activity
           WHERE datname = current_database() AND wait_event_type = 'Lock'
-            AND query ILIKE '%library_items%' AND query ILIKE '%for update%'`);
+            AND (query ILIKE '%library_items%' OR query ILIKE '%users%') AND query ILIKE '%for update%'`);
         const byPid = new Map(waiting.rows.map(row => [row.pid, row.blockers]));
-        const reachesGate = (pid: number, seen = new Set<number>()): boolean => {
-          if (pid === gatePid) return true;
+        const reaches = (pid: number, target: number, seen = new Set<number>()): boolean => {
+          if (pid === target) return true;
           if (seen.has(pid)) return false;
           seen.add(pid);
-          return (byPid.get(pid) ?? []).some(blocker => reachesGate(blocker, new Set(seen)));
+          return (byPid.get(pid) ?? []).some(blocker => reaches(blocker, target, new Set(seen)));
         };
-        // PostgreSQL's second row waiter can wait on the first waiter's tuple
-        // lock rather than directly on the gate transaction. Follow both hops.
-        if (waiting.rows.filter(row => reachesGate(row.pid)).length >= index + 1) { observed = true; break; }
+        const sourceWait = (query: string) => /\bselect\b/i.test(query) && /\bfrom\s+(?:"library_items"|library_items)(?:\s|$)/i.test(query);
+        if (index === 0) {
+          const source = waiting.rows.find(row => sourceWait(row.query) && reaches(row.pid, gatePid));
+          if (source) { firstSourcePid = source.pid; observed = true; break; }
+        } else if (firstSourcePid !== null && waiting.rows.some(row => row.pid === firstSourcePid && sourceWait(row.query) && reaches(row.pid, gatePid))) {
+          // An owner waiter qualifies only through operation1's observed source
+          // waiter. Other owner locks, INSERT/FK waits and unrelated PIDs cannot.
+          observed = waiting.rows.some(row => row.pid !== firstSourcePid && (
+            sourceWait(row.query) && reaches(row.pid, gatePid) ||
+            /\bselect\b/i.test(row.query) && /\bfrom\s+(?:"users"|users)(?:\s|$)/i.test(row.query) && reaches(row.pid, firstSourcePid!)
+          ));
+          if (observed) break;
+        }
         await delay(20);
       }
+      await raceGraph(gate, gatePid, label, `operation-${index + 1}:${observed ? 'hierarchy-observed' : 'hierarchy-not-observed'}`);
       assert.ok(observed, `Operation ${index + 1} must wait on the source SELECT FOR UPDATE`);
     }
     await gate.query('COMMIT');
@@ -301,7 +328,8 @@ for (const mutation of ['archive', 'update', 'delete'] as const) {
       const convert = () => createPost(owner, input, { sourceLibraryItemId: item.id, mirrorQueue: async () => { mirrors++; } });
       const mutate = () => mutation === 'delete' ? deleteLibraryItem(owner, item.id) : updateLibraryItem(owner, item.id,
         { text: 'Edited library copy', mediaIds: [], status: mutation === 'archive' ? 'ARCHIVED' : 'READY' });
-      const result = await orderedRace(item.id, conversionFirst ? convert : mutate, conversionFirst ? mutate : convert);
+      const result = await orderedRace(item.id, conversionFirst ? convert : mutate, conversionFirst ? mutate : convert,
+        `${mutation}:${conversionFirst ? 'conversion-first' : 'mutation-first'}`);
       const conversion = result[conversionFirst ? 0 : 1];
       const modification = result[conversionFirst ? 1 : 0];
       assert.equal(modification.status, 'fulfilled');
@@ -337,7 +365,7 @@ for (const mutation of ['archive', 'update', 'delete'] as const) {
     const { libraryItems } = await import('../db/schema.ts');
     await getDb().update(libraryItems).set({ updatedAt: oldRevision }).where(eq(libraryItems.id, item.id));
     item.updatedAt = oldRevision.toISOString();
-    const [modification, conversion] = await orderedRace(item.id, mutate, convert);
+    const [modification, conversion] = await orderedRace(item.id, mutate, convert, `queue:${mutation}-first`);
     assert.equal(modification.status, 'fulfilled'); assert.equal(conversion.status, 'rejected');
     if (conversion.status === 'rejected') assert.equal(conversion.reason.name, 'LibrarySourceStaleError');
     assert.deepEqual(await ownerPosts(), []); assert.deepEqual(await getDb().select().from(publications), []);

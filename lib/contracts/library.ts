@@ -18,6 +18,12 @@ const contentRequired = { message: 'Add text or media to the library item', path
 export const createLibraryItemInputSchema = z.object(libraryContentShape).refine(hasContent, contentRequired);
 export type CreateLibraryItemInput = z.infer<typeof createLibraryItemInputSchema>;
 
+export const libraryCreationKeySchema = z.string().uuid().transform(key => key.toLowerCase());
+export function canonicalLibraryCreateInput(raw: CreateLibraryItemInput): { title: string | null; text: string; mediaIds: string[] } {
+  const parsed = createLibraryItemInputSchema.parse(raw);
+  return { title: parsed.title ?? null, text: parsed.text, mediaIds: [...parsed.mediaIds] };
+}
+
 export const updateLibraryItemInputSchema = z.object({
   ...libraryContentShape,
   status: z.enum(['READY', 'ARCHIVED']),

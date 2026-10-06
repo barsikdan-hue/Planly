@@ -241,14 +241,18 @@ test('USED without a linked Post offers no publication action', () => {
 });
 test('create updates Planner data only after server acknowledgement', async () => {
   let resolve; const { h } = await app({ mutation: () => new Promise(done => { resolve = done; }) });
-  const pending = library(h).saveItem({ title: 'New', text: 'New text', mediaIds: [] }); await h.settle();
+  library(h).editorControl.onChange({ title: 'New', text: 'New text', mediaIds: [] }); await h.settle();
+  const pending = library(h).editorControl.save(library(h).editorControl.editor); await h.settle();
   assert.equal(library(h).items.length, 3);
   resolve(Response.json({ ...ready, id: 'new', title: 'New', text: 'New text' }, { status: 201 })); await pending; await h.settle();
   assert.equal(library(h).items.length, 4); assert.equal(library(h).items[0].id, 'new');
 });
 test('failed create/edit/delete leave Planner Library data intact', async () => {
   const { h } = await app({ mutation: async () => Response.json({ error: 'Server unavailable' }, { status: 500 }) });
-  for (const operation of [() => library(h).saveItem({ text: 'New', mediaIds: [] }), () => library(h).saveItem({ ...ready, status: 'READY', text: 'Edited' }, 'ready'), () => library(h).deleteItem('ready')]) {
+  library(h).editorControl.onChange({ title: '', text: 'New', mediaIds: [] }); await h.settle();
+  await library(h).editorControl.save(library(h).editorControl.editor); await h.settle();
+  assert.match(library(h).editorControl.error, /Server unavailable/); assert.deepEqual(library(h).items, [ready, used, archived]);
+  for (const operation of [() => library(h).saveItem({ ...ready, status: 'READY', text: 'Edited' }, 'ready'), () => library(h).deleteItem('ready')]) {
     await assert.rejects(operation, /Server unavailable/); await h.settle(); assert.deepEqual(library(h).items, [ready, used, archived]);
   }
 });

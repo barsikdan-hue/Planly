@@ -93,7 +93,7 @@ test('Library API authenticates collection and item routes before processing con
 
 test('Library API uses JSON 400, validation 422, READY creation, full replacement and 204 deletion', async () => {
   const { collection, item } = await libraryRoutes();
-  const post = (body: unknown) => collection.POST(request('/api/library-items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+  const post = (body: unknown) => collection.POST(request('/api/library-items', { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify(body) }));
   const malformed = await collection.POST(request('/api/library-items', { method: 'POST', body: '{bad' }));
   assert.equal(malformed.status, 400);
   for (const input of [
@@ -146,7 +146,7 @@ test('Library API foreign and missing items and media return safe indistinguisha
     }
   }
   for (const mediaId of ['foreign-library-media', 'missing-library-media']) {
-    const response = await collection.POST(request('/api/library-items', { method: 'POST', body: JSON.stringify({ text: '', mediaIds: [mediaId] }) }));
+    const response = await collection.POST(request('/api/library-items', { method: 'POST', headers: { 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ text: '', mediaIds: [mediaId] }) }));
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), { error: 'Not found' });
   }
