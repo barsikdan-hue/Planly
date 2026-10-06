@@ -1,6 +1,6 @@
 # CR09 / PR18 integration after CR11 merge
 
-STATUS: VERIFICATION_IN_PROGRESS. Final technical status, exact PR18 head and terminal native/Docker links are recorded in [PR18 metadata/checks](https://github.com/barsikdan-hue/Planly/pull/18), as required by the approved plan's canonical final-head evidence rule. No PR18 merge or production deployment is authorized by this report.
+STATUS: VERIFIED_RUNTIME_CHECKPOINT. Actual integrated runtime/test checkpoint `c8265e1058744df7e0225ff114fd751789fca8d9` passed fresh native/Docker and independent review. Final evidence-only descendant additionally requires its own exact-head native/Docker SUCCESS before READY_FOR_OWNER_MERGE_GATE — PR18. Final technical status, exact PR18 head and terminal links are recorded in [PR18 metadata/checks](https://github.com/barsikdan-hue/Planly/pull/18), following the approved plan's canonical final-head evidence rule. No PR18 merge or production deployment is authorized by this report.
 
 ## Merge and fresh baseline
 
@@ -38,10 +38,38 @@ Targeted 24-file regression: **301/301 PASS / 0 FAIL / 0 SKIP**, exit 0. Include
 
 Local no-incremental typecheck: PASS; ESLint: PASS, **0 errors / 13 existing warnings**; fresh corrected local Webpack production build: PASS, exit 0. Actual final-head native CI uses Node22.13/PostgreSQL17/Redis7; local Node24 hook/HTTP/timer/storage fixtures are supporting evidence. Local native DB/Docker tools are unavailable; required full native and Self-host execution use the existing real workflows without infrastructure changes.
 
+Actual PR18 checkpoint `c8265e1058744df7e0225ff114fd751789fca8d9` has parents fresh main `4621cfdedef43b98a014a9f4c7e9ad83e9c435ba` and frozen `f7dd2bb29d9c2a23d3919cda3e83a57fcf099027`. Actual REST base is `main@4621cfd`; behind 0 and mergeable true. GitHub synthetic merge `a739346f5cf306bcaaf953f210ec8c9d90a87325` has those fresh main/checkpoint parents and identical tree `836bb3350a62f2b72f0a9970f723a39b4478fd8b`, empty diff. The connector's initial stale normalized base SHA was refreshed by explicit main-base metadata update; actual REST and Git provenance confirm the correct base.
+
+- [Actual PR18 checkpoint native CI](https://github.com/barsikdan-hue/Planly/actions/runs/37438459805), job `112186003156`: SUCCESS, **656/656 PASS / 0 FAIL / 0 SKIP / 0 cancelled / 0 todo**; migrations/drift/typecheck/lint/production build SUCCESS. No previous compatibility/main result was substituted.
+- [Actual PR18 checkpoint Self-host](https://github.com/barsikdan-hue/Planly/actions/runs/37438459690), Docker job `112186002308`: SUCCESS; foundation, actual worker private object bytes, stack recreation, PostgreSQL/media persistence, Redis-loss reconciliation and honest unsupported-provider result passed. Provider-live and failure-only diagnostics are intentionally conditional workflow skips, distinct from native suite SKIP.
+
 ## Review and handoff
 
-Independent whole-branch final review: PENDING. Scope is existing App/Composer continuation integration and regression/evidence artifacts. No API/DB/recovery schema/package/workflow/provider change, refactor or new product behavior.
+One fresh independent whole-branch review on the most capable available reviewer model: **APPROVE within approved scope**, no actionable Critical/Important/Minor finding. Actual `4621cfd..c8265e1` 12-file range, App/Composer, all new tests/loader, plans/spec and evidence were inspected. Reviewer independently read focused/targeted log endings and verified clean source/diff check, without tests reruns, file edits or another agent. No deferred minors. Scope is existing App/Composer continuation integration and regression/evidence artifacts; no API/DB/recovery schema/package/workflow/provider change, refactor or new product behavior.
+
+Executor rulings on every declined input class are recorded explicitly below; these do not waive a proved defect or certify all App paths:
+
+1. Unscheduled/hidden owner observer — existing observer boundary, outside approved change — stale UI until an applied snapshot remains unproven.
+2. Logout/login outside a snapshot — auth lifecycle unchanged — a distinct unverified transition remains.
+3. Server authorization/session ownership — client fixtures cannot prove server isolation — server cross-owner effects are not certified.
+4. Physical/internal POST→GET cancellation — transport unchanged, no cancellation policy added — unused server assets/work remain possible.
+5. Already-admitted Save/Publish/Swipe after departure/unmount — approved CR11 exclusion — late results/cache/messages remain unproven.
+6. Save starts before upload — contract guards uploads-before-submit admission only — later attachment intent after save acknowledgement remains unproven.
+7. Pending-helper races — helpers unchanged beyond existing captured owner persistence — independent recovery races are not certified.
+8. Captured duplicate/create/edit/media-use/navigation beyond inspected admissions — unchanged scope — transfer through other callbacks remains unproven.
+9. Child-local Settings/picker/preview state — no generalized child-reset policy — rendered state retention remains unproven.
+10. Swipe selections/presets/skips/results/preview — separate child lifecycle — retained old review state remains unproven.
+11. Search/query/contentTab/review/detail/post confirmation — retained CR11 scope — selection/confirmation leakage remains unproven.
+12. Account connect/toggle — unchanged independent continuation — stale account effects/messages remain unproven.
+13. In-flight DELETE/reschedule — tombstone proof is successful same-owner local deletion — cross-owner mutation effects remain unproven.
+14. Library card/source/conflict refresh outside controlled editor — excluded independent paths — late card effects remain unproven.
+15. Other same-owner profile/upload ordering — existing revisions only — additional ordering races are not certified.
+16. Cross-tab/device deletion, repair and non-durable recovery — no replay/repair/cross-tab protocol — stale IDs/non-durable loss remain unproven.
+17. Actual React Strict Mode/concurrent DOM/file selection/remount — hook harness cannot prove browser scheduling — browser-only faults remain unproven.
+18. Exact native/Redis/migrations/build/Docker — pending during review, now independently resolved by actual checkpoint terminal workflows above; final evidence head still requires fresh terminal checks — no native PASS inferred from local tests.
+19. Render/browser/provider acceptance — deploy/live verification explicitly not authorized — production acceptance remains unproven.
+20. CR06/CR07/CR08/GAP01/other milestones — explicitly outside current scope — independent backlog remains, none started.
 
 Existing exclusions remain: already-admitted save/publish/Swipe responses after owner departure, account/reschedule/late-delete/child-local continuations and owner changes without scheduled-publication polling are not certified by this bounded CR09/CR11 gate. Modeled callback tests and Self-host do not establish actual React/browser/Render/provider acceptance. CR06/CR07/CR08/GAP01 are not started.
 
-NEXT_ACTION: actual PR18 exact-head full CI/Docker and final review, then clean/pushed fresh-main base, behind 0 and mergeable true before READY_FOR_OWNER_MERGE_GATE — PR18. No PR18 merge or production deploy without separate Owner approval.
+Final evidence-only descendant changes this report only; runtime/tests/packages/workflows remain identical to verified `c8265e1`. Its final exact SHA and own terminal CI/Docker links are canonical in PR18 metadata. Require clean/pushed current head, unchanged fresh main, behind 0 and mergeable true before READY_FOR_OWNER_MERGE_GATE — PR18. No PR18 merge or production deploy without separate Owner approval.
