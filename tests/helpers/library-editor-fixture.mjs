@@ -24,9 +24,10 @@ export function text(node) {
 export function storage() {
   const values = new Map();
   return { values, failWrite: false, failRead: false, failRemove: false,
+    failWriteKey: '', failRemoveKey: '', silentWriteKey: '', silentRemoveKey: '', onWrite: null, onRemove: null,
     getItem(key) { if (this.failRead) throw Error('read denied'); return values.get(key) ?? null; },
-    setItem(key, value) { if (this.failWrite) throw Error('quota'); values.set(key, value); },
-    removeItem(key) { if (this.failRemove) throw Error('remove denied'); values.delete(key); } };
+    setItem(key, value) { if (this.failWrite || this.failWriteKey === key) throw Error('quota'); if (this.silentWriteKey !== key) values.set(key, value); this.onWrite?.(key, value); },
+    removeItem(key) { if (this.failRemove || this.failRemoveKey === key) throw Error('remove denied'); if (this.silentRemoveKey !== key) values.delete(key); this.onRemove?.(key); } };
 }
 export const libraryKey = owner => `planly:library-editor:v1:${owner}`;
 export const item = (id = 'existing', status = 'READY') => ({ id, title: 'Server title', text: 'Server text', mediaIds: [], status,
@@ -47,7 +48,7 @@ export function fixture({ cache = storage(), items = [], owner = 'owner', media 
   globalThis.fetch = async (url, init) => {
     if (url === '/api/bootstrap') return Response.json(snapshot);
     if (url === '/api/media' && !init) return Response.json(snapshot.media);
-    const request = { url, method: init?.method, body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body };
+    const request = { url, method: init?.method, body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body, headers: new Headers(init?.headers) };
     requests.push(request);
     if (!mutation) throw Error('Unexpected mutation');
     return mutation(request, requests.length);
