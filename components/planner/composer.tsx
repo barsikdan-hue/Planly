@@ -27,7 +27,8 @@ export function Composer({ draft, setDraft, media, upload, save, publishNow, acc
     const [preview, setPreview] = useState<Network>('telegram');
     const [variant, setVariant] = useState<Network | 'common'>('common');
     const [picker, setPicker] = useState(false);
-    const [busy, setBusy] = useState(false);
+    const [pendingUploads, setPendingUploads] = useState(0);
+    const busy = pendingUploads > 0;
     const [publishMode, setPublishMode] = useState<'now' | 'scheduled'>(() => draft.status === 'scheduled' ? 'scheduled' : 'now');
     const input = useRef<HTMLInputElement>(null);
     const mounted = useRef(true);
@@ -49,12 +50,12 @@ export function Composer({ draft, setDraft, media, upload, save, publishNow, acc
         {duplicatePost && <Action secondary onClick={() => duplicatePost(draft)}><Copy size={16}/>Дублировать в черновик</Action>}
     </Card>;
     const changeText = (text: string) => variant === 'common' ? patch({ text }) : patch({ overrides: { ...draft.overrides, [variant]: text } });
-    const addFiles = async (files: FileList | File[]) => { setBusy(true); try {
+    const addFiles = async (files: FileList | File[]) => { setPendingUploads(current => current + 1); try {
         const added = await upload(files);
         if (mounted.current) setDraft(current => ({ ...current, mediaIds: [...current.mediaIds, ...added.map(m => m.id)] }));
     }
     finally {
-        setBusy(false);
+        if (mounted.current) setPendingUploads(current => current - 1);
     } };
     const submit = (status: Status) => { const error = validatePost(draft, status); if (error) {
         toast.error(error);
