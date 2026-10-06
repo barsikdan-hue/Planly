@@ -3,7 +3,7 @@
 // first committed HTTP response is deterministically suppressed at fetch.
 import test, { after, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../db/index.ts';
 import { libraryItems, mediaAssets, users } from '../db/schema.ts';
 import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
@@ -40,7 +40,9 @@ function bridge(loseFirst = false) {
   return sent;
 }
 beforeEach(async () => {
-  const db = getDb(); await db.delete(users).where(inArray(users.id, [owner, other]));
+  // Match the existing Library integration fixtures: this disposable test DB
+  // starts clean even when a preceding targeted auth test retained OWNER_EMAIL.
+  const db = getDb(); await db.delete(users);
   await db.insert(users).values([
     { id: owner, email: process.env.OWNER_EMAIL ?? 'owner@example.test', displayName: 'CR06' },
     { id: other, email: 'cr06-other@example.test', displayName: 'Other' },

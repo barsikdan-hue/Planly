@@ -1,6 +1,6 @@
 # CR06 Library creation ambiguity — diagnostic checkpoint
 
-STATUS: DIAGNOSTIC_ONLY_NATIVE_RED_PENDING. No runtime implementation or readiness claim.
+STATUS: ROOT_CAUSE_PROVEN_DIAGNOSTIC_ONLY. Native source checkpoint verified; final evidence/setup-only head requires fresh CI. No runtime implementation or readiness claim.
 
 Authority: `barsikdan-hue/Planly`; fresh main `95f53b7d18e656e0f8ceff5002b4c42af3d12251`; branch `codex/customer-ready-library-idempotency`; worktree `work/Planly-library-idempotency`. Direct Orchestrator `CR06_DIAGNOSTIC_APPROVED` permits diagnostics/spec only. PR12–19 retain frozen heads, bases and gates. No Owner release approval observed; no merge/deploy/provider sends.
 
@@ -18,13 +18,15 @@ Execution: `ContentLibrary::submit` → PR17 parent `PlannerApp::saveLibraryEdit
 
 Eight predeclared cases: two semantic REDs (postcommit explicit retry, three concurrent client repetitions), six controls/observations (precommit rejection/correction, intentional identical creations, edited content after ambiguity, owner/media isolation, unauthenticated rejection, invalid content). RED expects one persisted item for one logical attempt. Intentional-identical control expects two. Their present wire forms are indistinguishable: that counterexample proves why content matching cannot fix the protocol. These diagnostic assertions are not a premature choice of a new header/schema or a complete future acceptance oracle.
 
-Native results will be recorded from actual GitHub jobs. No local PostgreSQL/Redis/Docker is available; missing setup is not counted as behavioral RED. No skip is added.
+Actual native source checkpoint `ad737b3a0253f92965735f36abe8f422c86f4b9c`: [CI37414137377](https://github.com/barsikdan-hue/Planly/actions/runs/37414137377), job112108893973, **454 total /452 PASS /2 declared semantic FAIL /0 skip**, completed failure as expected. Postcommit RED reached two rows and a different retry ID; concurrent RED reached three rows/three DTO IDs. All six new controls and all446 baseline tests passed. Drift, migrations, typecheck and lint passed; CI Build skipped after the declared Test failure. No local PostgreSQL/Redis/Docker is available; missing setup is not counted as behavioral RED. No skip is added. Final follow-up changes only evidence and disposable fixture isolation, not any runtime or diagnostic assertion; fresh exact-head results remain required before citing that new head.
 
 ## Frozen PR17 client evidence
 
 Disposable `work/Planly-library-idempotency-pr17-probe`, detached `89111873a6cda4ecceba545102911706eafc386c`. Tracked PR17 runtime remains unchanged. Probe invokes actual App/Library callbacks; HTTP commits are modeled here and cannot substitute for the native suite.
 
 Fresh baseline: main Library/UI/client selection **68/68 PASS**, PR17 recovery/storage/continuations **46/46 PASS**, all zero skips. Primary no-incremental typecheck PASS.
+
+Main command: `node --max-old-space-size=512 --test --test-concurrency=1 --experimental-strip-types tests/library-contract.test.ts tests/content-library-ui.test.mjs tests/planly-api.test.ts`. PR17 baseline command uses `tests/library-editor-recovery.test.mjs tests/library-editor-recovery-storage.test.ts tests/library-editor-continuations.test.mjs` with the same Node flags. Local full ESLint:0errors/13unchangedwarnings; focused native/probe lint PASS. Local Node24.21.0; native CI uses22.13.0.
 
 Probe **7 total /4 PASS /3 declared semantic FAIL /0 skip**, exit1. Same mount, navigation/remount and same-tab App reload each reach `2 !== 1` after an explicit second Save. Before retry: initial modeled commit exists, raw text/title and token survive, ID remains absent, operation unlocks, no automatic POST occurs. On reload even bootstrap containing the original committed item does not guess an ID or close the raw editor. This is correct recovery behavior; missing creation intent is CR06.
 
@@ -37,6 +39,19 @@ node --max-old-space-size=512 --test --test-concurrency=1 --experimental-strip-t
 ```
 
 The source is preserved outside main's normal test glob because the PR17 fixture is absent on main. Relative import intentionally targets the stated disposable location. Existing frozen integration artifacts are preserved; native app worktree creation failed because the chat's stale/unborn SMM root lacks the requested commit, so verified authoritative Git worktree fallback was used.
+
+Executed/copy probe SHA256: `F87F8291469061649587FC5789E9A996C8E56CE05A10E3F33E70A7F6C680DFAE`.
+
+## Independent review and explicit rulings
+
+Fresh whole-diff read-only review: no Critical/Important, one Minor fixture-isolation caveat. Existing targeted auth tests can leave global OWNER_EMAIL occupied; native fixture now follows the established Library tests by clearing only the disposable test database's users before seeding. No runtime change or assertion waiver. Fresh exact-head native rerun is required for that correction.
+
+Reviewer declined-to-judge rulings:
+- Native outcomes: controller separately retrieved actual job logs and confirmed the exact two failures and454/452/2/0 counts; reviewer source reasoning alone is not native proof.
+- Browser reload/network loss: remains NOT PROVEN. Callback/response-stream injection is the explicit diagnostic scope; cost if generalized is a false browser acceptance claim.
+- Docker/provider/production: Docker source checkpoint is tracked separately, production/provider NOT RUN; no live claim or provider send is inferred.
+- Identity/deletion/edited-raw policy: remains unapproved architecture options. Cost if silently selected is lost newer raw work or duplicate resurrection.
+- Concurrent mounted UI Save: not claimed. Native concurrent transport repetitions do not imply a PR17 operation-lock bypass; cost if conflated is a wrong client root cause.
 
 ## Boundaries and next gate
 
