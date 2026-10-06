@@ -95,6 +95,22 @@ test('Captured first-intent control after cleanup cannot dispatch another create
   await value.open(); await value.change('library-text',' Original '); await save(value); assert.equal(boundary.rows.length,2);
   assert.notEqual(value.requests[0].headers.get('idempotency-key'), value.requests[1].headers.get('idempotency-key'));
 });
+for (const deleted of [false,true]) test(`Existing-item replacement resolves old ${deleted ? 'DELETED' : 'CREATED'} intent before a separate PATCH`, async () => {
+  const boundary = server(), value = fixture({ items: [item('existing')], mutation: (request,count) => {
+    if (request.method === 'PATCH') return Response.json({ ...item('existing'), ...request.body });
+    if (count === 2 && deleted) return Response.json({error:'deleted',code:'LIBRARY_CREATION_RESULT_DELETED'},{status:410});
+    return boundary.mutation(request);
+  } });
+  await open(value); await save(value); const frozen = attempt(value); assert.ok(frozen);
+  value.control().cancel(); await value.settle(); value.button('Редактировать').props.onClick(); await value.settle();
+  await value.change('library-text','Existing newer work'); const raw = value.cached();
+  await save(value);
+  assert.equal(value.requests[1].method,'POST','first Save must resolve old intent rather than mutate replacement');
+  assert.equal(value.requests[1].headers.get('idempotency-key'),frozen.creationKey); assert.deepEqual(value.requests[1].body,value.requests[0].body);
+  assert.deepEqual(value.cached(),raw); assert.equal(value.control().editor.id,'existing'); assert.equal(attempt(value),null);
+  await save(value); assert.equal(value.requests[2].method,'PATCH'); assert.equal(value.requests[2].url,'/api/library-items/existing');
+  assert.equal(value.requests[2].body.text,'Existing newer work'); assert.equal(value.cached(),null);
+});
 for (const reject of [false,true]) test(`First-A ${reject?'error':'success'} after A→B→A is quiet and preserves new A lifetime envelope`, async () => {
   const old = deferred(), newer = deferred(), value = fixture({scheduled:true,mutation:(_request,count)=>count===1?old.promise:newer.promise}); await open(value); const oldControl=value.control(); await save(value);
   const frozen=attempt(value); assert.ok(frozen); value.snapshot.profile.id='B'; await value.poll(); await value.open(); await value.change('library-text','B raw'); assert.equal(attempt(value),null);

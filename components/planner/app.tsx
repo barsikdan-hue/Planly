@@ -680,8 +680,9 @@ export default function PlannerApp() {
         if (JSON.stringify(libraryEditorFields(fields)) !== JSON.stringify(libraryEditorFields(submitted.editor))) return;
         const storage = libraryRecoveryStorage();
         const cached = storage ? readLibraryCreationAttempt(storage, owner) : { attempt: null, invalid: false, unavailable: true };
-        // A known unrelated item can still be PATCHed when creation storage is unavailable.
-        let attempt: LibraryCreationAttempt | null = cached.attempt && (!submitted.editor.id || cached.attempt.editorToken === submitted.token) ? cached.attempt : null;
+        // Resolve a valid old intent before saving either kind of replacement editor.
+        // Known items can still be PATCHed when no valid pending intent can be read.
+        let attempt: LibraryCreationAttempt | null = cached.attempt;
         if (!submitted.editor.id && (cached.invalid || cached.unavailable)) {
             setLibraryError('Не удалось подтвердить локальное создание заготовки. Новое создание не отправлено.'); return;
         }

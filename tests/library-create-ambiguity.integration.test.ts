@@ -30,7 +30,8 @@ function bridge(loseFirst = false) {
   let count = 0;
   const sent: { body: unknown; headers: HeadersInit | undefined }[] = [];
   globalThis.fetch = async (url, init) => {
-    assert.ok(String(url).startsWith('/api/library-items'));
+    if (init?.method === 'PATCH') assert.match(String(url), /^\/api\/library-items\/[^/]+$/);
+    else { assert.equal(url, '/api/library-items'); assert.equal(init?.method, 'POST'); }
     const body = JSON.parse(String(init?.body)); sent.push({ body, headers: init?.headers });
     const ordinal = ++count;
     const response = init?.method === 'PATCH'
