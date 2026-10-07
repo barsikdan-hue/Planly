@@ -43,6 +43,13 @@
       "when": 1791278572303,
       "tag": "0005_medical_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791352195518,
+      "tag": "0006_futuristic_abomination",
+      "breakpoints": true
     }
   ]
 }

@@ -8,29 +8,56 @@ import { AnalyticsSummary } from './dashboard';
 import { networkNames, type Network, type Post } from '@/lib/planner';
 import type { SocialAccountDto } from '@/lib/contracts/planner';
 import { toast } from 'sonner';
-export function SocialAccounts({ accounts, toggle, connect, embedded = false }: {
+export function SocialAccounts({ accounts, toggle, connect, disconnect, embedded = false }: {
     embedded?: boolean;
     accounts: SocialAccountDto[];
     toggle: (id: string, value: boolean) => void;
     connect: (id: string, destinationId: string) => Promise<void>;
+    disconnect?: (id: string) => Promise<void>;
 }) {
-    const [destination,setDestination] = useState<Record<string,string>>({});
-    const [connecting,setConnecting] = useState<Record<string,boolean>>({});
+    const [destination, setDestination] = useState<Record<string, string>>({});
+    const [connecting, setConnecting] = useState<Record<string, boolean>>({});
     const connected = accounts.filter(account => account.connectionStatus === 'CONNECTED').length;
     const Heading = embedded ? 'h2' : 'h1';
     const AccountHeading = embedded ? 'h3' : 'h2';
-    return <><div className="page-heading"><div><div className="eyebrow">ТВОИ ПЛОЩАДКИ</div><Heading>Социальные сети</Heading><p>Подключи Telegram или MAX для публикаций.</p></div><span className="pill neutral">{connected} из {accounts.length} подключены</span></div><div className="notice"><Info size={19}/><p>Добавь бота администратором группы или канала. Для канала включи право публиковать. Токен настраивается только на сервере.</p></div><div className="accounts-grid">{accounts.map(account => { const n = account.provider as Network; const isConnected = account.connectionStatus === 'CONNECTED'; return <Card key={account.id} className="account-card"><div className="row-between"><SocialIcon network={n}/><span className={`pill ${isConnected ? 'success' : 'neutral'}`}>{isConnected ? 'Подключено' : 'Не подключено'}</span></div><AccountHeading>{networkNames[n]}</AccountHeading><div className="account-profile"><span className="account-avatar">А</span><div><strong>{account.displayName}</strong><small>{account.providerAccountId ?? 'Аккаунт ещё не подтверждён'}</small></div></div><div className="account-features"><span><CheckCircle2 size={15}/>Текст и медиа</span><span><Clock size={15}/>Планирование</span></div>{(n === 'telegram' || n === 'max') && <div><label className="field-label" htmlFor={`destination-${account.id}`}>Канал или группа {networkNames[n]}</label><input id={`destination-${account.id}`} className="form-input" placeholder={n === 'telegram' ? '@your_chat или отрицательный ID' : 'Числовой chat_id MAX'} value={destination[account.id] ?? ''} onChange={event=>setDestination(values=>({...values,[account.id]:event.target.value}))} disabled={!!connecting[account.id]}/><Action secondary disabled={!!connecting[account.id] || !(destination[account.id] ?? '').trim()} onClick={async()=>{setConnecting(values=>({...values,[account.id]:true}));try {await connect(account.id,(destination[account.id] ?? '').trim());} finally {setConnecting(values=>({...values,[account.id]:false}));}}}>{connecting[account.id] ? 'Проверяем…' : 'Проверить и подключить'}</Action></div>}<div className="account-switch"><label htmlFor={`account-${account.id}`}>Использовать для публикаций</label><Switch id={`account-${account.id}`} checked={account.enabled} disabled={!isConnected} onCheckedChange={value => toggle(account.id, value)}/></div></Card>; })}</div><Card title={<><ShieldCheck size={19}/> Безопасное подключение</>} className="connection-info"><p>Planly не хранит логины и пароли социальных сетей во frontend. Подключение подтверждается проверкой бота и его прав в группе или канале.</p></Card></>;
+    const run = async (id: string, operation: () => Promise<void>) => {
+        setConnecting(values => ({ ...values, [id]: true }));
+        try { await operation(); } finally { setConnecting(values => ({ ...values, [id]: false })); }
+    };
+    return <><div className="page-heading"><div><div className="eyebrow">ТВОИ ПЛОЩАДКИ</div><Heading>Социальные сети</Heading><p>Подключи Telegram, MAX или сообщество VK для публикаций.</p></div><span className="pill neutral">{connected} из {accounts.length} подключены</span></div>
+        <div className="notice"><Info size={19}/><p>Для Telegram и MAX добавь бота администратором. Для VK войди через VK ID с правами администратора или редактора сообщества.</p></div>
+        <div className="accounts-grid">{accounts.map(account => {
+            const n = account.provider as Network;
+            const isConnected = account.connectionStatus === 'CONNECTED';
+            const busy = !!connecting[account.id];
+            const value = destination[account.id] ?? (n === 'vk' ? account.providerAccountId?.replace(/^-/, '') ?? '' : '');
+            return <Card key={account.id} className="account-card">
+                <div className="row-between"><SocialIcon network={n}/><span className={`pill ${isConnected ? 'success' : 'neutral'}`}>{isConnected ? 'Подключено' : 'Не подключено'}</span></div>
+                <AccountHeading>{networkNames[n]}</AccountHeading>
+                <div className="account-profile"><span className="account-avatar">А</span><div><strong>{account.displayName}</strong><small>{account.providerAccountId ?? 'Аккаунт ещё не подтверждён'}</small></div></div>
+                <div className="account-features"><span><CheckCircle2 size={15}/>{n === 'vk' ? 'Текст и фото' : 'Текст и медиа'}</span><span><Clock size={15}/>Планирование</span></div>
+                <div><label className="field-label" htmlFor={`destination-${account.id}`}>{n === 'vk' ? 'Числовой ID сообщества VK' : `Канал или группа ${networkNames[n]}`}</label>
+                    <input id={`destination-${account.id}`} className="form-input" placeholder={n === 'vk' ? 'Например, 123456' : n === 'telegram' ? '@your_chat или отрицательный ID' : 'Числовой chat_id MAX'} value={value} onChange={event => setDestination(values => ({ ...values, [account.id]: event.target.value }))} disabled={busy}/>
+                    <Action secondary disabled={busy || !value.trim()} onClick={() => { void run(account.id, () => connect(account.id, value.trim())); }}>{busy ? 'Подключаем…' : n === 'vk' ? (isConnected ? 'Переподключить через VK ID' : 'Подключить через VK ID') : 'Проверить и подключить'}</Action>
+                    {n === 'vk' && account.connectionStatus !== 'DISCONNECTED' && disconnect && <Action secondary disabled={busy} onClick={() => { void run(account.id, () => disconnect(account.id)); }}>Отключить VK</Action>}
+                    {n === 'vk' && <p className="mini-note">Нужны разрешения на публикацию и фото. Видео VK пока не поддерживается.</p>}
+                </div>
+                <div className="account-switch"><label htmlFor={`account-${account.id}`}>Использовать для публикаций</label><Switch id={`account-${account.id}`} checked={account.enabled} disabled={!isConnected || busy} onCheckedChange={value => toggle(account.id, value)}/></div>
+            </Card>;
+        })}</div>
+        <Card title={<><ShieldCheck size={19}/> Безопасное подключение</>} className="connection-info"><p>Planly не запрашивает пароль VK. Разрешения подтверждаются на странице VK ID. Отключение VK удаляет его подключение из Planly.</p></Card></>;
 }
-export function Settings({ name, saveName, accounts, toggle, connect }: {
+export function Settings({ name, saveName, accounts, toggle, connect, disconnect }: {
     name: string;
     saveName: (name: string) => void;
     accounts: SocialAccountDto[];
     toggle: (id: string, value: boolean) => void;
     connect: (id: string, destinationId: string) => Promise<void>;
+    disconnect?: (id: string) => Promise<void>;
 }) { const [value, setValue] = useState(name); return <><div className="page-heading"><div><div className="eyebrow">ПОД ТВОЙ РИТМ</div><h1>Настройки</h1><p>Только самое необходимое.</p></div></div><div className="settings-layout"><Card title={<><User size={18}/> Личный профиль</>}><label className="field-label" htmlFor="profile-name">Как к тебе обращаться</label><input className="form-input" id="profile-name" value={value} onChange={e => setValue(e.target.value)} maxLength={40} placeholder="Твоё имя"/><p className="mini-note">Это имя хранится в PostgreSQL и отображается на главной странице.</p><Action onClick={() => { if (!value.trim()) {
     toast.error('Укажи имя.');
     return;
-} saveName(value.trim()); }}>Сохранить</Action></Card><Card title={<><Clock size={18}/> Публикации</>}><div className="setting-row"><span>Часовой пояс</span><b>Москва · UTC+3</b></div><div className="setting-row"><span>Язык интерфейса</span><b>Русский</b></div><div className="setting-row"><span>Формат времени</span><b>24 часа</b></div></Card><Card title={<><Info size={18}/> О Planly</>} className="settings-about"><p>Personal SMM Planner · Content Core</p><p>Посты, расписание, профиль, медиа и публикации в Telegram и MAX работают через серверную очередь.</p><div className="roadmap-inline"><span>01 · Интерфейс</span><span>02 · Контент</span><span>03 · Планировщик</span><span className="current">04 · Telegram и MAX</span></div></Card></div><section className="settings-socials" aria-label="Социальные сети"><SocialAccounts embedded accounts={accounts} toggle={toggle} connect={connect}/></section></>; }
+} saveName(value.trim()); }}>Сохранить</Action></Card><Card title={<><Clock size={18}/> Публикации</>}><div className="setting-row"><span>Часовой пояс</span><b>Москва · UTC+3</b></div><div className="setting-row"><span>Язык интерфейса</span><b>Русский</b></div><div className="setting-row"><span>Формат времени</span><b>24 часа</b></div></Card><Card title={<><Info size={18}/> О Planly</>} className="settings-about"><p>Personal SMM Planner · Content Core</p><p>Посты, расписание, профиль, медиа и публикации в Telegram, MAX и VK работают через серверную очередь.</p><div className="roadmap-inline"><span>01 · Интерфейс</span><span>02 · Контент</span><span>03 · Планировщик</span><span className="current">04 · Telegram и MAX</span></div></Card></div><section className="settings-socials" aria-label="Социальные сети"><SocialAccounts embedded accounts={accounts} toggle={toggle} connect={connect} disconnect={disconnect}/></section></>; }
 export function Analytics({ posts }: {
     posts: Post[];
 }) { const [period, setPeriod] = useState('7'); const factor = period === '7' ? 1 : 3.6; return <><div className="page-heading"><div><div className="eyebrow">ОТ КОНТЕНТА К РЕЗУЛЬТАТУ</div><h1>Аналитика</h1><p>Посмотри, что откликается твоей аудитории.</p></div><Tabs value={period} onValueChange={setPeriod}><TabsList><TabsTrigger value="7">7 дней</TabsTrigger><TabsTrigger value="30">30 дней</TabsTrigger></TabsList></Tabs></div><div className="notice"><Info size={19}/><p>Демонстрационные цифры для проверки интерфейса. Реальная статистика появится после подключения соцсетей.</p></div><Card title={`Обзор за ${period} дней`}><AnalyticsSummary large period={period}/></Card><div className="analytics-bottom"><Card title="Просмотры по дням" action={<span className="pill success"><TrendingUp size={13}/> +12,4%</span>}><div className="bar-chart">{(period === '7' ? [35, 48, 43, 67, 55, 82, 95] : [38, 52, 67, 90]).map((v, i) => <div key={i}><span>{Math.round(v * 29 * factor).toLocaleString('ru-RU')}</span><i style={{ height: `${v}%` }}/><small>{period === '7' ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i] : `${i + 1} нед.`}</small></div>)}</div></Card><Card title="Что работает лучше"><div className="insight-icon"><Sparkles size={22}/></div><h3>Полезный контент сохраняют чаще</h3><p className="insight-text">В демопримере чек-листы и практические советы получают больше сохранений, чем посты о повседневной жизни.</p><div className="insight-stat"><strong>+24,6%</strong><span>сохранений за неделю</span></div><small className="muted">Пример будущего анализа, основанного на твоей статистике.</small></Card></div><Card title="Примеры результатов публикаций"><div className="analytics-posts">{posts.slice(0, 3).map((p, i) => <div key={p.id}><SocialIcon network={p.networks[0] ?? 'telegram'}/><strong>{p.text.split('\n')[0]}</strong><span><Eye size={15}/>{[4820, 3240, 2180][i].toLocaleString('ru-RU')}</span><span><Heart size={15}/>{[346, 215, 189][i]}</span><span><Bookmark size={15}/>{[128, 72, 54][i]}</span></div>)}</div></Card></>; }

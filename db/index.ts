@@ -10,7 +10,7 @@ type DbGlobals = typeof globalThis & {
 
 const globals = globalThis as DbGlobals;
 
-export function getDb(): NodePgDatabase<typeof schema> {
+export function getPool(): Pool {
   if (!globals.__planlyPool) {
     globals.__planlyPool = new Pool({
       connectionString: getServerEnv().DATABASE_URL,
@@ -19,7 +19,11 @@ export function getDb(): NodePgDatabase<typeof schema> {
       connectionTimeoutMillis: 5_000,
     });
   }
-  globals.__planlyDb ??= drizzle(globals.__planlyPool, { schema });
+  return globals.__planlyPool;
+}
+
+export function getDb(): NodePgDatabase<typeof schema> {
+  globals.__planlyDb ??= drizzle(getPool(), { schema });
   return globals.__planlyDb;
 }
 

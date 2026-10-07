@@ -72,7 +72,7 @@ test('bootstrap rejects unauthenticated requests and returns owner snapshot when
   assert.deepEqual(body.posts, []);
   assert.deepEqual(body.libraryItems, []);
   assert.deepEqual(body.media, []);
-  assert.deepEqual(body.socialAccounts.map((x: { provider: string }) => x.provider).sort(), ['max', 'telegram']);
+  assert.deepEqual(body.socialAccounts.map((x: { provider: string }) => x.provider).sort(), ['max', 'telegram', 'vk']);
 });
 
 async function libraryRoutes() {

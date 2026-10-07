@@ -24,12 +24,12 @@ beforeEach(async () => {
 });
 after(closeDb);
 
-test('owner bootstrap creates exactly Telegram and MAX disconnected rows without credentials', async () => {
+test('owner bootstrap creates exactly Telegram, MAX and VK disconnected rows without credentials', async () => {
   await ensureOwnerSocialAccounts(ownerA);
   await ensureOwnerSocialAccounts(ownerA);
   const rows = await listSocialAccounts(ownerA);
-  assert.deepEqual(rows.map(x => x.provider).sort(), ['max', 'telegram']);
-  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(x => x.provider).sort(), ['max', 'telegram', 'vk']);
+  assert.equal(rows.length, 3);
   assert.ok(rows.every(x => x.connectionStatus === 'DISCONNECTED'));
   assert.ok(rows.every(x => x.enabled === false));
 });

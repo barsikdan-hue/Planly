@@ -5,6 +5,7 @@ import { createMaxConnector } from './connectors/max.ts';
 import { createTelegramConnector } from './connectors/telegram.ts';
 import { socialAccounts } from '../../db/schema.ts';
 import { fromDbProvider, type SocialAccountDto } from '../contracts/planner.ts';
+import { disconnectVkAccount } from './vk/oauth.ts';
 
 function toDto(row: typeof socialAccounts.$inferSelect): SocialAccountDto {
   return {
@@ -36,6 +37,10 @@ export async function ensureOwnerSocialAccounts(userId: string): Promise<void> {
       enabled: false,
       connectionStatus: 'DISCONNECTED',
     },
+    {
+      id: randomUUID(), userId, provider: 'VK', displayName: 'VK',
+      enabled: false, connectionStatus: 'DISCONNECTED',
+    },
   ]).onConflictDoNothing({ target: [socialAccounts.userId, socialAccounts.provider] });
 }
 
@@ -53,6 +58,19 @@ export async function setSocialAccountEnabled(
   enabled: boolean,
 ): Promise<SocialAccountDto> {
   const db = getDb();
+  const [account] = await db.select().from(socialAccounts)
+    .where(and(eq(socialAccounts.id, accountId), eq(socialAccounts.userId, userId))).limit(1);
+  if (!account) throw new Error('Social account not found');
+  if (account.provider === 'VK') {
+    if (enabled) {
+      // OAuth completion is the sole path that enables VK and commits its credentials.
+      if (!account.enabled || account.connectionStatus !== 'CONNECTED') throw new Error('Reconnect VK through VK ID.');
+      return toDto(account);
+    }
+    await disconnectVkAccount(userId, accountId);
+    const [disconnected] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, accountId));
+    return toDto(disconnected);
+  }
   const [row] = await db.update(socialAccounts)
     .set({ enabled, updatedAt: new Date() })
     .where(and(eq(socialAccounts.id, accountId), eq(socialAccounts.userId, userId)))
@@ -66,6 +84,7 @@ export async function connectSocialAccount(userId: string, accountId: string, de
   const db = getDb();
   const [account] = await db.select().from(socialAccounts).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,userId))).limit(1);
   if (!account) throw new Error('Social account not found');
+  if (account.provider === 'VK') return { ok: false, message: 'Подключи сообщество через VK ID.' };
   const connector = account.provider === 'MAX' ? createMaxConnector({token:process.env.MAX_BOT_TOKEN ?? ''}) : createTelegramConnector({token:process.env.TELEGRAM_BOT_TOKEN ?? ''});
   const result = await connector.validate(destinationId);
   if (!result.ok) return {ok:false,message:result.message};

@@ -25,7 +25,7 @@ export type SwipePlannerProps = {
 type Preset = keyof typeof slotPresets | 'custom';
 type Preview = { key: string; scheduledAt: string | null; error?: string };
 const weekdayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const providers: Provider[] = ['telegram', 'max'];
+const providers: Provider[] = ['telegram', 'max', 'vk'];
 const todayMoscow = () => new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
 const endDate = (date: string, days: number) => new Date(Date.parse(`${date}T12:00:00Z`) + (days - 1) * 86400000).toISOString().slice(0, 10);
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить решение. Попробуй снова.';

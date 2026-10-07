@@ -1,6 +1,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { Pool } from 'pg';
 
 type Envelope = { ciphertext: string; iv: string; tag: string; keyVersion: string };
@@ -65,7 +66,7 @@ test('native credential storage contains only authenticated envelopes and fresh 
   for (const value of [tokens.accessToken, tokens.refreshToken, tokens.deviceId]) assert.equal(stored.includes(value), false);
 }));
 
-test('native concurrent refresh commits UNCERTAIN before external call and serializes one replacement pair', async () => fixture(async (api, pool, key) => {
+test('native concurrent refresh commits UNCERTAIN before external call and serializes one replacement pair', async t => fixture(async (api, pool, key) => {
   const old = await seed(api, pool, key); const replacement = freshGrant(); let calls = 0;
   let release!: () => void; const blocked = new Promise<void>(resolve => { release = resolve; });
   let started!: () => void; const firstStarted = new Promise<void>(resolve => { started = resolve; });
@@ -74,8 +75,45 @@ test('native concurrent refresh commits UNCERTAIN before external call and seria
     const durable = await pool.query('SELECT refresh_state FROM vk_credentials WHERE account_id=$1', [accountId]); assert.equal(durable.rows[0]?.refresh_state, 'UNCERTAIN');
     started(); await blocked; return Response.json(replacement);
   };
-  const first = api.getVkAccessToken(accountId); await firstStarted;
-  const second = api.getVkAccessToken(accountId); release();
+  const first = api.getVkAccessToken(accountId); let second: Promise<string> | undefined;
+  try {
+    await Promise.race([firstStarted, first.then(() => assert.fail('refresh completed before the held transport'))]);
+    second = api.getVkAccessToken(accountId);
+    // Attach rejection handlers while observing the native lock graph.
+    void Promise.allSettled([first, second]);
+    const deadline = Date.now() + 2000;
+    let graph: { waiting_pid: number; holder_pid: number; wait_event: string; blockers: number[] } | undefined;
+    do {
+      const observation = await pool.query<{ waiting_pid: number; holder_pid: number; wait_event: string; blockers: number[] }>(`
+        SELECT waiting.pid AS waiting_pid, held.pid AS holder_pid, activity.wait_event,
+               pg_blocking_pids(waiting.pid) AS blockers
+        FROM pg_locks waiting
+        JOIN pg_locks held ON held.locktype = waiting.locktype
+          AND held.database IS NOT DISTINCT FROM waiting.database
+          AND held.classid = waiting.classid AND held.objid = waiting.objid
+          AND held.objsubid = waiting.objsubid AND held.granted
+        JOIN pg_stat_activity activity ON activity.pid = waiting.pid
+        WHERE waiting.locktype = 'advisory' AND NOT waiting.granted
+          AND waiting.classid::bigint = ((hashtextextended($1,0) >> 32) & 4294967295)
+          AND waiting.objid::bigint = (hashtextextended($1,0) & 4294967295)
+          AND waiting.objsubid = 1 AND activity.wait_event_type = 'Lock'
+          AND held.pid = ANY(pg_blocking_pids(waiting.pid))
+      `, [`planly:vk:account:${accountId}`]);
+      graph = observation.rows[0];
+      if (!graph) await delay(20);
+    } while (!graph && Date.now() < deadline);
+    assert.ok(graph, 'second PostgreSQL session did not wait on the held account advisory lock within 2 seconds');
+    assert.notEqual(graph.waiting_pid, graph.holder_pid);
+    assert.equal(graph.wait_event, 'advisory');
+    assert.ok(graph.blockers.includes(graph.holder_pid), 'native blocking graph did not identify the holding session');
+    const whileBlocked = await pool.query('SELECT refresh_state FROM vk_credentials WHERE account_id=$1', [accountId]);
+    assert.equal(whileBlocked.rows[0]?.refresh_state, 'UNCERTAIN'); assert.equal(calls, 1);
+    t.diagnostic(`Native advisory graph: waiter=${graph.waiting_pid}, holder=${graph.holder_pid}, blockers=${graph.blockers.join(',')}, wait_event=${graph.wait_event}, durable_state=UNCERTAIN`);
+  } finally {
+    release();
+    await Promise.allSettled(second ? [first, second] : [first]);
+  }
+  assert.ok(second);
   const values = await Promise.all([first, second]); assert.ok(values.every(value => value === replacement.access_token), 'workers did not read committed replacement'); assert.equal(calls, 1);
   const durable = await pool.query('SELECT refresh_state FROM vk_credentials WHERE account_id=$1', [accountId]); assert.equal(durable.rows[0]?.refresh_state, 'READY');
 }));

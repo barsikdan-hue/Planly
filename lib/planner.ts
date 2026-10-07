@@ -2,7 +2,7 @@ import type { PostDto, SavePostInput } from './contracts/planner.ts';
 
 export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string; sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean };
 
-export type Network = 'telegram' | 'max';
+export type Network = 'telegram' | 'max' | 'vk';
 export type Status = 'draft' | 'scheduled' | 'published' | 'failed';
 export type Media = {
   id: string;
@@ -34,6 +34,7 @@ export type Post = {
 export const networkNames: Record<Network, string> = {
   telegram: 'Telegram',
   max: 'MAX',
+  vk: 'VK',
 };
 export const statusNames: Record<Status, string> = {
   draft: 'Черновик',
@@ -54,7 +55,7 @@ export function validatePost(p: {
   mediaIds?: string[];
   overrides?: Partial<Record<Network, string>>;
 }, status: string, now = Date.now()): string | null {
-  const hasOverride = p.networks.some(network => (network === 'telegram' || network === 'max') && !!p.overrides?.[network]?.trim());
+  const hasOverride = p.networks.some(network => (network === 'telegram' || network === 'max' || network === 'vk') && !!p.overrides?.[network]?.trim());
   if (!p.text.trim() && !p.mediaIds?.length && !hasOverride) return 'Добавь текст публикации или медиа.';
   if (status === 'draft') return null;
   if (!p.networks.length) return 'Выбери хотя бы одну соцсеть.';

@@ -6,7 +6,7 @@ const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 }, 'Invalid calendar date');
 const unique = <T>(values: T[]) => new Set(values).size === values.length;
 export const slotQuerySchema = z.object({
-  providers: z.array(providerSchema).min(1).max(2).refine(unique, 'Duplicate provider'),
+  providers: z.array(providerSchema).min(1).max(3).refine(unique, 'Duplicate provider'),
   startDate: calendarDate,
   endDate: calendarDate,
   weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).refine(unique, 'Duplicate weekday'),

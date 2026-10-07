@@ -19,7 +19,7 @@ const posts: Post[] = [{
     mediaIds: [],
     overrides: {},
 }];
-const accounts = { telegram: false, max: false };
+const accounts = { telegram: false, max: false, vk: false };
 const socialAccounts: SocialAccountDto[] = [
     { id: 'tg', provider: 'telegram', providerAccountId: null, displayName: 'Telegram', enabled: false, connectionStatus: 'DISCONNECTED' },
     { id: 'max', provider: 'max', providerAccountId: null, displayName: 'MAX', enabled: false, connectionStatus: 'DISCONNECTED' },

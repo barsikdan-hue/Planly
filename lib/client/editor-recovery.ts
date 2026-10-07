@@ -19,9 +19,9 @@ const recoverySchema = z.object({
   editor: z.object({
     id: z.string().max(200), text: z.string(), date: z.string().max(10), time: z.string().max(5),
     sourceLibraryItemId: z.string().min(1).max(200).nullable().optional(),
-    networks: z.array(z.enum(['telegram', 'max'])).max(2).refine(values => new Set(values).size === values.length),
+    networks: z.array(z.enum(['telegram', 'max', 'vk'])).max(3).refine(values => new Set(values).size === values.length),
     mediaIds: z.array(z.string().min(1).max(200)).refine(values => new Set(values).size === values.length),
-    overrides: z.object({ telegram: z.string().optional(), max: z.string().optional() }).strict(),
+    overrides: z.object({ telegram: z.string().optional(), max: z.string().optional(), vk: z.string().optional() }).strict(),
   }),
 });
 export const editorFieldsSchema = recoverySchema.shape.editor;
@@ -30,7 +30,7 @@ export function editorKey(ownerId: string): string { return `planly:editor:v1:${
 
 export function editorFields(post: EditorFields): EditorFields {
   const overrides: Post['overrides'] = {};
-  for (const network of ['telegram', 'max'] as const) {
+  for (const network of ['telegram', 'max', 'vk'] as const) {
     if (post.overrides[network] !== undefined) overrides[network] = post.overrides[network];
   }
   return { id: post.id, text: post.text, networks: [...post.networks], date: post.date, time: post.time,
