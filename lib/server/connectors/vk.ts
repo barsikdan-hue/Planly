@@ -18,7 +18,7 @@ const validToken = (value: unknown): value is string => typeof value === 'string
 function apiFailure(code: unknown, mutation: boolean, unknownOutcome: () => Failure): Failure {
   if (typeof code !== 'number' || !Number.isSafeInteger(code)) return mutation ? unknownOutcome() : unavailable();
   if (code === 6 || code === 29) return { ...failure('TEMPORARY', `VK_${code}`, 'VK rate limit; retry later.'), retryAfterMs: 60_000 };
-  if ([5, 7, 14, 15, 17, 20, 24, 25, 214, 704, 1117].includes(code)) return failure('AUTH', `VK_${code}`, 'VK credentials, community permissions or an account challenge require reconnecting.');
+  if ([5, 7, 14, 15, 17, 20, 24, 25, 27, 28, 214, 704, 1117].includes(code)) return failure('AUTH', `VK_${code}`, 'VK credentials, community permissions or an account challenge require reconnecting.');
   if ([22, 100, 118, 121, 219, 220, 222, 224, 225].includes(code)) return failure('VALIDATION', `VK_${code}`, 'VK rejected the community, text or photo. Check the content and community settings.');
   if (code === 9) return failure('PERMANENT', 'VK_9', 'VK flood control rejected this publication. Review the community before trying again.');
   return mutation ? unknownOutcome() : unavailable();

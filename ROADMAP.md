@@ -1,7 +1,7 @@
 # Personal SMM Planner / Planly
 
 CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; docs-only PR23 merged at main `e7e40cb1549cc7d5fb7c16ba34ee82d6d42a004b`. Accepted production runtime remains `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8`, including merged CR11, CR09 and production-accepted CR06. [Closure evidence](docs/verification/2026-10-06-customer-ready-closure.md).
-CURRENT MILESTONE: Phase 7A VK — AUTHORIZED / IN PROGRESS (contract research). Implementation is stopped at the app permissions / OAuth credential-lifecycle Owner gate; no VK runtime or production acceptance is claimed. [Current VK research and gate](docs/verification/2026-10-07-phase7a-vk-contract.md).
+CURRENT MILESTONE: Phase 7A VK — AUTHORIZED / IN PROGRESS (implementation verification, draft PR24). Owner approved encrypted rotating OAuth credentials on 2026-10-07. Text/photo, VK ID, account lifecycle and existing publication paths are implemented on the feature branch; native 835/835, typecheck/lint/build and Docker verification passed on the runtime head; final evidence-head CI remains a release check. Real app scopes, private setup and live VK readiness remain unproven. No VK production acceptance is claimed. [Approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md), [implementation evidence](docs/verification/2026-10-07-phase7a-vk-implementation.md), [setup gate](docs/verification/2026-10-07-vk-owner-setup.md).
 NEXT MILESTONE: Instagram HOLD until VK production acceptance. CR07 / CR08 / GAP01 remain not started. Known P2 findings and unproven boundaries remain listed below.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
@@ -18,7 +18,7 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 5 | Content Library | DONE and deployed |
 | 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
 | 7 | Additional networks | IN PROGRESS; Owner authorized Phase 7A VK only |
-| 7A | VK | IN PROGRESS; research complete to an app permissions / OAuth credential-lifecycle Owner gate; runtime not started |
+| 7A | VK | IN PROGRESS; encrypted OAuth/text/photo implementation in draft PR24; real permissions/setup and merge/deploy/provider acceptance remain gated |
 | 8 | Analytics | Future |
 | 9 | Scheduling automation | Future |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |

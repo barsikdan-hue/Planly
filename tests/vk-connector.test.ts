@@ -119,7 +119,7 @@ test('VK account credential failure is sanitized and does not publish', async ()
   assert.equal(sends, 0);
 });
 
-for (const [code, type] of [[5, 'AUTH'], [1117, 'AUTH'], [6, 'TEMPORARY'], [29, 'TEMPORARY'], [7, 'AUTH'], [15, 'AUTH'], [20, 'AUTH'], [14, 'AUTH'], [17, 'AUTH'], [24, 'AUTH'], [25, 'AUTH'], [704, 'AUTH'], [100, 'VALIDATION'], [214, 'AUTH'], [222, 'VALIDATION'], [9, 'PERMANENT']] as const) {
+for (const [code, type] of [[5, 'AUTH'], [27, 'AUTH'], [28, 'AUTH'], [1117, 'AUTH'], [6, 'TEMPORARY'], [29, 'TEMPORARY'], [7, 'AUTH'], [15, 'AUTH'], [20, 'AUTH'], [14, 'AUTH'], [17, 'AUTH'], [24, 'AUTH'], [25, 'AUTH'], [704, 'AUTH'], [100, 'VALIDATION'], [214, 'AUTH'], [222, 'VALIDATION'], [9, 'PERMANENT']] as const) {
   test(`VK explicit error ${code} has bounded ${type} classification with no provider echo`, async () => {
     const { connector, requests } = fixture(() => json({ error: { error_code: code, error_msg: token, request_params: [{ key: 'access_token', value: token }] } }));
     const result = await connector.publish(input);
