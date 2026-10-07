@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { closeDb, getDb } from '../db/index.ts';
 import { libraryItems, libraryItemMedia, mediaAssets, postMedia, posts, postTargets, publications, sessions, socialAccounts, users } from '../db/schema.ts';
 import { createOwnerSession, SESSION_COOKIE_NAME } from '../lib/server/auth/session.ts';
-import { ensureOwnerSocialAccounts } from '../lib/server/social-accounts.ts';
+import { ensureOwnerSocialAccounts, listSocialAccounts } from '../lib/server/social-accounts.ts';
 import { GET as bootstrapGET } from '../app/api/bootstrap/route.ts';
 import { POST as postsPOST } from '../app/api/posts/route.ts';
 import { PATCH as postPATCH } from '../app/api/posts/[id]/route.ts';
@@ -73,6 +73,57 @@ test('bootstrap rejects unauthenticated requests and returns owner snapshot when
   assert.deepEqual(body.libraryItems, []);
   assert.deepEqual(body.media, []);
   assert.deepEqual(body.socialAccounts.map((x: { provider: string }) => x.provider).sort(), ['max', 'telegram', 'vk']);
+});
+
+test('bootstrap reconciles missing VK for an existing session without changing connected account state', async () => {
+  const db = getDb();
+  await db.delete(socialAccounts).where(eq(socialAccounts.provider, 'VK'));
+  await db.update(socialAccounts).set({
+    providerAccountId: '-100123456789', displayName: 'Existing Telegram channel',
+    connectionStatus: 'CONNECTED', enabled: true, updatedAt: new Date('2026-01-01T00:00:00Z'),
+  }).where(eq(socialAccounts.provider, 'TELEGRAM'));
+  await db.update(socialAccounts).set({
+    providerAccountId: '-987654321', displayName: 'Existing MAX channel',
+    connectionStatus: 'CONNECTED', enabled: false, updatedAt: new Date('2026-01-02T00:00:00Z'),
+  }).where(eq(socialAccounts.provider, 'MAX'));
+  const originalRows = await db.select().from(socialAccounts).where(eq(socialAccounts.userId, ownerId)).orderBy(socialAccounts.provider);
+  const originalDtos = await listSocialAccounts(ownerId);
+  const originalSessions = await db.select().from(sessions).where(eq(sessions.userId, ownerId));
+  assert.deepEqual(originalDtos.map(account => account.provider).sort(), ['max', 'telegram']);
+  assert.equal(originalSessions.length, 1);
+
+  const response = await bootstrapGET(request('/api/bootstrap'));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const accounts = body.socialAccounts as Awaited<ReturnType<typeof listSocialAccounts>>;
+  assert.equal(accounts.length, 3);
+  assert.deepEqual(accounts.map(account => account.provider).sort(), ['max', 'telegram', 'vk']);
+  assert.deepEqual(accounts.filter(account => account.provider !== 'vk'), originalDtos);
+  const vk = accounts.find(account => account.provider === 'vk')!;
+  assert.ok(vk.id && !originalRows.some(row => row.id === vk.id));
+  assert.equal(vk.displayName, 'VK');
+  assert.equal(vk.providerAccountId, null);
+  assert.equal(vk.connectionStatus, 'DISCONNECTED');
+  assert.equal(vk.enabled, false);
+  const reconciledRows = await db.select().from(socialAccounts).where(eq(socialAccounts.userId, ownerId)).orderBy(socialAccounts.provider);
+  assert.equal(reconciledRows.length, 3);
+  assert.deepEqual(reconciledRows.filter(row => row.provider !== 'VK'), originalRows);
+
+  const repeated = await bootstrapGET(request('/api/bootstrap'));
+  assert.equal(repeated.status, 200);
+  assert.deepEqual((await repeated.json()).socialAccounts, accounts);
+  assert.deepEqual(await db.select().from(socialAccounts).where(eq(socialAccounts.userId, ownerId)).orderBy(socialAccounts.provider), reconciledRows);
+  assert.deepEqual(await db.select().from(sessions).where(eq(sessions.userId, ownerId)), originalSessions);
+});
+
+test('unauthenticated bootstrap cannot reconcile or create social account rows', async () => {
+  const db = getDb();
+  await db.delete(socialAccounts).where(eq(socialAccounts.userId, ownerId));
+  for (const invalidToken of ['', 'forged-existing-session']) {
+    token = invalidToken;
+    assert.equal((await bootstrapGET(request('/api/bootstrap'))).status, 401);
+    assert.deepEqual(await db.select().from(socialAccounts), []);
+  }
 });
 
 async function libraryRoutes() {
