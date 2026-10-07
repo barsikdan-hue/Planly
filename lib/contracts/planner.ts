@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const providerSchema = z.enum(['telegram', 'max']);
+export const providerSchema = z.enum(['telegram', 'max', 'vk']);
 export type Provider = z.infer<typeof providerSchema>;
 
 export const postStatusSchema = z.enum(['DRAFT', 'READY', 'ARCHIVED']);
@@ -14,7 +14,7 @@ export const savePostInputSchema = z.object({
     provider: providerSchema,
     textOverride: z.string().max(20_000).nullable().default(null),
     scheduledAt: z.string().datetime({ offset: true }).nullable().default(null),
-  })).max(2).refine(
+  })).max(3).refine(
     targets => new Set(targets.map(target => target.provider)).size === targets.length,
     'Duplicate provider target',
   ),
@@ -92,10 +92,10 @@ export const updateProfileInputSchema = z.object({
 export type UpdateProfileInput = z.infer<typeof updateProfileInputSchema>;
 export type ProfileDto = { id: string; email: string; displayName: string };
 
-export function toDbProvider(provider: Provider): 'TELEGRAM' | 'MAX' {
-  return provider === 'telegram' ? 'TELEGRAM' : 'MAX';
+export function toDbProvider(provider: Provider): 'TELEGRAM' | 'MAX' | 'VK' {
+  return { telegram: 'TELEGRAM', max: 'MAX', vk: 'VK' }[provider] as 'TELEGRAM' | 'MAX' | 'VK';
 }
 
-export function fromDbProvider(provider: 'TELEGRAM' | 'MAX'): Provider {
-  return provider === 'TELEGRAM' ? 'telegram' : 'max';
+export function fromDbProvider(provider: 'TELEGRAM' | 'MAX' | 'VK'): Provider {
+  return { TELEGRAM: 'telegram', MAX: 'max', VK: 'vk' }[provider] as Provider;
 }

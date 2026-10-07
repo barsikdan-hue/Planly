@@ -13,7 +13,8 @@ import {
 const createdAt = timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 
-export const socialProviderEnum = pgEnum('social_provider', ['TELEGRAM', 'MAX']);
+export const socialProviderEnum = pgEnum('social_provider', ['TELEGRAM', 'MAX', 'VK']);
+export const vkRefreshStateEnum = pgEnum('vk_refresh_state', ['READY', 'UNCERTAIN']);
 export const socialConnectionStatusEnum = pgEnum('social_connection_status', ['DISCONNECTED', 'CONNECTED', 'ERROR']);
 export const postStatusEnum = pgEnum('post_status', ['DRAFT', 'READY', 'ARCHIVED']);
 export const libraryItemStatusEnum = pgEnum('library_item_status', ['READY', 'USED', 'ARCHIVED']);
@@ -75,6 +76,31 @@ export const socialAccounts = pgTable('social_accounts', {
   uniqueIndex('social_accounts_user_provider_uidx').on(table.userId, table.provider),
   index('social_accounts_user_id_idx').on(table.userId),
 ]);
+
+// Only authenticated ciphertext is stored; account/provider/purpose/version are AAD.
+export const vkCredentials = pgTable('vk_credentials', {
+  accountId: text('account_id').primaryKey().references(() => socialAccounts.id, { onDelete: 'cascade' }),
+  ciphertext: text('ciphertext').notNull(),
+  iv: text('iv').notNull(),
+  tag: text('tag').notNull(),
+  keyVersion: text('key_version').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  refreshState: vkRefreshStateEnum('refresh_state').notNull().default('READY'),
+  updatedAt,
+});
+
+export const vkOAuthIntents = pgTable('vk_oauth_intents', {
+  stateHash: text('state_hash').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => socialAccounts.id, { onDelete: 'cascade' }),
+  communityId: text('community_id').notNull(),
+  ciphertext: text('ciphertext').notNull(),
+  iv: text('iv').notNull(),
+  tag: text('tag').notNull(),
+  keyVersion: text('key_version').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt,
+}, table => [uniqueIndex('vk_oauth_intents_account_uidx').on(table.accountId), index('vk_oauth_intents_expiry_idx').on(table.expiresAt)]);
 
 export const libraryItems = pgTable('library_items', {
   id: text('id').primaryKey(),

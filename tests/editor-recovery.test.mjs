@@ -54,7 +54,7 @@ test('deleted post becomes new draft and stale media ids are removed without los
 });
 
 test('malformed, unsupported-version and oversized recovery is ignored', () => {
-  for (const raw of ['{', JSON.stringify({ version: 2, editor: editorFields(editor()) }), 'x'.repeat(150_001), JSON.stringify({ version: 1, editor: { ...editorFields(editor()), networks: ['vk'] } })]) {
+  for (const raw of ['{', JSON.stringify({ version: 2, editor: editorFields(editor()) }), 'x'.repeat(150_001), JSON.stringify({ version: 1, editor: { ...editorFields(editor()), networks: ['instagram'] } })]) {
     const storage = memoryStorage(); storage.setItem(editorKey('owner'), raw);
     assert.deepEqual(readRecovery(storage, 'owner'), { editor: null, unavailable: false, invalid: true });
   }

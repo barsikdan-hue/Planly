@@ -145,3 +145,11 @@ export function connectSocialAccount(id: string, destinationId: string): Promise
 }
 
 export const connectTelegramAccount = connectSocialAccount;
+
+export function startVkConnection(accountId: string, communityId: string): Promise<{ authorizationUrl: string }> {
+  return request('/api/social-accounts/vk/start', jsonRequest('POST', { accountId, communityId }));
+}
+
+export function disconnectVkConnection(accountId: string): Promise<SocialAccountDto> {
+  return request('/api/social-accounts/vk/disconnect', jsonRequest('POST', { accountId }));
+}

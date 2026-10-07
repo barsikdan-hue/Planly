@@ -20,7 +20,7 @@ import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts } from './planner-slots.ts';
 import { slotMinuteKey } from '../planner-slots.ts';
 
-const providerOrder = { telegram: 0, max: 1 } as const;
+const providerOrder = { telegram: 0, max: 1, vk: 2 } as const;
 
 type PostPersistenceOptions = {
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;

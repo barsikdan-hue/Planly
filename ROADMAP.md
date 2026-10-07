@@ -1,8 +1,8 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phases 0–6 DONE for MVP. Accepted production/main checkpoint: `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8` (2026-10-06), including merged CR11, CR09 and CR06. [Current closure evidence](docs/verification/2026-10-06-customer-ready-closure.md).
-CURRENT MILESTONE: MVP RELEASE CANDIDATE / CUSTOMER-READY PLANLY — the approved release scope is technically complete and production accepted; milestone closure awaits the Owner decision. Known P2 findings and unproven boundaries remain listed below.
-NEXT MILESTONE: none authorized. CR07 / CR08 / GAP01 are not started; Phase 7 remains HOLD pending an explicit Owner product decision.
+CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; docs-only PR23 merged at main `e7e40cb1549cc7d5fb7c16ba34ee82d6d42a004b`. Accepted production runtime remains `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8`, including merged CR11, CR09 and production-accepted CR06. [Closure evidence](docs/verification/2026-10-06-customer-ready-closure.md).
+CURRENT MILESTONE: Phase 7A VK — AUTHORIZED / IN PROGRESS (implementation verification, draft PR24). Owner approved encrypted rotating OAuth credentials on 2026-10-07. Text/photo, VK ID, account lifecycle and existing publication paths are implemented on the feature branch; native 835/835, typecheck/lint/build and Docker verification passed on the runtime head; final evidence-head CI remains a release check. Real app scopes, private setup and live VK readiness remain unproven. No VK production acceptance is claimed. [Approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md), [implementation evidence](docs/verification/2026-10-07-phase7a-vk-implementation.md), [setup gate](docs/verification/2026-10-07-vk-owner-setup.md).
+NEXT MILESTONE: Instagram HOLD until VK production acceptance. CR07 / CR08 / GAP01 remain not started. Known P2 findings and unproven boundaries remain listed below.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -17,7 +17,8 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 4 | Telegram + MAX Functional MVP | DONE; scoped production acceptance below |
 | 5 | Content Library | DONE and deployed |
 | 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
-| 7 | Additional networks | HOLD; requires an explicit owner product decision |
+| 7 | Additional networks | IN PROGRESS; Owner authorized Phase 7A VK only |
+| 7A | VK | IN PROGRESS; encrypted OAuth/text/photo implementation in draft PR24; real permissions/setup and merge/deploy/provider acceptance remain gated |
 | 8 | Analytics | Future |
 | 9 | Scheduling automation | Future |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
@@ -119,7 +120,7 @@ Completed goal: conveniently store content prepared outside Planly. Prepared con
 
 ## Later-phase boundaries
 
-- Phase 7 networks require an explicit owner decision; VK/Instagram are not automatic next work.
+- Owner authorized Phase 7A VK on 2026-10-07. Instagram remains HOLD until VK production acceptance and a separate Owner decision. This authorization does not start CR07 / CR08 / GAP01 or later phases.
 - Phase 8 analytics follows a stable core product.
 - Phase 9 may add reusable slots, repeat content, better posting times and scheduling assistance, without AI.
 - Phase 10 revisits hosting, a permanent worker, scheduler precision, backups, DNS/TLS and monitoring only when a real need is proven and the owner approves the infrastructure decision.

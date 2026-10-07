@@ -1,8 +1,9 @@
-export type SocialProvider = 'TELEGRAM' | 'MAX';
+export type SocialProvider = 'TELEGRAM' | 'MAX' | 'VK';
 export type PublicationErrorType = 'TEMPORARY' | 'AUTH' | 'VALIDATION' | 'PERMANENT';
 
 export type PublishInput = {
   publicationId: string;
+  socialAccountId?: string;
   provider: SocialProvider;
   destinationId: string | null;
   text: string;

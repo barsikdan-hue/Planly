@@ -10,10 +10,25 @@ export type PublicationContentIssue = { code: string; message: string };
 // The existing Planly upload/connector limits are intentionally narrower than provider capabilities.
 // Count UTF-16 units consistently with the connectors; no parse_mode or entity parsing is used.
 export function validatePublicationContent(
-  provider: 'TELEGRAM' | 'MAX',
+  provider: 'TELEGRAM' | 'MAX' | 'VK',
   text: string,
   media: readonly PublicationMediaMetadata[] = [],
 ): PublicationContentIssue | null {
+  if (provider === 'VK') {
+    // Conservative Planly MVP limits, not a claim about VK's maximum capabilities.
+    if (media.length > 10 || text.length > 4000 || (!media.length && !text.trim())) return {
+      code: 'VK_CONTENT_LIMIT', message: 'VK: добавь текст или фото; не более 4000 символов и 10 фотографий.',
+    };
+    for (const asset of media) {
+      if (asset.mimeType !== 'image/jpeg' && asset.mimeType !== 'image/png') return {
+        code: 'VK_MEDIA_FORMAT', message: 'VK: публикация поддерживает JPEG и PNG. Видео пока не поддерживается.',
+      };
+      if (!asset.byteSize || asset.byteSize > 10 * 1024 * 1024) return {
+        code: 'VK_MEDIA_SIZE', message: 'VK: изображение должно быть непустым и не больше 10 МиБ.',
+      };
+    }
+    return null;
+  }
   const name = provider === 'TELEGRAM' ? 'Telegram' : 'MAX';
   const maxItems = provider === 'TELEGRAM' ? 10 : 12;
   const textLimit = provider === 'TELEGRAM' ? (media.length ? 1024 : 4096) : 4000;
