@@ -52,8 +52,8 @@ async function publicationRows(postId: string) {
 async function vkConnector(fetchImpl: typeof fetch, accounts: string[]): Promise<SocialConnector> {
   // Dynamic path keeps the tests-only RED checkpoint typecheckable before the new module exists.
   const modulePath = '../lib/server/connectors/vk.ts';
-  const module = await import(modulePath) as { createVkConnector(options: { getAccessToken: (id: string) => Promise<string>; fetchImpl: typeof fetch }): SocialConnector };
-  return module.createVkConnector({ getAccessToken: async id => { accounts.push(id); return token; }, fetchImpl });
+  const vkModule = await import(modulePath) as { createVkConnector(options: { getAccessToken: (id: string) => Promise<string>; fetchImpl: typeof fetch }): SocialConnector };
+  return vkModule.createVkConnector({ getAccessToken: async id => { accounts.push(id); return token; }, fetchImpl });
 }
 const api = (response: unknown) => Response.json({ response });
 function resolver(vk: SocialConnector, captured: PublishInput[]): ConnectorResolver {

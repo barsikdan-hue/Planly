@@ -30,6 +30,16 @@ test('provider error echoes never become public OAuth diagnostics', async () => 
   assert.equal(JSON.stringify(error).includes(echo), false); assert.equal(String(error).includes(echo), false);
 });
 
+test('OAuth grant rejects whitespace and control characters in either rotating token', async () => {
+  const api = await oauthModule();
+  for (const field of ['access_token', 'refresh_token']) {
+    const generated = randomBytes(24).toString('hex');
+    for (const value of [' ', '\t\r\n', `${generated} `, `${generated}\0`, `${generated}\x1f`, `${generated}\x7f`, `${generated}\u00a0`]) {
+      assert.throws(() => api.parseVkGrant({ ...grant(), [field]: value }), error => error instanceof api.VkOAuthError && error.code === 'AUTH');
+    }
+  }
+});
+
 test('VK config enforces static server key version redirect and app credentials', async () => {
   const path = '../lib/server/vk/config.ts'; const loaded = await import(path).catch(() => null);
   assert.ok(loaded?.getVkConfig, 'VK strict server configuration feature is missing');
