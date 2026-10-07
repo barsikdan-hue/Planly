@@ -10,10 +10,10 @@ test('production planner app no longer imports IndexedDB workspace storage', asy
   assert.match(source, /planly-api/);
 });
 
-test('active MVP network model exposes Telegram and MAX only', async () => {
+test('active Phase 7A network model exposes Telegram, MAX and VK only', async () => {
   const source = await read('lib/planner.ts');
-  assert.match(source, /'telegram'\s*\|\s*'max'/);
-  assert.doesNotMatch(source, /'vk'|'instagram'/);
+  assert.match(source, /export type Network = 'telegram'\s*\|\s*'max'\s*\|\s*'vk';/);
+  assert.doesNotMatch(source, /'instagram'/);
 });
 
 test('composer cannot claim a fake immediate publication', async () => {
@@ -22,11 +22,13 @@ test('composer cannot claim a fake immediate publication', async () => {
   assert.match(source, /Запланировать/);
 });
 
-test('social and calendar surfaces contain MAX instead of VK or Instagram', async () => {
+test('social and calendar surfaces include approved VK and MAX while excluding Instagram', async () => {
   const settings = await read('components/planner/settings.tsx');
   const calendar = await read('components/planner/calendar.tsx');
-  assert.doesNotMatch(`${settings}\n${calendar}`, /Instagram|\bVK\b|instagram|\bvk\b/);
+  assert.doesNotMatch(`${settings}\n${calendar}`, /Instagram|instagram/);
   assert.match(`${settings}\n${calendar}`, /MAX/);
+  assert.match(settings, /Подключить через VK ID/);
+  assert.match(calendar, /legend-dot vk/);
 });
 
 test('planner UI no longer describes provider publishing as Telegram-only or future-only', async () => {

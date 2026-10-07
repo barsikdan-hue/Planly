@@ -382,6 +382,16 @@ export default function PlannerApp() {
         window.addEventListener('hashchange', sync);
         return () => window.removeEventListener('hashchange', sync);
     }, []);
+    useEffect(() => {
+        if (!ready || !isOwnerCurrent(ownerContext) || !window.location.search) return;
+        const url = new URL(window.location.href);
+        const feedback = url.searchParams.get('vk');
+        if (feedback !== 'connected' && feedback !== 'reconnect') return;
+        url.searchParams.delete('vk');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        if (feedback === 'connected') toast.success('VK подключён: права публикации подтверждены.');
+        else toast.error('Не удалось подтвердить подключение VK. Повтори вход через VK ID.');
+    }, [ready, ownerContext, isOwnerCurrent]);
     const navigate = useCallback((v: string) => {
         const nextView = normalizePlannerView(v);
         if (!nextView) return;

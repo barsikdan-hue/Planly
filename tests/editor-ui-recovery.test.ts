@@ -50,7 +50,7 @@ test('malformed optional UI under the envelope size limit salvages valid text an
 });
 
 test('valid optional UI does not bypass invalid content, version or whole-envelope size rejection', () => {
-  for (const raw of [JSON.stringify({ version: 1, editor: { ...recovery.editorFields(draft()), networks: ['vk'] }, ui: { publishMode: 'now' } }),
+  for (const raw of [JSON.stringify({ version: 1, editor: { ...recovery.editorFields(draft()), networks: ['instagram'] }, ui: { publishMode: 'now' } }),
     JSON.stringify({ version: 2, editor: recovery.editorFields(draft()), ui: { publishMode: 'now' } }), 'x'.repeat(150001)]) {
     const cache = storage(); cache.setItem(recovery.editorKey('owner'), raw);
     assert.deepEqual(recovery.readRecovery(cache, 'owner'), { editor: null, unavailable: false, invalid: true });
