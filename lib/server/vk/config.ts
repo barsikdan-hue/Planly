@@ -5,16 +5,26 @@ export type VkOAuthDiagnostic = {
 
 export type VkInvalidGrantReason = 'PKCE_MISMATCH' | 'CODE_VERIFIER_REJECTED' | 'CODE_INVALID_EXPIRED_OR_USED' | 'DEVICE_ID_REJECTED' | 'REDIRECT_REJECTED' | 'SERVICE_TOKEN_REJECTED' | 'OTHER_INVALID_GRANT';
 
+export type VkDescriptionState = 'MISSING' | 'NON_STRING' | 'EMPTY' | 'PRESENT' | 'TOO_LONG';
+export type VkDescriptionMention = 'PKCE' | 'CODE' | 'DEVICE_ID' | 'REDIRECT_URI' | 'SERVICE_TOKEN';
+export type VkTokenExchangeMetadata = {
+  providerHttpStatus: number;
+  providerDescriptionState: VkDescriptionState;
+  providerDescriptionMentions: readonly VkDescriptionMention[];
+};
+
 export class VkOAuthError extends Error {
   readonly code: string;
   readonly diagnostic?: VkOAuthDiagnostic;
   readonly invalidGrantReason?: VkInvalidGrantReason;
-  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION', diagnostic?: VkOAuthDiagnostic, invalidGrantReason?: VkInvalidGrantReason) {
+  readonly tokenExchangeMetadata?: VkTokenExchangeMetadata;
+  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION', diagnostic?: VkOAuthDiagnostic, invalidGrantReason?: VkInvalidGrantReason, tokenExchangeMetadata?: VkTokenExchangeMetadata) {
     super(`VK authorization failed (${code})`);
     this.name = 'VkOAuthError';
     this.code = code;
     this.diagnostic = diagnostic;
     this.invalidGrantReason = invalidGrantReason;
+    this.tokenExchangeMetadata = tokenExchangeMetadata;
   }
 }
 
