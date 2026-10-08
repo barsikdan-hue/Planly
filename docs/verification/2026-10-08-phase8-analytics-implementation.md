@@ -34,7 +34,9 @@ Local fixtures use an isolated native PostgreSQL/Redis stack on loopback ports 5
 | Initial local full suite | 960/961 PASS, no skips; unchanged Windows self-host path test fails |
 | Final focused analytics / typecheck | 58/58 PASS without skips on exact Node 22.13.0; typecheck PASS |
 | Deadline-fix focused lint | PASS on exact Node 22.13.0 |
-| Build/lint gates | Canonical exact-head CI/Self-host required; local build blocked by external dependency junction |
+| Canonical code-head CI | `4dbcaf927a4d28218b71d2d2962c77bbb0d74b1c`: [native run 37796263342](https://github.com/barsikdan-hue/Planly/actions/runs/37796263342) SUCCESS; 967/967 tests, zero failures/cancellations/skips; migration/drift/typecheck/lint/build SUCCESS |
+| Canonical code-head Self-host | Same `4dbcaf9` head: [run 37796262898](https://github.com/barsikdan-hue/Planly/actions/runs/37796262898) SUCCESS; Docker runtime/build/scheduler recovery verified; optional telegram-live SKIPPED |
+| Local build/lint limitations | External dependency junction blocked local build; full local lint exhausted heap. Neither is PASS; canonical Linux gates passed |
 | Final native CI and Self-host | See exact-head evidence in PR body/checks; no prior-head result substitutes for the final head |
 | Production analytics / MAX real count / Telegram real delivery | NOT PROVEN |
 
@@ -60,7 +62,7 @@ Root cause: `refreshMaxAnalytics` composed `AbortSignal.any([AbortSignal.timeout
 
 Downloaded the exact official Node 22.13.0 Windows executable into isolated scratch and verified it against official SHA256 sums. The existing per-call test reproduced cancellation. A child-process GC test executed the actual refresh module with a synthetic held reader and a shortened test-only clock: the deadline failed and a late value was accepted (RED). The MAX reader's parent-signal GC probe already passed before the change, so that probe is supporting coverage, not a claimed failing reproduction.
 
-Minimal correction: `collectionDeadline` owns a referenced timer/AbortController, forwards parent cancellation and clears its timer/listener in finally. Both MAX request deadlines and the refresh deadline consume it. Production bounds remain exactly 10/25 seconds; account cancellation/draining and lease cleanup remain enforced. Existing timeout assertions are unchanged. GC reproduction and cancelled timeout test turned GREEN; all 58 analytics checks passed on Node 22.13.0, including the original real 25-second test. Final canonical full-suite SUCCESS remains required for the new exact head.
+Minimal correction: `collectionDeadline` owns a referenced timer/AbortController, forwards parent cancellation and clears its timer/listener in finally. Both MAX request deadlines and the refresh deadline consume it. Production bounds remain exactly 10/25 seconds; account cancellation/draining and lease cleanup remain enforced. Existing timeout assertions are unchanged. GC reproduction and cancelled timeout test turned GREEN; all 58 analytics checks passed on Node 22.13.0, including the original real 25-second test. Code-head `4dbcaf9` then passed the canonical full suite (967/967), lint, typecheck and build, plus Self-host. The final documentation-only head is checked independently before release; its exact results are recorded in the PR body/checks.
 
 No second reviewer pass is requested. Final focused analytics checks passed 58/58 on exact Node 22.13.0, typecheck passed and deadline-file lint passed. Canonical full-suite/lint/build evidence must cover the exact final PR head; the result is recorded in its body/checks.
 
@@ -72,9 +74,8 @@ Deferred minor: frozen Telegram receipts do not retain destination type. A `-100
 2. Accept positive and negative canonical MAX numeric destinations, matching the existing validator. Cost if wrong: reject or misclassify a valid destination.
 3. Preserve the unchanged Windows self-host test and require canonical Linux full-suite success. Cost if wrong: an actual Windows regression could remain undiscovered.
 4. Provider acceptance and webhook activation set aside by review remain deferred to their expressly approved later gates. Cost if wrong: mocked access/receipt evidence could differ from production.
-5. Preserve/restore the original dependency junction after a frozen physical install timeout and use canonical Linux build/Self-host gates. Cost if wrong: local Windows build parity remains unverified.
-6. Handoff docs and exact-head CI set aside by review are executor release obligations; neither review nor local checks substitute for them. Cost if wrong: releasing an unverified head.
-
+5. Handoff docs and exact-head CI set aside by review are executor release obligations; neither review nor local checks substitute for them. Cost if wrong: releasing an unverified head.
+6. Preserve/restore the original dependency junction after a frozen physical install timeout and use canonical Linux build/Self-host gates. Cost if wrong: local Windows build parity remains unverified.
 7. Use an explicitly owned, cleared timer after the canonical-runtime GC reproduction instead of extending/weakening deadlines. Cost if wrong: timer retention or deadline cancellation could be incorrect; GC and original timeout tests cover both consumers.
 
 ## Owner release and later activation

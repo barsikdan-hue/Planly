@@ -3,7 +3,7 @@
 CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; its acceptance scope remains in the [closure evidence](docs/verification/2026-10-06-customer-ready-closure.md). Main and latest Render LIVE runtime were verified on 2026-10-08 at `124f6d4fceedcbb8a9ef2ba59827a65b1cabe383` after PR30; health HTTP 200. This is deployment evidence, not new Telegram/MAX provider acceptance or successful VK authorization.
 CURRENT MILESTONE: Phase 8 Analytics — approved design/plan and inline implementation on 2026-10-08. Tasks 1–5 implemented on the feature branch: owned MAX views, authenticated Telegram aggregate receiver and real-data UI. Independent review fixes and 58 focused analytics checks on Node 22.13.0 are verified. Canonical exact-head CI/Self-host remains the release gate; production/provider acceptance is NOT PROVEN. [Implementation evidence](docs/verification/2026-10-08-phase8-analytics-implementation.md).
 DEFERRED: Phase 7A VK — HOLD by Owner on 2026-10-08. Implementation and diagnostic PRs are merged, but the latest real attempt failed at TOKEN_EXCHANGE / INVALID_GRANT; the root cause and publication readiness remain unproven. Stop VK investigation, OAuth attempts, support requests and changes until Owner explicitly resumes VK. Existing code and credentials are retained; HOLD is not production acceptance. [Original approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md).
-NEXT STEP: Finish exact-head CI/Self-host and independent review for PR #31, then request explicit Owner merge/deploy approval. Telegram webhook activation requires a separate private configuration gate. MAX live read and Telegram delivery remain independently unproven. Instagram stays HOLD; CR07 / CR08 / GAP01 remain not started.
+NEXT STEP: Independent review and its fixes are complete. Finish exact-head CI/Self-host for PR #31, then request explicit Owner merge/deploy approval. Telegram webhook activation requires a separate private configuration gate. MAX live read and Telegram delivery remain independently unproven. Instagram stays HOLD; CR07 / CR08 / GAP01 remain not started.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -20,7 +20,7 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
 | 7 | Additional networks | HOLD; VK deferred by Owner, Instagram not started |
 | 7A | VK | HOLD by Owner 2026-10-08; implementation merged, live OAuth and publishing unproven |
-| 8 | Analytics | WRITTEN DESIGN APPROVED; Telegram/MAX post performance; implementation awaits plan review/execution selection |
+| 8 | Analytics | IMPLEMENTED ON FEATURE BRANCH; review fixes verified; exact-head CI, Owner release and production/provider acceptance remain gates |
 | 9 | Scheduling automation | Future |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
 
