@@ -148,6 +148,7 @@ export async function processPublication(
       status: 'PUBLISHED',
       publishedAt: new Date(),
       providerRemoteId: result.remoteId,
+      ...((row.publication.provider === 'TELEGRAM' || row.publication.provider === 'MAX') && input.destinationId && /^-?[1-9]\d{0,15}$/.test(input.destinationId) && Number.isSafeInteger(Number(input.destinationId)) ? {analyticsDestinationId:input.destinationId} : {}),
       providerUrl: result.remoteUrl ?? null,
       nextRetryAt: null,
       normalizedErrorType: null,

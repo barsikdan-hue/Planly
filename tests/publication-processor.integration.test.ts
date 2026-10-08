@@ -62,6 +62,18 @@ test('successful publish stores remote ID and becomes PUBLISHED', async () => {
   assert.equal(row?.attemptCount, 1);
 });
 
+test('analytics receipt freezes the destination actually sent despite later reconnection', async () => {
+  let sent: string | null = null;
+  const result = await processPublication(publicationId, () => ({provider:'TELEGRAM', async publish(input) {
+    sent=input.destinationId;
+    await getDb().update(socialAccounts).set({providerAccountId:'-100999'}).where(eq(socialAccounts.id,'processor-tg'));
+    return {ok:true,remoteId:'31'};
+  }}));
+  assert.equal(result.status,'PUBLISHED');assert.equal(sent,'-100123');
+  const [row]=await getDb().select().from(publications).where(eq(publications.id,publicationId));
+  assert.equal(row.analyticsDestinationId,'-100123');assert.equal(row.attemptCount,1);
+});
+
 test('duplicate delivery after PUBLISHED does not call connector again', async () => {
   await reset('PUBLISHED');
   const result = await processPublication(publicationId, resolver);

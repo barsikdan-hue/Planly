@@ -1,5 +1,7 @@
 import {
+  bigint,
   boolean,
+  check,
   index,
   integer,
   pgEnum,
@@ -9,6 +11,8 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import type { AnalyticsError, AnalyticsMetric, MetricObservation } from '../lib/contracts/analytics.ts';
 
 const createdAt = timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
@@ -206,6 +210,7 @@ export const publications = pgTable('publications', {
   scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'date' }),
   publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
   providerRemoteId: text('provider_remote_id'),
+  analyticsDestinationId: text('analytics_destination_id'),
   providerUrl: text('provider_url'),
   attemptCount: integer('attempt_count').notNull().default(0),
   lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true, mode: 'date' }),
@@ -220,4 +225,22 @@ export const publications = pgTable('publications', {
   index('publications_user_id_idx').on(table.userId),
   index('publications_status_idx').on(table.status),
   index('publications_scheduled_at_idx').on(table.scheduledAt),
+]);
+
+export const publicationMetrics = pgTable('publication_metrics', {
+  publicationId: text('publication_id').primaryKey().references(() => publications.id, {onDelete:'cascade'}),
+  remoteMessageId: text('remote_message_id').notNull(),
+  destinationId: text('destination_id').notNull(),
+  metric: text('metric').$type<AnalyticsMetric>().notNull(),
+  source: text('source').$type<'MAX_MESSAGE'|'TELEGRAM_AGGREGATE'>().notNull(),
+  value: bigint('value',{mode:'number'}),
+  coverage: text('coverage').$type<MetricObservation['coverage']>().notNull().default('NO_DATA'),
+  observedAt: timestamp('observed_at',{withTimezone:true,mode:'date'}),
+  providerEventAt: timestamp('provider_event_at',{withTimezone:true,mode:'date'}),
+  lastUpdateId: bigint('last_update_id',{mode:'number'}),
+  collectionError: text('collection_error').$type<AnalyticsError>(),
+  attemptedAt: timestamp('attempted_at',{withTimezone:true,mode:'date'}),
+  nextAttemptAt: timestamp('next_attempt_at',{withTimezone:true,mode:'date'}),
+}, table=>[
+  check('publication_metrics_value_check', sql`${table.value} IS NULL OR (${table.value} >= 0 AND ${table.value} <= 9007199254740991)`),
 ]);

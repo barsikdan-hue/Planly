@@ -1,11 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { CheckCircle2, ShieldCheck, Sparkles, Clock, User, Info, TrendingUp, Eye, Heart, Bookmark } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, Clock, User, Info } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, SocialIcon, Action } from './common';
-import { AnalyticsSummary } from './dashboard';
-import { networkNames, type Network, type Post } from '@/lib/planner';
+import { networkNames, type Network } from '@/lib/planner';
 import type { SocialAccountDto } from '@/lib/contracts/planner';
 import { toast } from 'sonner';
 export function SocialAccounts({ accounts, toggle, connect, disconnect, embedded = false }: {
@@ -58,6 +56,3 @@ export function Settings({ name, saveName, accounts, toggle, connect, disconnect
     toast.error('Укажи имя.');
     return;
 } saveName(value.trim()); }}>Сохранить</Action></Card><Card title={<><Clock size={18}/> Публикации</>}><div className="setting-row"><span>Часовой пояс</span><b>Москва · UTC+3</b></div><div className="setting-row"><span>Язык интерфейса</span><b>Русский</b></div><div className="setting-row"><span>Формат времени</span><b>24 часа</b></div></Card><Card title={<><Info size={18}/> О Planly</>} className="settings-about"><p>Personal SMM Planner · Content Core</p><p>Посты, расписание, профиль, медиа и публикации в Telegram, MAX и VK работают через серверную очередь.</p><div className="roadmap-inline"><span>01 · Интерфейс</span><span>02 · Контент</span><span>03 · Планировщик</span><span className="current">04 · Telegram и MAX</span></div></Card></div><section className="settings-socials" aria-label="Социальные сети"><SocialAccounts embedded accounts={accounts} toggle={toggle} connect={connect} disconnect={disconnect}/></section></>; }
-export function Analytics({ posts }: {
-    posts: Post[];
-}) { const [period, setPeriod] = useState('7'); const factor = period === '7' ? 1 : 3.6; return <><div className="page-heading"><div><div className="eyebrow">ОТ КОНТЕНТА К РЕЗУЛЬТАТУ</div><h1>Аналитика</h1><p>Посмотри, что откликается твоей аудитории.</p></div><Tabs value={period} onValueChange={setPeriod}><TabsList><TabsTrigger value="7">7 дней</TabsTrigger><TabsTrigger value="30">30 дней</TabsTrigger></TabsList></Tabs></div><div className="notice"><Info size={19}/><p>Демонстрационные цифры для проверки интерфейса. Реальная статистика появится после подключения соцсетей.</p></div><Card title={`Обзор за ${period} дней`}><AnalyticsSummary large period={period}/></Card><div className="analytics-bottom"><Card title="Просмотры по дням" action={<span className="pill success"><TrendingUp size={13}/> +12,4%</span>}><div className="bar-chart">{(period === '7' ? [35, 48, 43, 67, 55, 82, 95] : [38, 52, 67, 90]).map((v, i) => <div key={i}><span>{Math.round(v * 29 * factor).toLocaleString('ru-RU')}</span><i style={{ height: `${v}%` }}/><small>{period === '7' ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][i] : `${i + 1} нед.`}</small></div>)}</div></Card><Card title="Что работает лучше"><div className="insight-icon"><Sparkles size={22}/></div><h3>Полезный контент сохраняют чаще</h3><p className="insight-text">В демопримере чек-листы и практические советы получают больше сохранений, чем посты о повседневной жизни.</p><div className="insight-stat"><strong>+24,6%</strong><span>сохранений за неделю</span></div><small className="muted">Пример будущего анализа, основанного на твоей статистике.</small></Card></div><Card title="Примеры результатов публикаций"><div className="analytics-posts">{posts.slice(0, 3).map((p, i) => <div key={p.id}><SocialIcon network={p.networks[0] ?? 'telegram'}/><strong>{p.text.split('\n')[0]}</strong><span><Eye size={15}/>{[4820, 3240, 2180][i].toLocaleString('ru-RU')}</span><span><Heart size={15}/>{[346, 215, 189][i]}</span><span><Bookmark size={15}/>{[128, 72, 54][i]}</span></div>)}</div></Card></>; }
