@@ -1,9 +1,9 @@
 # Personal SMM Planner / Planly
 
 CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; its acceptance scope remains in the [closure evidence](docs/verification/2026-10-06-customer-ready-closure.md). Main and latest Render LIVE runtime were verified on 2026-10-08 at `124f6d4fceedcbb8a9ef2ba59827a65b1cabe383` after PR30; health HTTP 200. This is deployment evidence, not new Telegram/MAX provider acceptance or successful VK authorization.
-CURRENT MILESTONE: Phase 8 Analytics — AUTHORIZED / DISCOVERY AND DESIGN (Owner decision 2026-10-08). Scope: Telegram/MAX; purpose: understand which posts perform better. Existing analytics figures are demonstrations. Verify actual provider capabilities and agree the metric/data contract before implementation. AI, new networks and infrastructure changes are outside this transition. [Decision and discovery evidence](docs/verification/2026-10-08-vk-hold-phase8-discovery.md).
+CURRENT MILESTONE: Phase 8 Analytics — WRITTEN DESIGN APPROVED on 2026-10-08; implementation-plan review/execution selection pending. Scope: automatic Telegram/MAX metrics to understand which posts perform better. Existing analytics figures are demonstrations; no runtime analytics implementation has started. AI, new networks and infrastructure changes are outside this transition. [Decision and discovery evidence](docs/verification/2026-10-08-vk-hold-phase8-discovery.md).
 DEFERRED: Phase 7A VK — HOLD by Owner on 2026-10-08. Implementation and diagnostic PRs are merged, but the latest real attempt failed at TOKEN_EXCHANGE / INVALID_GRANT; the root cause and publication readiness remain unproven. Stop VK investigation, OAuth attempts, support requests and changes until Owner explicitly resumes VK. Existing code and credentials are retained; HOLD is not production acceptance. [Original approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md).
-NEXT STEP: Review the [proposed Phase 8 design](docs/superpowers/specs/2026-10-08-telegram-max-analytics-design.md): automatic MAX views and Telegram aggregate reactions, unavailable data shown explicitly, comparisons within a provider. Written-spec approval precedes the implementation plan. Instagram remains HOLD; CR07 / CR08 / GAP01 remain not started. Known P2 findings and unproven boundaries remain listed below.
+NEXT STEP: Review the [Phase 8 implementation plan](docs/superpowers/plans/2026-10-08-telegram-max-analytics.md), including immutable non-secret delivery identity and conservative historical coverage, and choose execution method. The [approved design](docs/superpowers/specs/2026-10-08-telegram-max-analytics-design.md) uses automatic MAX views and Telegram aggregate reactions, explicit unavailable data and within-provider comparisons. Instagram remains HOLD; CR07 / CR08 / GAP01 remain not started. Known P2 findings and unproven boundaries remain listed below.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -20,7 +20,7 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
 | 7 | Additional networks | HOLD; VK deferred by Owner, Instagram not started |
 | 7A | VK | HOLD by Owner 2026-10-08; implementation merged, live OAuth and publishing unproven |
-| 8 | Analytics | AUTHORIZED / DISCOVERY AND DESIGN; Telegram/MAX post performance; implementation awaits the agreed design |
+| 8 | Analytics | WRITTEN DESIGN APPROVED; Telegram/MAX post performance; implementation awaits plan review/execution selection |
 | 9 | Scheduling automation | Future |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
 

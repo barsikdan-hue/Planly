@@ -1,6 +1,6 @@
 # Phase 8 — automatic Telegram/MAX post-performance analytics
 
-Status: PROPOSED / OWNER WRITTEN-SPEC REVIEW REQUIRED. Not an implementation authorization.
+Status: OWNER WRITTEN-SPEC APPROVED on 2026-10-08. Implementation-plan review and execution selection remain pending.
 
 ## Agreed intent and exclusions
 
@@ -22,6 +22,8 @@ Use baseline main `124f6d4fceedcbb8a9ef2ba59827a65b1cabe383`. Source discovery a
 | Telegram | Reactions | message_reaction_count updates | Anonymous aggregate reaction counts, received after collection is enabled for an administrator bot. No historical zero/backfill is inferred from a missing event. |
 
 Only PUBLISHED Telegram/MAX publications belonging to the current owner are eligible. Match the saved destination and remote message identity before accepting a metric. Never fetch an arbitrary client-provided message ID or URL. First MVP supports channel publications only; verify Telegram event chat.type and MAX channel coverage before accepting observations. Chat/dialog publications remain visible with unsupported coverage, excluded from ranking. Webhook mapping must resolve one active owned account/publication unambiguously; reject conflicting destination/message mappings instead of writing metrics across owners.
+
+Implementation-plan clarification for review: current publications do not preserve an immutable delivery destination. Record the existing numeric destination input as non-secret receipt metadata in the existing successful Telegram/MAX persistence write; do not alter sending, connector results, statuses or retry behavior. Never backfill a historical destination from the mutable current account. A historical Telegram numeric /c/ message URL can establish its channel/message pair; a public username URL alone cannot. Unproven historical identity stays unavailable. MAX can establish the historical destination through the requested message's returned recipient, matched to the owned active account.
 
 Telegram albums currently store comma-separated message IDs. First MVP measures only the first/caption message and labels it "реакции на основное сообщение"; it does not imply a total across the album. MAX currently stores one message ID for a post, including posts with multiple attachments. Validate provider-specific IDs before constructing fixed-host requests; legacy IDs outside the documented format are unavailable rather than guessed.
 
@@ -71,4 +73,4 @@ Success for the first release: supported observed metrics replace demo values, r
 
 ## Review and delivery boundary
 
-Owner review of this written specification is the next required step. That review authorizes writing the implementation plan only; plan review/execution selection precedes runtime implementation under the architectural brainstorming path. Merge, production deployment, env/webhook configuration and any provider mutation retain their explicit gates. Current work changes documentation only.
+Owner approved the written specification on 2026-10-08. Review of the implementation plan, including the receipt-identity clarification above, and execution selection precede runtime implementation under the architectural brainstorming path. Merge, production deployment, env/webhook configuration and any provider mutation retain their explicit gates. Current work changes documentation only.
