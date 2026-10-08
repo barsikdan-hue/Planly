@@ -4,7 +4,7 @@
 
 Read-only production investigation of `TOKEN_EXCHANGE / INVALID_GRANT`, followed by preparation of the Owner-authorized diagnostic-only proposal. No production fix, env changes, secret rotation, VK settings changes, publication, merge or deployment is authorized here.
 
-GitHub main and Render's latest LIVE deploy were independently checked at `9efaa9bf62b75e9f2d247c56218c746616f9ac4a`, deploy `dep-db3l1360tbcc73fvia5g`. The clean reused isolated worktree had identical content at `8a130c9`; the diagnostic branch starts from the exact production SHA.
+GitHub main and Render's latest LIVE deploy were independently checked at `9efaa9bf62b75e9f2d247c56218c746616f9ac4a`, deploy `dep-db3lidqj9qps7385ij4g`, LIVE since 08:51:49 UTC after the Owner's private configuration correction. The earlier same-SHA deploy `dep-db3l1360tbcc73fvia5g` is deactivated. The clean reused isolated worktree had identical content at `8a130c9`; the diagnostic branch starts from the exact production SHA.
 
 ## Real production evidence
 
@@ -50,7 +50,7 @@ The [official HTTP documentation](https://id.vk.ru/about/business/go/docs/ru/vki
 - A one-off in-memory probe ran 100 synthetic START -> encrypted intent -> callback parsing -> actual completion/request functions. Only PostgreSQL transport and provider fetch were replaced. Independent WebCrypto SHA-256 plus manual Base64URL conversion equalled the original challenge after recovery. Code/device/state round-trip, client/redirect equality, verifier preservation, no plaintext verifier in the stored envelope, local replay refusal and no downstream writes after provider failure all passed. Real provider requests: zero. No synthetic credential values were printed.
 - Diagnostic RED: nine new tests failed because the fixed classification was absent.
 - Diagnostic GREEN plus unchanged OAuth, crypto, diagnostics, routes and Origin tests: 48 PASS, 0 FAIL, 0 SKIP. Existing tests were not edited.
-- Typecheck/lint and canonical CI results must be read separately before claiming readiness. Local full integration execution requires an isolated database; no local DATABASE_URL was configured or substituted from production.
+- Local typecheck and scoped lint passed. Canonical CI [37756620454](https://github.com/barsikdan-hue/Planly/actions/runs/37756620454) at code head `9ac582a4de3f66e170a0e6f6504ed7592e821341` passed migration checks, typecheck, full lint, build and the full suite: 876 PASS, 0 FAIL, 0 SKIP. Self-host [37756620897](https://github.com/barsikdan-hue/Planly/actions/runs/37756620897) passed Docker runtime verification. Local full integration execution requires an isolated database; no local DATABASE_URL was configured or substituted from production. A subsequent report-only commit corrects the deployment identity and records these results; its workflow status must be checked separately before a release claim.
 
 ## Diagnostic-only proposal
 
