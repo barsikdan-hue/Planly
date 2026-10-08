@@ -3,6 +3,8 @@ import { UnauthorizedError } from '../../../../../lib/server/auth/owner.ts';
 import { completeVkOAuth } from '../../../../../lib/server/vk/oauth.ts';
 import { validateVkCommunity } from '../../../../../lib/server/connectors/vk.ts';
 import { vkApiError } from '../../../../../lib/server/vk/http.ts';
+import { VkOAuthError } from '../../../../../lib/server/vk/config.ts';
+import { logVkOAuthFailure, vkProviderFailureReason } from '../../../../../lib/server/vk/diagnostics.ts';
 
 function feedback(connected: boolean): Response {
   try {
@@ -16,11 +18,13 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const owner = await requireApiOwner(request);
     const query = new URL(request.url).searchParams;
+    if (query.has('error')) throw new VkOAuthError('AUTH', { stage: 'CALLBACK', reason: vkProviderFailureReason(query.get('error')) });
     await completeVkOAuth(owner.id, { state: query.get('state') || '', code: query.get('code') || '', deviceId: query.get('device_id') || '' },
       (token, communityId) => validateVkCommunity({ token, communityId }));
     return feedback(true);
   } catch (error) {
     if (error instanceof UnauthorizedError) return vkApiError(error);
+    logVkOAuthFailure(error);
     return feedback(false);
   }
 }
