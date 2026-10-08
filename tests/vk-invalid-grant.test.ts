@@ -36,7 +36,7 @@ async function exchange(description: unknown) {
 
 for (const [description, category, mentions] of cases) {
   test(`invalid grant logs only the fixed ${category} category`, async () => {
-    assert.deepEqual(await exchange(description), { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: category, providerHttpStatus: 400, providerDescriptionState: 'PRESENT', providerDescriptionMentions: mentions });
+    assert.deepEqual(await exchange(description), { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: category, providerHttpStatus: 400, providerDescriptionState: 'PRESENT', providerDescriptionMentions: mentions, ...(description === 'service_token is invalid' ? { providerServiceTokenTerms: ['INVALID'] } : {}) });
   });
 }
 

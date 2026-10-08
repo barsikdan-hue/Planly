@@ -7,10 +7,12 @@ export type VkInvalidGrantReason = 'PKCE_MISMATCH' | 'CODE_VERIFIER_REJECTED' | 
 
 export type VkDescriptionState = 'MISSING' | 'NON_STRING' | 'EMPTY' | 'PRESENT' | 'TOO_LONG';
 export type VkDescriptionMention = 'PKCE' | 'CODE' | 'DEVICE_ID' | 'REDIRECT_URI' | 'SERVICE_TOKEN';
+export type VkServiceTokenTerm = 'INVALID' | 'MISSING' | 'REQUIRED' | 'EXPIRED' | 'REVOKED' | 'IP' | 'APPLICATION' | 'CONFIDENTIAL' | 'RESTRICTED' | 'ALLOWLIST';
 export type VkTokenExchangeMetadata = {
   providerHttpStatus: number;
   providerDescriptionState: VkDescriptionState;
   providerDescriptionMentions: readonly VkDescriptionMention[];
+  providerServiceTokenTerms?: readonly VkServiceTokenTerm[];
 };
 
 export class VkOAuthError extends Error {
