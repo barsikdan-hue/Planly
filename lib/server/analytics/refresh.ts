@@ -3,7 +3,7 @@ import {getDb,getPool} from '../../../db/index.ts';
 import {socialAccounts} from '../../../db/schema.ts';
 import {analyticsCohort,publicationIdentity,saveCollectionResult} from './repository.ts';
 import {createMaxAnalyticsReader,type MaxAnalyticsReader} from './max.ts';
-import {abortable} from './body.ts';
+import {abortable,collectionDeadline} from './body.ts';
 import type {AnalyticsQuery,RefreshSummary} from '../../contracts/analytics.ts';
 import type {MaxMetricRead} from '../../analytics.ts';
 export async function refreshMaxAnalytics(userId:string,query:AnalyticsQuery,options:{now?:Date;reader?:MaxAnalyticsReader}={}):Promise<RefreshSummary> {
@@ -22,7 +22,7 @@ export async function refreshMaxAnalytics(userId:string,query:AnalyticsQuery,opt
     const rows=cohort.slice(query.page*20,(query.page+1)*20);summary.nextPage=(query.page+1)*20<cohort.length?query.page+1:null;
     if(!rows.length)return summary;
     const reader=options.reader??createMaxAnalyticsReader({token:process.env.MAX_BOT_TOKEN??''});
-    const cancellation=new AbortController();const signal=AbortSignal.any([AbortSignal.timeout(25000),cancellation.signal]);let cursor=0;let failed=false;
+    const deadline=collectionDeadline(25000);const signal=deadline.signal;let cursor=0;let failed=false;
     async function worker(){
       try{for(;!failed;){const row=rows[cursor++];if(!row)break;
         const identity=publicationIdentity(row.publication);const destination=identity?.destinationId??row.account.providerAccountId;
@@ -34,11 +34,12 @@ export async function refreshMaxAnalytics(userId:string,query:AnalyticsQuery,opt
         if(signal.aborted)result={coverage:'NO_DATA',value:null,error:'UNAVAILABLE'};
         const saved=await saveCollectionResult({userId,publicationId:row.publication.id,accountId:row.account.id,destinationId:destination,remoteMessageId:identity.remoteId,metric:'views',...result},now);
         if(saved&&result.value!==null&&!result.error)summary.observed++;else summary.unavailable++;
-      }}catch(error){failed=true;cancellation.abort();throw error;}
+      }}catch(error){failed=true;deadline.cancel();throw error;}
     }
-    const workers=await Promise.allSettled([worker(),worker()]);
-    const failure=workers.find(result=>result.status==='rejected');if(failure?.status==='rejected')throw failure.reason;
-    return summary;
+    try{const workers=await Promise.allSettled([worker(),worker()]);
+      const failure=workers.find(result=>result.status==='rejected');if(failure?.status==='rejected')throw failure.reason;
+      return summary;
+    }finally{deadline.dispose();}
   }finally{
     let discard=!confirmed;
     try{if(locked){const result=await connection.query<{unlocked:boolean}>('SELECT pg_advisory_unlock(hashtextextended($1,0)) AS unlocked',[key]);if(result.rows[0]?.unlocked!==true){discard=true;throw Error('Unable to release analytics lease');}}}

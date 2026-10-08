@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {createMaxAnalyticsReader} from '../lib/server/analytics/max.ts';
+test('MAX deadline survives garbage collection with a live parent signal',()=>{
+  const moduleUrl=new URL('../lib/server/analytics/max.ts',import.meta.url).href;
+  const code=`import {createMaxAnalyticsReader} from ${JSON.stringify(moduleUrl)};
+    const parent=new AbortController();
+    const guard=setTimeout(()=>{console.error('DEADLINE_NOT_ENFORCED');process.exit(1);},1000);
+    const collection=setInterval(()=>globalThis.gc(),5);
+    try{const reader=createMaxAnalyticsReader({token:'synthetic',timeoutMs:80,fetcher:async()=>new Promise(()=>{})});
+      const result=await reader.read({destinationId:'123',remoteId:'mid_42'},parent.signal);
+      if(result.error!=='UNAVAILABLE')throw Error('Unexpected result');console.log('DEADLINE_ENFORCED');
+    }finally{clearTimeout(guard);clearInterval(collection);}`;
+  const result=spawnSync(process.execPath,['--expose-gc','--experimental-strip-types','--input-type=module','-e',code],{encoding:'utf8',timeout:3000});
+  assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/DEADLINE_ENFORCED/);
+});
 const expected={destinationId:'123',remoteId:'mid_42'};
 const message={timestamp:1791360000000,recipient:{chat_id:123,chat_type:'channel'},body:{mid:'mid_42',seq:1,text:'Post',attachments:[]},stat:{views:0}};
 test('MAX collector reads channel once, fixed-host messages, with header-only credentials',async()=>{

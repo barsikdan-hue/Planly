@@ -1,5 +1,6 @@
 import test,{beforeEach,after} from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {eq} from 'drizzle-orm';
 import {closeDb,getDb,getPool} from '../db/index.ts';
 import {socialAccounts,posts,publicationMetrics} from '../db/schema.ts';
@@ -45,6 +46,23 @@ test('foreign, inactive, mismatched and Telegram selections cannot cause MAX rea
   await analyticsPublication('foreign',{owner:'b'});let calls=0;const reader={async read(){calls++;return {coverage:'AVAILABLE' as const,value:42,error:null};}};
   await refreshMaxAnalytics('a',query,{now,reader});await refreshMaxAnalytics('a',{...query,provider:'telegram'},{now,reader});assert.equal(calls,0);
   await analyticsPublication('x',{destination:'999'});await refreshMaxAnalytics('a',query,{now,reader});assert.equal(calls,0);
+});
+
+test('refresh deadline survives garbage collection of temporary timeout sources',()=>{
+  const urls=['../lib/server/analytics/refresh.ts','./helpers/analytics-fixture.ts','../db/index.ts'].map(path=>JSON.stringify(new URL(path,import.meta.url).href));
+  const code=`import {refreshMaxAnalytics} from ${urls[0]};import {analyticsFixture,analyticsPublication} from ${urls[1]};import {closeDb} from ${urls[2]};
+    const nativeTimeout=AbortSignal.timeout.bind(AbortSignal);const nativeTimer=globalThis.setTimeout;
+    AbortSignal.timeout=(ms)=>nativeTimeout(ms===25000?80:ms);
+    globalThis.setTimeout=(fn,ms,...args)=>nativeTimer(fn,ms===25000?80:ms,...args);
+    await analyticsFixture();await analyticsPublication('gc-deadline');
+    let release;const held=new Promise(resolve=>{release=()=>resolve({coverage:'AVAILABLE',value:42,error:null});});
+    const guard=nativeTimer(()=>{console.error('DEADLINE_NOT_ENFORCED');release();},1000);
+    const collection=setInterval(()=>globalThis.gc(),5);
+    try{const result=await refreshMaxAnalytics('a',{provider:'max',period:7,page:0},{now:new Date('2026-10-08T12:00:00Z'),reader:{read:()=>held}});
+      if(result.observed!==0||result.unavailable!==1)throw Error('DEADLINE_NOT_ENFORCED');console.log('DEADLINE_ENFORCED');
+    }finally{release();clearTimeout(guard);clearInterval(collection);await closeDb();}`;
+  const result=spawnSync(process.execPath,['--expose-gc','--experimental-strip-types','--input-type=module','-e',code],{encoding:'utf8',timeout:5000});
+  assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/DEADLINE_ENFORCED/);
 });
 
 test('overall refresh deadline rejects even a late reader which ignores abort',async()=>{

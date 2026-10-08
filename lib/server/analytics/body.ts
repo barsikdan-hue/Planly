@@ -1,4 +1,12 @@
 export class PayloadLimitError extends Error { constructor(){super('Payload exceeds limit');} }
+export function collectionDeadline(delay:number,parent?:AbortSignal) {
+  const controller=new AbortController();const cancel=()=>controller.abort();
+  // An owned timer retains its controller through active work and is cleared
+  // explicitly. Temporary AbortSignal.timeout/any sources can be collected.
+  const timer=setTimeout(cancel,delay);
+  if(parent?.aborted)cancel();else parent?.addEventListener('abort',cancel,{once:true});
+  return {signal:controller.signal,cancel,dispose(){clearTimeout(timer);parent?.removeEventListener('abort',cancel);}};
+}
 export async function readBoundedJson(body:ReadableStream<Uint8Array>|null,limit:number):Promise<unknown> {
   if(!body)throw new SyntaxError('Missing JSON');
   const reader=body.getReader();const chunks:Uint8Array[]=[];let length=0;

@@ -32,14 +32,15 @@ Local fixtures use an isolated native PostgreSQL/Redis stack on loopback ports 5
 | Fresh install 0000–0007 and existing 0006 upgrade | PASS, isolated PostgreSQL |
 | Drizzle generation/drift | PASS, no schema changes/generated drift |
 | Initial local full suite | 960/961 PASS, no skips; unchanged Windows self-host path test fails |
-| Final focused analytics / typecheck | 56/56 PASS without skips; typecheck PASS at implementation head 0865839 |
+| Final focused analytics / typecheck | 58/58 PASS without skips on exact Node 22.13.0; typecheck PASS |
+| Deadline-fix focused lint | PASS on exact Node 22.13.0 |
 | Build/lint gates | Canonical exact-head CI/Self-host required; local build blocked by external dependency junction |
 | Final native CI and Self-host | See exact-head evidence in PR body/checks; no prior-head result substitutes for the final head |
 | Production analytics / MAX real count / Telegram real delivery | NOT PROVEN |
 
 The local full-suite failure is `tests/self-host-init.test.mjs:20`: `URL.pathname` is passed to Node on Windows, producing `C:\C:\...SMM%20Planer...`; `MODULE_NOT_FOUND` precedes the setup script. Its source is unchanged from the base. No assertion was weakened, test skipped or unrelated path fix introduced. Canonical Linux CI remains the full-suite release gate.
 
-The initial local Turbopack build rejected the pre-existing `node_modules` junction pointing outside the worktree. A frozen physical install was attempted but timed out downloading dependencies. The original junction was restored, external dependencies were left unchanged and the partial install was isolated for cleanup. No source/config/build check was relaxed; canonical Linux CI/Self-host supplies build verification. The initial full local lint was cancelled after prolonged non-completion and is not classified PASS.
+The initial local Turbopack build rejected the pre-existing `node_modules` junction pointing outside the worktree. A frozen physical install was attempted but timed out downloading dependencies. The original junction was restored, external dependencies were left unchanged and the partial install was isolated for cleanup. No source/config/build check was relaxed; canonical Linux CI/Self-host supplies build verification. The initial full local lint was cancelled after prolonged non-completion. A subsequent full local lint exhausted its JavaScript heap (exit 134). Neither is classified PASS; no heap limit was increased or source excluded. Canonical Linux lint and focused deadline-file lint remain distinct evidence.
 
 ## Independent review and one fix pass
 
@@ -51,7 +52,17 @@ Fresh-context whole-branch review used `gpt-6-astra` on `124f6d4..cd497b7`, per 
 
 Provider text override preview was regraded Important because ranking could show the wrong copy; a 200-character override test failed, then selecting the effective provider text passed. A first-render owner replacement test independently reproduced visible prior-owner metrics; owner-tagged view state fixed this and the effect lint errors without suppressing rules.
 
-No second reviewer pass is requested. Final focused analytics checks passed 56/56 and typecheck passed. Canonical full-suite/lint/build evidence must cover the exact final PR head; the result is recorded in its body/checks.
+### Canonical-runtime deadline regression
+
+Initial code heads `0865839` and `22f74c1` passed Self-host build but native CI stopped in Test at the workflow 20-minute limit. Logs show a cancelled per-request MAX timeout test (pending promise/event loop finished), followed by the held-reader overall deadline test not completing. No retry, workflow skip, assertion weakening or timeout increase was used.
+
+Root cause: `refreshMaxAnalytics` composed `AbortSignal.any([AbortSignal.timeout(25000), cancellation.signal])` from a temporary timeout source. Node 22.13.0 stores source references weakly and finalizes timeout signals; the pending composite listener does not retain that temporary source. The per-call timeout also uses an unreferenced Node timer, so a synthetic pending fetch with no I/O can let the event loop exit before categorizing the timeout. See the [exact Node 22.13.0 implementation](https://github.com/nodejs/node/blob/v22.13.0/lib/internal/abort_controller.js).
+
+Downloaded the exact official Node 22.13.0 Windows executable into isolated scratch and verified it against official SHA256 sums. The existing per-call test reproduced cancellation. A child-process GC test executed the actual refresh module with a synthetic held reader and a shortened test-only clock: the deadline failed and a late value was accepted (RED). The MAX reader's parent-signal GC probe already passed before the change, so that probe is supporting coverage, not a claimed failing reproduction.
+
+Minimal correction: `collectionDeadline` owns a referenced timer/AbortController, forwards parent cancellation and clears its timer/listener in finally. Both MAX request deadlines and the refresh deadline consume it. Production bounds remain exactly 10/25 seconds; account cancellation/draining and lease cleanup remain enforced. Existing timeout assertions are unchanged. GC reproduction and cancelled timeout test turned GREEN; all 58 analytics checks passed on Node 22.13.0, including the original real 25-second test. Final canonical full-suite SUCCESS remains required for the new exact head.
+
+No second reviewer pass is requested. Final focused analytics checks passed 58/58 on exact Node 22.13.0, typecheck passed and deadline-file lint passed. Canonical full-suite/lint/build evidence must cover the exact final PR head; the result is recorded in its body/checks.
 
 Deferred minor: frozen Telegram receipts do not retain destination type. A `-100...` ID cannot distinguish a channel from a supergroup, so the receiver accepts channel events only, but a group row may remain NO_DATA/IDENTITY_UNPROVEN rather than UNSUPPORTED. No values are fabricated or ranked. Establishing trustworthy type metadata is a later design decision; do not infer type, alter connector contracts or make Telegram provider calls in this task.
 
@@ -63,6 +74,8 @@ Deferred minor: frozen Telegram receipts do not retain destination type. A `-100
 4. Provider acceptance and webhook activation set aside by review remain deferred to their expressly approved later gates. Cost if wrong: mocked access/receipt evidence could differ from production.
 5. Preserve/restore the original dependency junction after a frozen physical install timeout and use canonical Linux build/Self-host gates. Cost if wrong: local Windows build parity remains unverified.
 6. Handoff docs and exact-head CI set aside by review are executor release obligations; neither review nor local checks substitute for them. Cost if wrong: releasing an unverified head.
+
+7. Use an explicitly owned, cleared timer after the canonical-runtime GC reproduction instead of extending/weakening deadlines. Cost if wrong: timer retention or deadline cancellation could be incorrect; GC and original timeout tests cover both consumers.
 
 ## Owner release and later activation
 
