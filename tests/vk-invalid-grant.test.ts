@@ -6,13 +6,13 @@ import { logVkOAuthFailure } from '../lib/server/vk/diagnostics.ts';
 
 // Synthetic descriptions define a conservative classifier, not a claim about the observed VK response.
 const cases = [
-  ['code_challenge does not match code_verifier', 'PKCE_MISMATCH'],
-  ['code_verifier is invalid', 'CODE_VERIFIER_REJECTED'],
-  ['code is invalid or expired', 'CODE_INVALID_EXPIRED_OR_USED'],
-  ['code was already used', 'CODE_INVALID_EXPIRED_OR_USED'],
-  ['device_id is invalid', 'DEVICE_ID_REJECTED'],
-  ['redirect_uri is invalid, please pass same redirect_uri, you used in authorize method.', 'REDIRECT_REJECTED'],
-  ['service_token is invalid', 'SERVICE_TOKEN_REJECTED'],
+  ['code_challenge does not match code_verifier', 'PKCE_MISMATCH', ['PKCE']],
+  ['code_verifier is invalid', 'CODE_VERIFIER_REJECTED', ['PKCE']],
+  ['code is invalid or expired', 'CODE_INVALID_EXPIRED_OR_USED', ['CODE']],
+  ['code was already used', 'CODE_INVALID_EXPIRED_OR_USED', ['CODE']],
+  ['device_id is invalid', 'DEVICE_ID_REJECTED', ['DEVICE_ID']],
+  ['redirect_uri is invalid, please pass same redirect_uri, you used in authorize method.', 'REDIRECT_REJECTED', ['REDIRECT_URI']],
+  ['service_token is invalid', 'SERVICE_TOKEN_REJECTED', ['SERVICE_TOKEN']],
 ] as const;
 const config = { clientId: '54809575', serviceToken: 'synthetic-service', redirectUri: 'https://planly.example.test/callback', encryptionKey: '', keyVersion: '1' };
 
@@ -34,16 +34,20 @@ async function exchange(description: unknown) {
   } finally { globalThis.fetch = originalFetch; console.warn = originalWarn; }
 }
 
-for (const [description, category] of cases) {
+for (const [description, category, mentions] of cases) {
   test(`invalid grant logs only the fixed ${category} category`, async () => {
-    assert.deepEqual(await exchange(description), { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: category });
+    assert.deepEqual(await exchange(description), { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: category, providerHttpStatus: 400, providerDescriptionState: 'PRESENT', providerDescriptionMentions: mentions });
   });
 }
 
 test('absent unknown malformed and secret-bearing descriptions remain OTHER_INVALID_GRANT', async () => {
-  for (const value of [undefined, null, {}, ['code_verifier is invalid'], 42, '', 'unknown', 'code_verifier is invalid synthetic-private-echo', 'synthetic-private-echo code_verifier is invalid', 'code_verifier is invalid\n', 'x'.repeat(100_000)]) {
+  for (const [value, state, mentions] of [
+    [undefined, 'MISSING', []], [null, 'NON_STRING', []], [{}, 'NON_STRING', []], [['code_verifier is invalid'], 'NON_STRING', []], [42, 'NON_STRING', []],
+    ['', 'EMPTY', []], ['unknown', 'PRESENT', []], ['code_verifier is invalid synthetic-private-echo', 'PRESENT', ['PKCE']],
+    ['synthetic-private-echo code_verifier is invalid', 'PRESENT', ['PKCE']], ['code_verifier is invalid\n', 'PRESENT', ['PKCE']], ['x'.repeat(100_000), 'TOO_LONG', []],
+  ] as const) {
     const logged = await exchange(value);
-    assert.deepEqual(logged, { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: 'OTHER_INVALID_GRANT' });
+    assert.deepEqual(logged, { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'TOKEN_EXCHANGE', reason: 'INVALID_GRANT', invalidGrantReason: 'OTHER_INVALID_GRANT', providerHttpStatus: 400, providerDescriptionState: state, providerDescriptionMentions: mentions });
   }
 });
 

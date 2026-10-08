@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { getPool } from '../../../db/index.ts';
 import { getVkConfig, VkOAuthError, type VkConfig, type VkOAuthDiagnostic } from './config.ts';
-import { vkInvalidGrantReason, vkProviderFailureReason } from './diagnostics.ts';
+import { vkInvalidGrantReason, vkProviderFailureReason, vkTokenExchangeMetadata } from './diagnostics.ts';
 import { openVkPayload, sealVkPayload } from './crypto.ts';
 import { readVkAccount, rowEnvelope, withVkAccountLock } from './credentials.ts';
 export { VkOAuthError } from './config.ts';
@@ -24,7 +24,8 @@ export async function requestVkGrant(fields: Record<string, string>, config: VkC
     catch { throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: response.ok ? 'INVALID_RESPONSE' : 'HTTP_REJECTED' }); }
     if (!raw || typeof raw !== 'object') throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: response.ok ? 'INVALID_RESPONSE' : 'HTTP_REJECTED' });
     const value = raw as Record<string, unknown>;
-    if (value.error) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: vkProviderFailureReason(value.error) }, value.error === 'invalid_grant' ? vkInvalidGrantReason(value.error_description) : undefined);
+    if (value.error) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: vkProviderFailureReason(value.error) }, value.error === 'invalid_grant' ? vkInvalidGrantReason(value.error_description) : undefined,
+      value.error === 'invalid_grant' && fields.grant_type === 'authorization_code' ? vkTokenExchangeMetadata(response.status, value.error_description) : undefined);
     if (!response.ok) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'HTTP_REJECTED' });
     if (value.state !== undefined && value.state !== fields.state) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'STATE_MISMATCH' });
     // A refresh may omit unchanged permissions; the initial grant must always be explicit.
