@@ -15,11 +15,11 @@ export function vkApiError(error: unknown): Response {
   return json({ error: 'VK request could not be completed.' }, 500);
 }
 
-export function requireVkSameOrigin(request: Request): void {
+export function requireVkSameOrigin(request: Request, configuredOrigin?: string): void {
   const origin = request.headers.get('origin');
   if (!origin) return;
   let expected: string;
-  try { expected = new URL(request.url).origin; }
+  try { expected = configuredOrigin ?? new URL(request.url).origin; }
   catch { throw new VkOAuthError('CONFIG'); }
   if (origin !== expected) throw new UnauthorizedError();
 }
