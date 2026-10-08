@@ -9,6 +9,7 @@ import type { CreateLibraryItemInput, LibraryItemDto, UpdateLibraryItemInput } f
 import { libraryCreationKeySchema } from '../contracts/library.ts';
 import type { ComposerPostInput } from '../planner.ts';
 import type { SlotQuery } from '../contracts/swipe-planner.ts';
+import type {AnalyticsQuery,AnalyticsDto,RefreshSummary} from '../contracts/analytics.ts';
 
 export type MediaAssetWithPreview = MediaAssetDto & { previewUrl: string };
 export type PlannerSnapshot = {
@@ -152,4 +153,10 @@ export function startVkConnection(accountId: string, communityId: string): Promi
 
 export function disconnectVkConnection(accountId: string): Promise<SocialAccountDto> {
   return request('/api/social-accounts/vk/disconnect', jsonRequest('POST', { accountId }));
+}
+export function loadAnalytics(query:AnalyticsQuery,signal?:AbortSignal):Promise<AnalyticsDto> {
+  return request(`/api/analytics?${new URLSearchParams({provider:query.provider,period:String(query.period),page:String(query.page)})}`,signal?{signal}:undefined);
+}
+export function refreshAnalytics(query:AnalyticsQuery,signal?:AbortSignal):Promise<RefreshSummary> {
+  return request('/api/analytics/refresh',{...jsonRequest('POST',query),headers:{'content-type':'application/json','X-Planly-Analytics':'1'},...(signal?{signal}:{})});
 }

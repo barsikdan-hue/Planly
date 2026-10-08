@@ -1,7 +1,7 @@
 import {and,eq,gte,lte,sql} from 'drizzle-orm';
 import {getDb} from '../../../db/index.ts';
 import {posts,postTargets,publications,socialAccounts,publicationMetrics} from '../../../db/schema.ts';
-import {isCount,legacyTelegramDestination,numericDestination,parseTelegramPrimaryId,publicationWindow,summarizeObserved,validMaxMessageId} from '../../analytics.ts';
+import {isCount,legacyTelegramDestination,numericDestination,parseTelegramPrimaryId,publicationWindow,summarizeObserved,validMaxMessageId,safeAnalyticsUrl} from '../../analytics.ts';
 import type {AnalyticsDto,AnalyticsError,AnalyticsMetric,AnalyticsQuery,MetricObservation} from '../../contracts/analytics.ts';
 
 export type AnalyticsTx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
@@ -32,7 +32,7 @@ export async function listAnalytics(userId:string,query:AnalyticsQuery,now:Date)
     const value=metricMatches&&isCount(metric?.value)?metric.value:null;
     const observedAt=value!==null&&metric?.observedAt?metric.observedAt.toISOString():null;
     const coverage:MetricObservation['coverage']=value!==null?'AVAILABLE':!identity||(query.provider==='telegram'&&!identity.destinationId)?'IDENTITY_UNPROVEN':metricMatches?metric!.coverage:'NO_DATA';
-    return {publicationId:publication.id,text,publishedAt:publication.publishedAt!.toISOString(),providerUrl:publication.providerUrl,primaryMessageOnly:query.provider==='telegram'&&publication.providerRemoteId!.includes(','),metric:{value,observedAt,coverage,stale:!!observedAt&&now.getTime()-Date.parse(observedAt)>86400000,collectionError:metricMatches?metric!.collectionError:null}};
+    return {publicationId:publication.id,text,publishedAt:publication.publishedAt!.toISOString(),providerUrl:safeAnalyticsUrl(publication.providerUrl,query.provider),primaryMessageOnly:query.provider==='telegram'&&!!publication.providerRemoteId?.includes(','),metric:{value,observedAt,coverage,stale:!!observedAt&&now.getTime()-Date.parse(observedAt)>86400000,collectionError:metricMatches?metric!.collectionError:null}};
   });
   rows.sort((a,b)=> a.metric.value===null&&b.metric.value!==null?1:b.metric.value===null&&a.metric.value!==null?-1:(b.metric.value??0)-(a.metric.value??0)||Date.parse(b.publishedAt)-Date.parse(a.publishedAt)||a.publicationId.localeCompare(b.publicationId));
   return {...query,pageSize:20,eligibleCount:rows.length,...summarizeObserved(rows.map(r=>r.metric.value)),rows:rows.slice(query.page*20,(query.page+1)*20),asOf:now.toISOString()};

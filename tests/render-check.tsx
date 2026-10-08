@@ -4,7 +4,8 @@ import { Dashboard } from '../components/planner/dashboard';
 import { Composer } from '../components/planner/composer';
 import { Calendar } from '../components/planner/calendar';
 import { Content, MediaLibrary } from '../components/planner/library';
-import { SocialAccounts, Settings, Analytics } from '../components/planner/settings';
+import { SocialAccounts, Settings } from '../components/planner/settings';
+import { Analytics } from '../components/planner/analytics';
 import { blankPost, type Post } from '../lib/planner';
 import type { SocialAccountDto } from '../lib/contracts/planner';
 
@@ -33,7 +34,7 @@ const screens = [
     ['Контент', <Content key="content" posts={posts} media={[]} query="" setQuery={noop} openPost={noop} editPost={noop} deletePost={noop} duplicatePost={noop} create={noop}/>, '3 ошибки при покупке'],
     ['Медиа', <MediaLibrary key="media" media={[]} upload={async () => []} remove={noop} useMedia={noop}/>, 'Медиатека'],
     ['Соцсети', <SocialAccounts key="socials" accounts={socialAccounts} toggle={noop} connect={async()=>{}}/>, 'Не подключено'],
-    ['Аналитика', <Analytics key="analytics" posts={posts}/>, 'Демонстрационные цифры'],
+    ['Аналитика', <Analytics key="analytics" ownerContext={null}/>, 'Накопительные значения'],
     ['Настройки', <Settings key="settings" name="Данил" saveName={noop} accounts={socialAccounts} toggle={noop} connect={async()=>{}}/>, 'Как к тебе обращаться'],
 ] as const;
 for (const [name, screen, expected] of screens) {

@@ -39,3 +39,7 @@ export function parseMaxViews(message: unknown, expected: {destinationId:string;
   const views = record(data.stat)?.views;
   return isCount(views) ? {coverage:'AVAILABLE',value:views,error:null} : invalid;
 }
+export function safeAnalyticsUrl(url:string|null,provider:'telegram'|'max'):string|null {
+  if(!url)return null;
+  try{const u=new URL(url);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!u.search&&!u.hash&&(provider==='telegram'?u.hostname==='t.me':u.hostname==='max.ru')?u.href:null;}catch{return null;}
+}
