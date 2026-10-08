@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyticsQuerySchema } from '../lib/contracts/analytics.ts';
-import { publicationWindow, parseTelegramPrimaryId, legacyTelegramDestination, summarizeObserved, parseMaxViews } from '../lib/analytics.ts';
+import { publicationWindow, parseTelegramPrimaryId, legacyTelegramDestination, summarizeObserved, parseMaxViews, validMaxMessageId } from '../lib/analytics.ts';
 
 test('publication cohort includes Moscow calendar days, not a rolling metric window', () => {
   assert.deepEqual(publicationWindow(7, new Date('2026-10-08T12:00:00Z')), {from:new Date('2026-10-01T21:00:00Z'),through:new Date('2026-10-08T12:00:00Z')});
@@ -39,4 +39,14 @@ test('MAX views require the requested message and destination, absent is not zer
 
 test('MAX numeric destinations also accept positive canonical chat IDs', () => {
   assert.deepEqual(parseMaxViews({body:{mid:'mid_42'},recipient:{chat_id:123},stat:{views:5}},{destinationId:'123',remoteId:'mid_42'}),{coverage:'AVAILABLE',value:5,error:null});
+});
+
+test('MAX views accept intact mid-prefixed delivery IDs and still require exact response identity', () => {
+  const expected={destinationId:'123',remoteId:'mid.synthetic_42'};
+  const message={recipient:{chat_id:123},body:{mid:'mid.synthetic_42'},stat:{views:7}};
+  assert.deepEqual(parseMaxViews(message,expected),{coverage:'AVAILABLE',value:7,error:null});
+  assert.equal(parseMaxViews({...message,body:{mid:'synthetic_42'}},expected).error,'INVALID_RESPONSE');
+  for(const id of ['.','..','mid.','mid..42','other.42','mid.x/42','mid.x?token=x','mid.x#x','mid.%2f42',' mid.x','mid.x\n','mid.'+'x'.repeat(253)]) {
+    assert.equal(validMaxMessageId(id),false,id);
+  }
 });
