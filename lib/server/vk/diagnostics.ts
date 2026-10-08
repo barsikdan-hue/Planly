@@ -1,4 +1,4 @@
-import { VkOAuthError, type VkOAuthDiagnostic, type VkInvalidGrantReason, type VkDescriptionState, type VkDescriptionMention, type VkTokenExchangeMetadata } from './config.ts';
+import { VkOAuthError, type VkOAuthDiagnostic, type VkInvalidGrantReason, type VkDescriptionState, type VkDescriptionMention, type VkTokenExchangeMetadata, type VkServiceTokenTerm } from './config.ts';
 
 // Mentions are lexical signals only, not provider-reported causes or proof of a request bug.
 // Retain no description/body. Bound work before trimming or matching untrusted text.
@@ -15,7 +15,24 @@ export function vkTokenExchangeMetadata(httpStatus: number, description: unknown
     ];
     for (const [mention, pattern] of patterns) if (pattern.test(description)) mentions.push(mention);
   }
-  return { providerHttpStatus: httpStatus, providerDescriptionState: state, providerDescriptionMentions: mentions };
+  const terms: VkServiceTokenTerm[] = [];
+  if (state === 'PRESENT' && typeof description === 'string' && mentions.includes('SERVICE_TOKEN')) {
+    // These are word-presence signals, including in negated/quoted text, never causal classifications.
+    const patterns: readonly [VkServiceTokenTerm, RegExp][] = [
+      ['INVALID', /\b(?:invalid|incorrect|wrong|bad)\b/i],
+      ['MISSING', /\b(?:missing|absent)\b/i],
+      ['REQUIRED', /\b(?:required|require|requires|mandatory)\b/i],
+      ['EXPIRED', /\bexpired\b/i],
+      ['REVOKED', /\brevoked\b/i],
+      ['IP', /\b(?:ip|ip_address|ipaddress)\b/i],
+      ['APPLICATION', /\b(?:app|application|client|client_id)\b/i],
+      ['CONFIDENTIAL', /\bconfidential\b/i],
+      ['RESTRICTED', /\b(?:restricted|forbidden|disallowed|not_allowed)\b|\bnot[ \t]+allowed\b/i],
+      ['ALLOWLIST', /\b(?:allowed|allowlist|whitelist)\b/i],
+    ];
+    for (const [term, pattern] of patterns) if (pattern.test(description)) terms.push(term);
+  }
+  return { providerHttpStatus: httpStatus, providerDescriptionState: state, providerDescriptionMentions: mentions, ...(terms.length ? { providerServiceTokenTerms: terms } : {}) };
 }
 
 // Exact whole-string matches only. Unknown descriptions and provider echoes are discarded.
@@ -53,15 +70,20 @@ export function logVkOAuthFailure(error: unknown): void {
   const invalidGrantReasons: readonly unknown[] = ['PKCE_MISMATCH', 'CODE_VERIFIER_REJECTED', 'CODE_INVALID_EXPIRED_OR_USED', 'DEVICE_ID_REJECTED', 'REDIRECT_REJECTED', 'SERVICE_TOKEN_REJECTED', 'OTHER_INVALID_GRANT'];
   const descriptionStates: readonly unknown[] = ['MISSING', 'NON_STRING', 'EMPTY', 'PRESENT', 'TOO_LONG'];
   const descriptionMentions: readonly unknown[] = ['PKCE', 'CODE', 'DEVICE_ID', 'REDIRECT_URI', 'SERVICE_TOKEN'];
+  const serviceTokenTerms: readonly unknown[] = ['INVALID', 'MISSING', 'REQUIRED', 'EXPIRED', 'REVOKED', 'IP', 'APPLICATION', 'CONFIDENTIAL', 'RESTRICTED', 'ALLOWLIST'];
   const metadata = known?.tokenExchangeMetadata;
   const httpStatus = metadata?.providerHttpStatus; const descriptionState = metadata?.providerDescriptionState;
   const suppliedMentions = metadata?.providerDescriptionMentions;
   // Snapshot bounded entries by index: sparse holes must fail validation, not become JSON null.
   const mentions = Array.isArray(suppliedMentions) && suppliedMentions.length <= 5 ? Array.from({ length: suppliedMentions.length }, (_, index) => suppliedMentions[index]) : undefined;
+  const suppliedTerms = metadata?.providerServiceTokenTerms;
+  const terms = Array.isArray(suppliedTerms) && suppliedTerms.length > 0 && suppliedTerms.length <= 10 ? Array.from({ length: suppliedTerms.length }, (_, index) => suppliedTerms[index]) : undefined;
+  const safeTerms = descriptionState === 'PRESENT' && mentions?.includes('SERVICE_TOKEN') && terms && terms.every(term => serviceTokenTerms.includes(term)) ? [...new Set(terms)] : undefined;
   const safeMetadata = httpStatus !== undefined && Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 && descriptionStates.includes(descriptionState) && mentions && mentions.every(mention => descriptionMentions.includes(mention)) ? {
     providerHttpStatus: httpStatus,
     providerDescriptionState: descriptionState,
     providerDescriptionMentions: [...new Set(mentions)],
+    ...(safeTerms ? { providerServiceTokenTerms: safeTerms } : {}),
   } : undefined;
   console.warn(JSON.stringify({
     event: 'VK_OAUTH_FAILURE',
