@@ -2,7 +2,7 @@
 
 Date: 2026-10-08. Owner approved the design, implementation plan and inline execution in this chat. PR: [#31](https://github.com/barsikdan-hue/Planly/pull/31). Base: `124f6d4fceedcbb8a9ef2ba59827a65b1cabe383`. Branch: `codex/phase8-analytics-discovery` in the verified linked `Planly-library-idempotency` worktree.
 
-Status: IMPLEMENTED; final exact-head verification pending. No merge, production deployment, env changes, webhook registration or provider publication was performed. VK remains HOLD.
+Status: IMPLEMENTED; independent review fixes and final local analytics checks verified. The exact final PR head and canonical CI/Self-host outcomes are recorded in the PR body before the Owner release gate. No merge, production deployment, env changes, webhook registration or provider publication was performed. VK remains HOLD.
 
 ## Result and acceptance boundaries
 
@@ -32,13 +32,14 @@ Local fixtures use an isolated native PostgreSQL/Redis stack on loopback ports 5
 | Fresh install 0000–0007 and existing 0006 upgrade | PASS, isolated PostgreSQL |
 | Drizzle generation/drift | PASS, no schema changes/generated drift |
 | Initial local full suite | 960/961 PASS, no skips; unchanged Windows self-host path test fails |
-| Final focused checks/typecheck/lint/build | Pending final head |
-| Final native CI and Self-host | Pending final head |
+| Final focused analytics / typecheck | 56/56 PASS without skips; typecheck PASS at implementation head 0865839 |
+| Build/lint gates | Canonical exact-head CI/Self-host required; local build blocked by external dependency junction |
+| Final native CI and Self-host | See exact-head evidence in PR body/checks; no prior-head result substitutes for the final head |
 | Production analytics / MAX real count / Telegram real delivery | NOT PROVEN |
 
 The local full-suite failure is `tests/self-host-init.test.mjs:20`: `URL.pathname` is passed to Node on Windows, producing `C:\C:\...SMM%20Planer...`; `MODULE_NOT_FOUND` precedes the setup script. Its source is unchanged from the base. No assertion was weakened, test skipped or unrelated path fix introduced. Canonical Linux CI remains the full-suite release gate.
 
-The initial local Turbopack build rejected the pre-existing `node_modules` junction pointing outside the worktree. The junction was preserved and dependencies are being installed physically in this worktree; no source/config/build check was relaxed. The initial full local lint was cancelled after prolonged non-completion and is not classified PASS.
+The initial local Turbopack build rejected the pre-existing `node_modules` junction pointing outside the worktree. A frozen physical install was attempted but timed out downloading dependencies. The original junction was restored, external dependencies were left unchanged and the partial install was isolated for cleanup. No source/config/build check was relaxed; canonical Linux CI/Self-host supplies build verification. The initial full local lint was cancelled after prolonged non-completion and is not classified PASS.
 
 ## Independent review and one fix pass
 
@@ -50,7 +51,7 @@ Fresh-context whole-branch review used `gpt-6-astra` on `124f6d4..cd497b7`, per 
 
 Provider text override preview was regraded Important because ranking could show the wrong copy; a 200-character override test failed, then selecting the effective provider text passed. A first-render owner replacement test independently reproduced visible prior-owner metrics; owner-tagged view state fixed this and the effect lint errors without suppressing rules.
 
-No second reviewer pass is requested. Final full-suite/typecheck/lint/build evidence must cover the fix commit.
+No second reviewer pass is requested. Final focused analytics checks passed 56/56 and typecheck passed. Canonical full-suite/lint/build evidence must cover the exact final PR head; the result is recorded in its body/checks.
 
 Deferred minor: frozen Telegram receipts do not retain destination type. A `-100...` ID cannot distinguish a channel from a supergroup, so the receiver accepts channel events only, but a group row may remain NO_DATA/IDENTITY_UNPROVEN rather than UNSUPPORTED. No values are fabricated or ranked. Establishing trustworthy type metadata is a later design decision; do not infer type, alter connector contracts or make Telegram provider calls in this task.
 
@@ -60,7 +61,8 @@ Deferred minor: frozen Telegram receipts do not retain destination type. A `-100
 2. Accept positive and negative canonical MAX numeric destinations, matching the existing validator. Cost if wrong: reject or misclassify a valid destination.
 3. Preserve the unchanged Windows self-host test and require canonical Linux full-suite success. Cost if wrong: an actual Windows regression could remain undiscovered.
 4. Provider acceptance and webhook activation set aside by review remain deferred to their expressly approved later gates. Cost if wrong: mocked access/receipt evidence could differ from production.
-5. Handoff docs and exact-head CI set aside by review are executor release obligations; neither review nor local checks substitute for them. Cost if wrong: releasing an unverified head.
+5. Preserve/restore the original dependency junction after a frozen physical install timeout and use canonical Linux build/Self-host gates. Cost if wrong: local Windows build parity remains unverified.
+6. Handoff docs and exact-head CI set aside by review are executor release obligations; neither review nor local checks substitute for them. Cost if wrong: releasing an unverified head.
 
 ## Owner release and later activation
 
