@@ -15,7 +15,7 @@ try{
   sourceCssSha256=createHash('sha256').update(source).digest('hex');
   let urls;
   try{
-    const html=await readFile(path.join(root,'.next/server/app/index.html'),'utf8');
+    const html=(await readFile(path.join(root,'.next/server/app/index.html'),'utf8')).replace(/<!--[\s\S]*?-->/g,'');
     urls=[...new Set([...html.matchAll(/<link\b[^>]*>/g)].filter(m=>/\brel="stylesheet"/.test(m[0])).map(m=>/\bhref="([^"]+)"/.exec(m[0])?.[1]))];
   }catch(error){
     if(error.code!=='ENOENT')throw error;

@@ -38,6 +38,15 @@ test('an orphan CSS file or commented selectors cannot hide missing route styles
   const result=run(root);assert.equal(result.status,1);
   assert.equal(JSON.parse(result.stdout).code,'ANALYTICS_CSS_MISSING');
 });
+test('stylesheet links inside HTML comments do not connect orphan CSS to the route',async t=>{
+  const root=await fixture(t,validCss);
+  await writeFile(path.join(root,'.next/server/app/index.html'),'<html><head><!--\n<link rel="stylesheet" href="/_next/static/chunks/entry.css">\n--><!--<link rel="stylesheet" href="/_next/static/chunks/entry.css">--></head><body></body></html>');
+  const result=run(root);assert.equal(result.status,1);
+  const diagnostic=JSON.parse(result.stdout);
+  assert.equal(diagnostic.code,'ANALYTICS_CSS_ASSET_INVALID');
+  assert.equal(diagnostic.stylesheetCount,0);
+  assert.deepEqual(diagnostic.checks,{controlsLayout:false,buttonSpacing:false,tableSpacing:false});
+});
 test('a stylesheet outside emitted static assets is rejected without fetching it',async t=>{
   const root=await fixture(t,validCss,'https://evil.test/secret.css');
   const result=run(root);assert.equal(result.status,1);
