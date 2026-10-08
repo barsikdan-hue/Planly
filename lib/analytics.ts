@@ -25,7 +25,7 @@ export function legacyTelegramDestination(url: string | null, primaryId: string)
 }
 export function summarizeObserved(values: readonly (number | null)[]): { observedCount: number; total: number | null; totalOverflow: boolean } {
   const available = values.filter((v): v is number => v !== null && isCount(v));
-  const sum = available.reduce((a,b) => a + BigInt(b), 0n);
+  const sum = available.reduce((a,b) => a + BigInt(b), BigInt(0));
   const totalOverflow = sum > BigInt(Number.MAX_SAFE_INTEGER);
   return {observedCount:available.length, total:available.length && !totalOverflow ? Number(sum) : null, totalOverflow};
 }
