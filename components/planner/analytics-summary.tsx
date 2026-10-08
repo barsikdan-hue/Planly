@@ -13,18 +13,18 @@ export function AnalyticsSummary({data,loading,error,provider='max'}:{provider?:
   </section>;
 }
 export function DashboardAnalytics({ownerContext}:{ownerContext:AnalyticsOwnerContext}) {
-  const [values,setValues]=useState<{max:AnalyticsDto|null;telegram:AnalyticsDto|null}>({max:null,telegram:null});
-  const [loading,setLoading]=useState(false);const [error,setError]=useState<string|null>(null);
+  const [observation,setObservation]=useState<{ownerId:string;generation:object;max:AnalyticsDto|null;telegram:AnalyticsDto|null;error:string|null}|null>(null);
+  const ownerId=ownerContext?.id;const generation=ownerContext?.generation;
+  const visible=observation?.ownerId===ownerId&&observation?.generation===generation?observation:null;
+  const loading=!!ownerContext&&!visible;
   useEffect(()=>{
-    const controller=new AbortController();let current=true;setValues({max:null,telegram:null});setError(null);
-    if(!ownerContext){setLoading(false);return ()=>controller.abort();}
-    setLoading(true);
+    const controller=new AbortController();let current=true;
+    if(!ownerId||!generation)return ()=>controller.abort();
     void Promise.allSettled([loadAnalytics({provider:'max',period:7,page:0},controller.signal),loadAnalytics({provider:'telegram',period:7,page:0},controller.signal)]).then(results=>{
       if(!current)return;
-      setValues({max:results[0].status==='fulfilled'?results[0].value:null,telegram:results[1].status==='fulfilled'?results[1].value:null});
-      setError(results.some(r=>r.status==='rejected')?'Не удалось загрузить часть статистики.':null);setLoading(false);
+      setObservation({ownerId,generation,max:results[0].status==='fulfilled'?results[0].value:null,telegram:results[1].status==='fulfilled'?results[1].value:null,error:results.some(r=>r.status==='rejected')?'Не удалось загрузить часть статистики.':null});
     });
     return ()=>{current=false;controller.abort();};
-  },[ownerContext?.id,ownerContext?.generation]);
-  return <div className="analytics-provider-summary"><div><h3>MAX</h3><AnalyticsSummary provider="max" data={values.max} loading={loading} error={error}/></div><div><h3>Telegram</h3><AnalyticsSummary provider="telegram" data={values.telegram} loading={loading} error={error}/></div></div>;
+  },[ownerId,generation]);
+  return <div className="analytics-provider-summary"><div><h3>MAX</h3><AnalyticsSummary provider="max" data={visible?.max??null} loading={loading} error={visible?.error??null}/></div><div><h3>Telegram</h3><AnalyticsSummary provider="telegram" data={visible?.telegram??null} loading={loading} error={visible?.error??null}/></div></div>;
 }

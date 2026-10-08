@@ -65,3 +65,8 @@ test('unmounted analytics does not refresh after a late initial read',async()=>{
   globalThis.fetch=async(_url,init)=>{if(init?.method==='POST')posts++;return pending;};
   const {h}=mount();h.unmount();release(Response.json(empty()));await new Promise(resolve=>setTimeout(resolve,0));assert.equal(posts,0);
 });
+test('owner metrics are hidden during the first replacement render before effects settle',async()=>{
+  let fresh=false;globalThis.fetch=async(_url,init)=>init?.method==='POST'?Response.json({nextPage:null,busy:false}):fresh?new Promise(()=>{}):Response.json({...empty(),total:67890,eligibleCount:1,observedCount:1});
+  const {h,state}=mount();await h.settle();assert.match(renderToStaticMarkup(h.tree),/67.?890/);
+  fresh=true;state.owner={id:'b',generation:{}};h.render();assert.doesNotMatch(renderToStaticMarkup(h.tree),/67.?890/);
+});

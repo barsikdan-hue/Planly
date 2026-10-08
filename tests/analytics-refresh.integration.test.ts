@@ -59,16 +59,16 @@ test('overall refresh deadline rejects even a late reader which ignores abort',a
   } finally {release();clearInterval(keepAlive);}
 });
 
-test('lease connection is released even when advisory unlock fails',async()=>{
+test('lease connection is destroyed when advisory unlock fails',async()=>{
   await analyticsPublication('x');const pool=getPool();
-  let released=false;let forceRelease:undefined|(()=>void);
+  let released=false;let destroyArgument:unknown;
   const originals=new Map<PoolClient,PoolClient['query']>();
   const acquire=(client:PoolClient)=>{
     if(originals.has(client))return;const query=client.query;originals.set(client,query);
     Object.defineProperty(client,'query',{configurable:true,value:(...args:unknown[])=>{
       if(typeof args[0]==='string'&&args[0].includes('pg_try_advisory_lock')){
-        const release=client.release;forceRelease=()=>Reflect.apply(release,client,[true]);
-        Object.defineProperty(client,'release',{configurable:true,value:()=>{released=true;return Reflect.apply(release,client,[true]);}});
+        const release=client.release;
+        Object.defineProperty(client,'release',{configurable:true,value:(destroy:unknown)=>{released=true;destroyArgument=destroy;return Reflect.apply(release,client,[destroy]);}});
       }
       if(typeof args[0]==='string'&&args[0].includes('pg_advisory_unlock'))throw Error('synthetic unlock transport failure');
       return Reflect.apply(query,client,args);
@@ -76,6 +76,41 @@ test('lease connection is released even when advisory unlock fails',async()=>{
   };pool.on('acquire',acquire);
   try {
     await assert.rejects(()=>refreshMaxAnalytics('a',query,{now,reader:{async read(){return {coverage:'AVAILABLE',value:1,error:null};}}}),/synthetic unlock/);
-    assert.equal(released,true);
-  }finally{pool.off('acquire',acquire);for(const [client,query]of originals)Object.defineProperty(client,'query',{configurable:true,value:query});if(!released)forceRelease?.();}
+    assert.equal(released,true);assert.equal(destroyArgument,true);
+  }finally{pool.off('acquire',acquire);for(const [client,query]of originals)Object.defineProperty(client,'query',{configurable:true,value:query});const cleanup=await pool.connect();try{await cleanup.query('SELECT pg_advisory_unlock_all()');}finally{cleanup.release(true);}}
+});
+
+test('failed worker cancels and drains its sibling before account unlock',async()=>{
+  await analyticsPublication('a',{remoteId:'mid_a'});await analyticsPublication('b',{remoteId:'mid_b'});
+  const pool=getPool();let peerEntered!:()=>void;const ready=new Promise<void>(resolve=>{peerEntered=resolve;});
+  let releasePeer!:()=>void;let peerExited=false;let exitAtUnlock=false;let injected=false;
+  const originals=new Map<PoolClient,PoolClient['query']>();
+  const acquire=(client:PoolClient)=>{if(originals.has(client))return;const original=client.query;originals.set(client,original);Object.defineProperty(client,'query',{configurable:true,value:(...args:unknown[])=>{
+    const text=typeof args[0]==='string'?args[0]:(args[0] as {text?:string})?.text??'';
+    if(text.includes('insert into "publication_metrics"')&&!injected){injected=true;throw Error('synthetic metric write failure');}
+    if(text.includes('pg_advisory_unlock('))exitAtUnlock=peerExited;
+    return Reflect.apply(original,client,args);
+  }});};pool.on('acquire',acquire);
+  const reader={async read(expected:{remoteId:string},signal?:AbortSignal){
+    if(expected.remoteId==='mid_a'){await ready;return {coverage:'AVAILABLE' as const,value:1,error:null};}
+    await new Promise<void>((resolve,reject)=>{releasePeer=resolve;signal?.addEventListener('abort',()=>{peerExited=true;reject(Error('cancelled peer'));},{once:true});peerEntered();});
+    peerExited=true;return {coverage:'AVAILABLE' as const,value:2,error:null};
+  }};
+  try{await assert.rejects(()=>refreshMaxAnalytics('a',query,{now,reader}),(error:unknown)=>(error as Error & {cause?:Error}).cause?.message==='synthetic metric write failure');assert.equal(exitAtUnlock,true,'unlock must follow sibling cancellation/drain');}
+  finally{releasePeer?.();await new Promise(resolve=>setTimeout(resolve,30));pool.off('acquire',acquire);for(const [client,original]of originals)Object.defineProperty(client,'query',{configurable:true,value:original});}
+});
+
+test('cache eligibility is reloaded after a delayed lock acquisition',async()=>{
+  await analyticsPublication('x');const pool=getPool();let reads=0;let enter!:()=>void;let releaseA!:()=>void;
+  const entered=new Promise<void>(resolve=>{enter=resolve;});const held=new Promise<void>(resolve=>{releaseA=resolve;});
+  const reader={async read(){reads++;enter();await held;return {coverage:'AVAILABLE' as const,value:5,error:null};}};
+  const a=refreshMaxAnalytics('a',query,{now,reader});await entered;
+  let resumeB!:()=>void;let pause!:()=>void;const paused=new Promise<void>(resolve=>{pause=resolve;});const gate=new Promise<void>(resolve=>{resumeB=resolve;});
+  const originals=new Map<PoolClient,PoolClient['query']>();
+  const acquire=(client:PoolClient)=>{if(originals.has(client))return;const original=client.query;originals.set(client,original);Object.defineProperty(client,'query',{configurable:true,value:(...args:unknown[])=>{
+    if(typeof args[0]==='string'&&args[0].includes('pg_try_advisory_lock')){pause();return gate.then(()=>Reflect.apply(original,client,args));}return Reflect.apply(original,client,args);
+  }});};pool.on('acquire',acquire);
+  const b=refreshMaxAnalytics('a',query,{now,reader});await paused;
+  try{releaseA();await a;resumeB();const result=await b;assert.equal(result.checked,0);assert.equal(reads,1);}
+  finally{releaseA();resumeB();await Promise.allSettled([a,b]);pool.off('acquire',acquire);for(const [client,original]of originals)Object.defineProperty(client,'query',{configurable:true,value:original});}
 });

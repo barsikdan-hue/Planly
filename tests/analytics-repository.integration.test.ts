@@ -2,13 +2,18 @@ import test,{beforeEach,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {eq} from 'drizzle-orm';
 import {getDb,closeDb} from '../db/index.ts';
-import {posts,publications,socialAccounts,publicationMetrics} from '../db/schema.ts';
+import {posts,postTargets,publications,socialAccounts,publicationMetrics} from '../db/schema.ts';
 import {analyticsFixture,analyticsPublication} from './helpers/analytics-fixture.ts';
 import {listAnalytics,saveObservation,saveCollectionResult} from '../lib/server/analytics/repository.ts';
 
 beforeEach(analyticsFixture);after(closeDb);
 const now=new Date('2026-10-08T12:00:00Z');
 const query={provider:'max' as const,period:7 as const,page:0};
+test('preview uses the provider copy that was published, truncated to 200 characters',async()=>{
+  await analyticsPublication('override');const text='Provider-specific text '.repeat(20);
+  await getDb().update(postTargets).set({textOverride:text}).where(eq(postTargets.id,'t-override'));
+  assert.equal((await listAnalytics('a',query,now)).rows[0].text,text.slice(0,200));
+});
 async function save(id:string,value:number,options:{owner?:string;destination?:string;observedAt?:Date}={}) {
   return getDb().transaction(tx=>saveObservation(tx,{userId:options.owner??'a',publicationId:id,accountId:'a-MAX',destinationId:options.destination??'123',remoteMessageId:'mid_42',metric:'views',value,observedAt:options.observedAt??now,providerEventAt:null,updateId:null}));
 }

@@ -1,12 +1,12 @@
 # Phase 8 — automatic Telegram/MAX post-performance analytics
 
-Status: OWNER WRITTEN-SPEC APPROVED on 2026-10-08. Implementation-plan review and execution selection remain pending.
+Status: OWNER DESIGN AND IMPLEMENTATION-PLAN APPROVED on 2026-10-08. Owner selected inline execution in this chat. Tasks 1–5 implemented on the feature branch; verification/review/release gates remain.
 
 ## Agreed intent and exclusions
 
 Owner decision 2026-10-08: defer VK, proceed to Phase 8 Telegram/MAX analytics, help identify which posts perform better, and use automatic metrics through existing bots. The approved approach shows unavailable metrics as unavailable and compares posts within a provider. The first draft's mention of MAX repost counts was corrected after inspecting the expanded official schema: only views are confirmed.
 
-The proposal below turns that approach into a concrete design for review. Manual statistics entry, CSV import, Telegram user-session/MTProto integration, AI, new networks, scheduler redesign and infrastructure migration are excluded. Existing publishing, retry, account/auth and VK behavior remain unchanged.
+This approved design defines the implementation contract. Manual statistics entry, CSV import, Telegram user-session/MTProto integration, AI, new networks, scheduler redesign and infrastructure migration are excluded. Existing publishing, retry, account/auth and VK behavior remain unchanged.
 
 ## Current implementation gap
 
@@ -73,4 +73,4 @@ Success for the first release: supported observed metrics replace demo values, r
 
 ## Review and delivery boundary
 
-Owner approved the written specification on 2026-10-08. Review of the implementation plan, including the receipt-identity clarification above, and execution selection precede runtime implementation under the architectural brainstorming path. Merge, production deployment, env/webhook configuration and any provider mutation retain their explicit gates. Current work changes documentation only.
+Owner approved the written specification and implementation plan, including the receipt-identity clarification, on 2026-10-08 and explicitly requested inline implementation in this chat. Merge, production deployment, env/webhook configuration and any provider mutation retain their explicit gates. Implementation is on the feature branch. Production/provider acceptance remains pending.

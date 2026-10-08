@@ -8,7 +8,7 @@ export type AnalyticsTx = Parameters<Parameters<ReturnType<typeof getDb>['transa
 export type OwnedObservation = {userId:string;publicationId:string;accountId:string;destinationId:string;remoteMessageId:string;metric:AnalyticsMetric;value:number;observedAt:Date;providerEventAt:Date|null;updateId:number|null};
 export async function analyticsCohort(userId:string,query:AnalyticsQuery,now:Date) {
   const window=publicationWindow(query.period,now);
-  return getDb().select({publication:publications,account:socialAccounts,metric:publicationMetrics,text:sql<string>`left(${posts.baseText},200)`}).from(publications)
+  return getDb().select({publication:publications,account:socialAccounts,metric:publicationMetrics,text:sql<string>`left(coalesce(${postTargets.textOverride},${posts.baseText}),200)`}).from(publications)
     .innerJoin(posts,eq(posts.id,publications.postId)).innerJoin(postTargets,eq(postTargets.id,publications.postTargetId))
     .innerJoin(socialAccounts,eq(socialAccounts.id,postTargets.socialAccountId)).leftJoin(publicationMetrics,eq(publicationMetrics.publicationId,publications.id))
     .where(and(eq(publications.userId,userId),eq(posts.userId,userId),eq(socialAccounts.userId,userId),eq(publications.provider,query.provider==='max'?'MAX':'TELEGRAM'),eq(publications.status,'PUBLISHED'),gte(publications.publishedAt,window.from),lte(publications.publishedAt,window.through)));
