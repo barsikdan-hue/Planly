@@ -1,9 +1,16 @@
+export type VkOAuthDiagnostic = {
+  stage: 'CALLBACK' | 'OAUTH_INTENT' | 'TOKEN_EXCHANGE' | 'GRANT_VALIDATION' | 'COMMUNITY_VALIDATION' | 'CREDENTIAL_PERSISTENCE';
+  reason: 'FAILED' | 'INVALID_SCOPE' | 'INVALID_GRANT' | 'INVALID_CLIENT' | 'ACCESS_DENIED' | 'PROVIDER_REJECTED' | 'HTTP_REJECTED' | 'INVALID_RESPONSE' | 'TRANSPORT_FAILED' | 'STATE_MISMATCH' | 'MISSING_PUBLISHING_SCOPES';
+};
+
 export class VkOAuthError extends Error {
   readonly code: string;
-  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION') {
+  readonly diagnostic?: VkOAuthDiagnostic;
+  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION', diagnostic?: VkOAuthDiagnostic) {
     super(`VK authorization failed (${code})`);
     this.name = 'VkOAuthError';
     this.code = code;
+    this.diagnostic = diagnostic;
   }
 }
 
