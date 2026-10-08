@@ -3,14 +3,18 @@ export type VkOAuthDiagnostic = {
   reason: 'FAILED' | 'INVALID_SCOPE' | 'INVALID_GRANT' | 'INVALID_CLIENT' | 'ACCESS_DENIED' | 'PROVIDER_REJECTED' | 'HTTP_REJECTED' | 'INVALID_RESPONSE' | 'TRANSPORT_FAILED' | 'STATE_MISMATCH' | 'MISSING_PUBLISHING_SCOPES';
 };
 
+export type VkInvalidGrantReason = 'PKCE_MISMATCH' | 'CODE_VERIFIER_REJECTED' | 'CODE_INVALID_EXPIRED_OR_USED' | 'DEVICE_ID_REJECTED' | 'REDIRECT_REJECTED' | 'SERVICE_TOKEN_REJECTED' | 'OTHER_INVALID_GRANT';
+
 export class VkOAuthError extends Error {
   readonly code: string;
   readonly diagnostic?: VkOAuthDiagnostic;
-  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION', diagnostic?: VkOAuthDiagnostic) {
+  readonly invalidGrantReason?: VkInvalidGrantReason;
+  constructor(code: 'AUTH' | 'CONFIG' | 'NOT_FOUND' | 'STATE' | 'VALIDATION', diagnostic?: VkOAuthDiagnostic, invalidGrantReason?: VkInvalidGrantReason) {
     super(`VK authorization failed (${code})`);
     this.name = 'VkOAuthError';
     this.code = code;
     this.diagnostic = diagnostic;
+    this.invalidGrantReason = invalidGrantReason;
   }
 }
 
