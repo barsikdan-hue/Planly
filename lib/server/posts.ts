@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { ZodError } from 'zod';
 import { getDb } from '../../db/index.ts';
-import { libraryItems, mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { libraryItems, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import {
   fromDbProvider,
   createPostSourceSchema,
@@ -13,7 +13,7 @@ import {
 } from '../contracts/planner.ts';
 import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
 import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
-import { PublicationContentError, validatePublicationContent, type PublicationMediaMetadata } from '../publication-content.ts';
+import { validatePostRelations } from './post-relations.ts';
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
@@ -94,34 +94,6 @@ async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
   };
 }
 
-async function validateRelations(
-  tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
-  userId: string,
-  input: SavePostInput,
-) {
-  let media: PublicationMediaMetadata[] = [];
-  if (input.mediaIds.length) {
-    const rows = await tx.select({ id: mediaAssets.id, mimeType: mediaAssets.mimeType,
-      byteSize: mediaAssets.byteSize, width: mediaAssets.width, height: mediaAssets.height }).from(mediaAssets)
-      .where(and(eq(mediaAssets.userId, userId), inArray(mediaAssets.id, input.mediaIds)));
-    if (rows.length !== input.mediaIds.length) throw new Error('Media not found for owner');
-    media = rows;
-  }
-
-  for (const target of input.targets) {
-    if (!target.scheduledAt) continue;
-    const issue = validatePublicationContent(toDbProvider(target.provider), target.textOverride ?? input.baseText, media);
-    if (issue) throw new PublicationContentError(issue);
-  }
-
-  const providers = input.targets.map(target => toDbProvider(target.provider));
-  if (!providers.length) return new Map<string, string>();
-  const accounts = await tx.select().from(socialAccounts)
-    .where(and(eq(socialAccounts.userId, userId), inArray(socialAccounts.provider, providers)));
-  if (accounts.length !== new Set(providers).size) throw new Error('Social account not found');
-  return new Map(accounts.map(account => [account.provider, account.id]));
-}
-
 export async function listPlannerPosts(userId: string): Promise<PostDto[]> {
   const db = getDb();
   const rows = await db.select({ id: posts.id }).from(posts)
@@ -188,7 +160,7 @@ export async function createPost(
       const occupied = await occupiedSlotMinutes(tx, userId, { providers: input.targets.map(target => target.provider) });
       if (occupied.has(slotMinuteKey(schedules[0]!))) throw new PlannerSlotConflictError();
     }
-    const accounts = await validateRelations(tx, userId, input);
+    const accounts = await validatePostRelations(tx, userId, input);
     const now = new Date();
     const inserted = await tx.insert(posts).values({
       id: postId,
@@ -269,7 +241,7 @@ export async function updatePost(
     if (samePostInput(input, current)) return { changed: false, changes: [] as PublicationQueueChange[] };
     const blockedReason = postEditBlockedReason(history);
     if (blockedReason) throw new PostEditConflictError(blockedReason);
-    const accounts = await validateRelations(tx, userId, input);
+    const accounts = await validatePostRelations(tx, userId, input);
     await tx.update(posts)
       .set({
         title: input.title ?? null,
