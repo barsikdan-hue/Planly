@@ -10,6 +10,7 @@ import { libraryCreationKeySchema } from '../contracts/library.ts';
 import type { ComposerPostInput } from '../planner.ts';
 import type { SlotQuery } from '../contracts/swipe-planner.ts';
 import type {AnalyticsQuery,AnalyticsDto,RefreshSummary} from '../contracts/analytics.ts';
+import type {SchedulingPlanPreviewInput,SchedulingPlanPreview,SchedulingPlanCommitInput,SchedulingPlanCommitResult} from '../contracts/scheduling-plan.ts';
 
 export type MediaAssetWithPreview = MediaAssetDto & { previewUrl: string };
 export type PlannerSnapshot = {
@@ -64,6 +65,13 @@ function jsonRequest(method: string, body: unknown): RequestInit {
 
 export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
+}
+
+export function previewSchedulingPlanRequest(input:SchedulingPlanPreviewInput):Promise<SchedulingPlanPreview> {
+  return request('/api/scheduling-plans/preview',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Scheduling':'1'}});
+}
+export function commitSchedulingPlanRequest(input:SchedulingPlanCommitInput):Promise<SchedulingPlanCommitResult> {
+  return request('/api/scheduling-plans/commit',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Scheduling':'1'}});
 }
 
 export async function savePost(input: ComposerPostInput, id?: string, creationKey?: string): Promise<PostDto> {
