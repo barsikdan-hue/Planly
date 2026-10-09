@@ -4,15 +4,18 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { AnalyticsError, AnalyticsMetric, MetricObservation } from '../lib/contracts/analytics.ts';
+import type { SchedulingPlanReceipt } from '../lib/contracts/scheduling-plan.ts';
 
 const createdAt = timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
@@ -47,6 +50,14 @@ export const users = pgTable('users', {
   createdAt,
   updatedAt,
 });
+
+export const schedulingPlanOperations = pgTable('scheduling_plan_operations', {
+  userId: text('user_id').notNull().references(() => users.id, {onDelete:'cascade'}),
+  operationId: uuid('operation_id').notNull(),
+  requestHash: text('request_hash').notNull(),
+  receipt: jsonb('receipt').$type<SchedulingPlanReceipt>().notNull(),
+  createdAt,
+}, table => [primaryKey({columns:[table.userId,table.operationId]}),check('scheduling_plan_request_hash_format',sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`)]);
 
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
