@@ -4,7 +4,7 @@ Status: IMPLEMENTED IN DRAFT PR34; final exact-head verification and desktop/mob
 
 Owner approved the specification at `7d2577746a7a35afc5afce8cc3a1a12c511234b6` and the implementation plan at `3217d13a633df27d7d7d8f84c7612571b4118582`, selecting native execution in this chat on 2026-10-09. Repository: `barsikdan-hue/Planly`; branch: `codex/phase9-scheduling-design`; source baseline: `a2187cd1531e595816a044691ae76ee7930e1162`. Last verified production remains `2539796a7427175642d5b9e8c351382a4c18954c` from PR32; this report does not refresh production identity.
 
-Implementation checkpoint: `0c27acfba59cd210ed1673648747bff03e9ba362`. A subsequent test-only lint binding correction is `a72275f5a95c0bcbb9c1c165d68591fe54257797`. Final head and workflow evidence are recorded in [PR34](https://github.com/barsikdan-hue/Planly/pull/34) after checks finish; earlier heads are not evidence for a later head.
+Implementation checkpoint: `0c27acfba59cd210ed1673648747bff03e9ba362`. A subsequent test-only lint binding correction is `a72275f5a95c0bcbb9c1c165d68591fe54257797`. Review fixes are at `94d6908433a038afe4e9003a76429a383d8528cf`. Final head and workflow evidence are recorded in [PR34](https://github.com/barsikdan-hue/Planly/pull/34) after checks finish; earlier heads are not evidence for a later head.
 
 ## Requirement coverage
 
@@ -36,7 +36,7 @@ All new test groups were observed RED before their feature was implemented, then
 
 Local API tests substitute only the external queue-mirroring adapter through a test loader. Database/auth/route/transaction logic remain real. Native CI and Self-host provide real Redis/queue recovery evidence. No production dependencies, env values or provider credentials were copied into the fixture.
 
-Local full lint was attempted but its final exit was unavailable after the exec session closed; it is NOT claimed as PASS. Exact native CI supplies the full lint result. Local full-suite execution requires Redis, which is unavailable in the isolated Windows fixture; it has not been represented as PASS. Local canonical build was attempted and stopped on the pre-existing external `node_modules` junction: Turbopack reported that the symlink points outside its filesystem root. No dependency layout, build contract, bundler flag, CI rule or timeout was changed to bypass this. Canonical build acceptance must come from exact-head CI/Self-host.
+Local full lint was attempted but its final exit was unavailable after the exec session closed; it is NOT claimed as PASS. Exact native CI supplies the full lint result. Local full-suite execution requires Redis, which is unavailable in the isolated Windows fixture; it has not been represented as PASS. The post-review native rerun initially failed before assertions with ECONNREFUSED: the isolated PostgreSQL fixture process had exited for an unknown reason. The same verified fixture was restarted; native checks then passed 24/24. The fixture was cleanly stopped afterward. No production state changed. Local canonical build was attempted and stopped on the pre-existing external `node_modules` junction: Turbopack reported that the symlink points outside its filesystem root. No dependency layout, build contract, bundler flag, CI rule or timeout was changed to bypass this. Canonical build acceptance must come from exact-head CI/Self-host.
 
 ## Findings corrected during integration
 
@@ -47,7 +47,7 @@ Local full lint was attempted but its final exit was unavailable after the exec 
 
 ## Remaining gates and deferred work
 
-- Independent whole-branch review found no Critical issue and two concrete fixes: restored receipts must be labelled historical with application time, and fractional non-slot timestamps must reject before Date loses precision. Both new regression tests were observed RED, then GREEN in 26/26 pure/client tests. Typecheck and focused lint passed. Reviewer follow-up and final native checks remain required.
+- Independent whole-branch review is complete. It found no Critical issue and two concrete fixes: restored receipts must be labelled historical with application time, and fractional non-slot timestamps must reject before Date loses precision. Both new regression tests were observed RED, then GREEN in 26/26 pure/client tests. Typecheck and focused lint passed. Reviewer follow-up at `94d6908433a038afe4e9003a76429a383d8528cf` confirmed both fixes resolved, with 2/2 targeted tests PASS. Native API/commit/preview rerun passed 24/24 with zero failures/cancellations/skips. Final exact-head CI remains required.
 - Exact final-head native CI and Self-host must both succeed, including full suite with zero failures/cancellations/skips, typecheck/lint/build, migration drift and scheduler recovery.
 - Desktop/mobile local browser smoke is NOT VERIFIED. Two CUA webview attachment attempts timed out; opening the synthetic local UI through Codex returned `queued` because this chat was hidden. Owner was asked to open this chat. The fixture prohibits commit requests and contains only synthetic drafts/media/destinations. Behavior tests are not a substitute for visual/keyboard acceptance.
 - Keep PR34 draft until required verification is complete. Do not declare `READY_FOR_OWNER_MERGE_GATE` while a mandatory check remains unverified.

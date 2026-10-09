@@ -10,7 +10,7 @@
 
 **Spec:** [Owner-approved written specification](../specs/2026-10-09-batch-draft-scheduling-design.md), approved in chat on 2026-10-09 at PR34 head `7d2577746a7a35afc5afce8cc3a1a12c511234b6`.
 
-**Status:** OWNER PLAN APPROVED at head `3217d13a633df27d7d7d8f84c7612571b4118582` on 2026-10-09 with native execution in this chat. Tasks 1–5 completed; Task 6 implementation and behavior tests completed, desktop/mobile browser verification pending. Task 7 independent review and exact-head CI in progress. Merge/deploy/provider gates remain separate.
+**Status:** OWNER PLAN APPROVED at head `3217d13a633df27d7d7d8f84c7612571b4118582` on 2026-10-09 with native execution in this chat. Tasks 1–5 completed; Task 6 implementation and behavior tests completed, desktop/mobile browser verification pending. Task 7 independent review is complete; exact final-head CI and browser verification are pending. Merge/deploy/provider gates remain separate.
 
 ## Global Constraints
 
@@ -161,9 +161,9 @@ Define a pure state reducer `reduceSchedulingPlan(state: SchedulingPlanState, ev
 
 **Files:** Update `ROADMAP.md`, the current-state paragraph of `AGENTS.md` and this plan's completed checkboxes; create `docs/verification/2026-10-09-phase9-batch-scheduling.md` for exact evidence. If delivery is later, use the actual date for the verification report.
 
-- [ ] Re-read the approved spec and map every requirement to Tasks 1–6 evidence. Run focused failures again only if new edits justify them; do not weaken assertions, add blanket skips or increase timeouts to manufacture PASS.
+- [x] Re-read the approved spec and map every requirement to Tasks 1–6 evidence. Run focused failures again only if new edits justify them; do not weaken assertions, add blanket skips or increase timeouts to manufacture PASS.
 - [ ] In isolated development/test infrastructure run `pnpm db:generate` and inspect no generated drift; `pnpm db:migrate`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Require exit 0/full suite 0 failures/cancellations/skips in canonical CI; native PostgreSQL lock tests must run. Preserve the existing analytics CSS/build check and Self-host recovery contract.
-- [ ] Request an independent whole-branch review against the approved spec and baseline; resolve actionable correctness/security findings, then rerun affected checks. Record safe evidence categories separately: focused/native tests, full CI, Self-host, local UI, production, provider.
+- [x] Request an independent whole-branch review against the approved spec and baseline; resolve actionable correctness/security findings, then rerun affected checks. Record safe evidence categories separately: focused/native tests, full CI, Self-host, local UI, production, provider.
 - [ ] Push approved implementation commits, update PR34 with final behavior/validation (keep draft until verification is ready), and inspect native CI + Self-host for the exact final SHA. Confirm no unapproved file/scope/env/provider changes. Documentation-head CI is not implementation-head evidence.
 - [ ] When all required checks/review pass, STOP at `READY_FOR_OWNER_MERGE_GATE`. Provide exact final head/base, CI links and request separate Owner merge/deploy approval. Do not merge, deploy or migrate production from plan approval alone.
 - [ ] After explicit release approval only: merge, verify main SHA, deploy that exact SHA to the existing Render service, verify LIVE/health/deployed identity and real production preview/recovery UI. A production commit schedules real work: obtain Owner-approved existing drafts/destinations/future times for a minimal scheduler/provider smoke. Without that evidence report preview-only acceptance and leave scheduling/delivery unproven. Preserve all deferred Phase 8/VK work.
