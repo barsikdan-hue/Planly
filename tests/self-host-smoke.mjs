@@ -1,6 +1,8 @@
 // Destructive Redis-loss probe for a fresh, disposable CI Compose stack only.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {collectReleaseCssChecks} from '../scripts/release-css-contract.mjs';
 
 assert.equal(process.env.PLANLY_SELF_HOST_TEST, 'isolated-ci', 'Run this only against an empty disposable CI stack.');
 const base = process.env.PLANLY_BASE_URL;
@@ -24,6 +26,31 @@ async function api(path, init = {}) {
   headers.set('cookie', cookie);
   return fetch(`${base}${path}`, { ...init, headers, signal: AbortSignal.timeout(10000) });
 }
+// Inspect the actual authenticated HTML and HTTP stylesheet assets after packaging.
+const page = await api('/');
+assert.equal(page.status, 200);
+const html = (await page.text()).replace(/<!--[\s\S]*?-->/g, '');
+const styles = [...new Set([...html.matchAll(/<link\b[^>]*>/g)].filter(m => /\brel="stylesheet"/.test(m[0])).map(m => /\bhref="([^"]+)"/.exec(m[0])?.[1]))];
+assert.ok(styles.length > 0);
+const emitted = [];
+for (const stylesheet of styles) {
+  assert.match(stylesheet ?? '', /^\/_next\/static\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.css$/);
+  const response = await api(stylesheet);
+  assert.equal(response.status, 200);
+  emitted.push({path: stylesheet, css: await response.text()});
+}
+// The CI runner has no app dependencies. Parse HTTP CSS with the existing web
+// container's PostCSS dependency, feeding public CSS on stdin (no cookies/env).
+const checks = JSON.parse(execFileSync('docker', ['compose', '--env-file', '.env.self-host', 'exec', '-T', 'web', 'node', '--input-type=module', '-e', `
+  import {readFileSync} from 'node:fs';
+  import {createRequire} from 'node:module';
+  const require=createRequire(process.cwd()+'/package.json');
+  const postcss=createRequire(require.resolve('@tailwindcss/postcss'))('postcss');
+  const collect=${collectReleaseCssChecks.toString()};
+  console.log(JSON.stringify(collect(JSON.parse(readFileSync(0,'utf8')).map(css=>postcss.parse(css)))));
+`], {input: JSON.stringify(emitted.map(asset => asset.css)), encoding: 'utf8', timeout: 10000}));
+assert.equal(Object.values(checks).every(Boolean), true, 'SERVED_RELEASE_CSS_MISSING');
+console.log(JSON.stringify({code: 'SERVED_RELEASE_CSS_OK', assets: emitted.map(({path, css}) => ({path, bytes: Buffer.byteLength(css), sha256: createHash('sha256').update(css).digest('hex')})), checks}));
 const libraryInput = { title: null, text: 'isolated durable Library intent', mediaIds: [] };
 const libraryKey = crypto.randomUUID(), deletedLibraryKey = crypto.randomUUID();
 const createLibrary = key => api('/api/library-items', { method: 'POST',

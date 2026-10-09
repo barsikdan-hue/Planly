@@ -74,3 +74,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Diagnose restored CSS build cache in isolation
+        env:
+          PLANLY_CSS_CACHE_DIAGNOSTIC: isolated-ci
+        run: node scripts/diagnose-css-cache.mjs
