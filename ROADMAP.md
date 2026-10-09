@@ -1,9 +1,9 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; its acceptance scope remains in the [closure evidence](docs/verification/2026-10-06-customer-ready-closure.md). Main and latest Render LIVE runtime were verified on 2026-10-08 at `124f6d4fceedcbb8a9ef2ba59827a65b1cabe383` after PR30; health HTTP 200. This is deployment evidence, not new Telegram/MAX provider acceptance or successful VK authorization.
-CURRENT MILESTONE: Phase 8 Analytics — approved design/plan and inline implementation on 2026-10-08. Tasks 1–5 implemented on the feature branch: owned MAX views, authenticated Telegram aggregate receiver and real-data UI. Independent review fixes and 58 focused analytics checks on Node 22.13.0 are verified. Canonical exact-head CI/Self-host remains the release gate; production/provider acceptance is NOT PROVEN. [Implementation evidence](docs/verification/2026-10-08-phase8-analytics-implementation.md).
+CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; its acceptance scope remains in the [closure evidence](docs/verification/2026-10-06-customer-ready-closure.md). PR31 and PR32 are merged/deployed. Main and Render LIVE were verified on 2026-10-09 at `2539796a7427175642d5b9e8c351382a4c18954c`; health HTTP 200. Exact PR32 head CI/Self-host succeeded, full suite 976/976 PASS. This does not establish VK authorization or Telegram analytics delivery.
+CURRENT MILESTONE: Phase 9 Scheduling automation — Owner requested the transition on 2026-10-09. Discovery only: establish the first product scenario and approve its design before implementation. Phase 8 is PARTIALLY ACCEPTED, not DONE: real MAX collection for two existing posts and analytics styling passed; Telegram analytics is deferred by Owner. [Production acceptance and deferred work](docs/verification/2026-10-09-phase8-partial-acceptance-phase9-transition.md).
 DEFERRED: Phase 7A VK — HOLD by Owner on 2026-10-08. Implementation and diagnostic PRs are merged, but the latest real attempt failed at TOKEN_EXCHANGE / INVALID_GRANT; the root cause and publication readiness remain unproven. Stop VK investigation, OAuth attempts, support requests and changes until Owner explicitly resumes VK. Existing code and credentials are retained; HOLD is not production acceptance. [Original approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md).
-NEXT STEP: Independent review and its fixes are complete. Finish exact-head CI/Self-host for PR #31, then request explicit Owner merge/deploy approval. Telegram webhook activation requires a separate private configuration gate. MAX live read and Telegram delivery remain independently unproven. Instagram stays HOLD; CR07 / CR08 / GAP01 remain not started.
+NEXT STEP: Define Phase 9's first automation scenario using the existing planner and free scheduler. Do not resume Telegram analytics or VK during this work. No Phase 9 product code, provider sends or infrastructure changes are authorized by the transition alone; design and release gates remain. Instagram stays HOLD; CR07 / CR08 / GAP01 remain not started.
 
 PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
 
@@ -20,13 +20,22 @@ PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → cont
 | 6 | Smart Content Queue / Swipe Planner | DONE; deployed and production accepted by owner |
 | 7 | Additional networks | HOLD; VK deferred by Owner, Instagram not started |
 | 7A | VK | HOLD by Owner 2026-10-08; implementation merged, live OAuth and publishing unproven |
-| 8 | Analytics | IMPLEMENTED ON FEATURE BRANCH; review fixes verified; exact-head CI, Owner release and production/provider acceptance remain gates |
-| 9 | Scheduling automation | Future |
+| 8 | Analytics | PARTIALLY ACCEPTED / TELEGRAM HOLD; MAX two-post collection and CSS verified in production; Telegram deferred by Owner 2026-10-09 |
+| 9 | Scheduling automation | DISCOVERY requested by Owner 2026-10-09; first scenario/design not yet approved |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
 
 AI is REMOVED from the product roadmap, not deferred or optional.
 
-## Current production acceptance — 2026-10-06
+## Production analytics acceptance and deferred work — 2026-10-09
+
+- [PR #32](https://github.com/barsikdan-hue/Planly/pull/32) merged/deployed at `2539796a7427175642d5b9e8c351382a4c18954c`; Render `dep-db46mrm7bikc73aq16d0` LIVE at 07:21:58 Moscow, health 200. Exact head `b7035627c5480744838e074fed81de590e1d2e2b`: native CI 37807602286 and Self-host 37807602264 SUCCESS; 976 tests passed, zero failed/skipped/cancelled.
+- One normal MAX refresh read two existing published posts: checked 2, observed 2, unavailable/skipped 0. Following GET returned AVAILABLE views 5 + 5, total 10. Analytics CSS was visually and computationally verified in the production browser. No test publications or env/cache changes.
+- Telegram GET returned HTTP 200, eligible 2, observed 0, total null; both historical posts have IDENTITY_UNPROVEN. No zero reaction counts are inferred. The exact identity cause and current webhook configuration are not proven; real reaction receipt is not verified.
+- Owner deferred the unfinished Telegram work and requested Phase 9. Retain the receiver/code and existing credentials; no Telegram analytics diagnosis, backfill, webhook/env changes or real reaction probes until explicitly resumed. Existing Telegram publishing remains within its previous accepted scope.
+- Return later to: identity proof for legacy Telegram posts; read-only webhook/consumer inventory; separately approved private webhook setup and one real reaction receipt. Do not weaken ownership/identity checks, overwrite a foreign consumer or fabricate historical data.
+- Prior CSS omission's mechanism remains unproven. Current build/delivery is verified; investigate the earlier mechanism only if needed or if it recurs. Phase 8 is not fully closed. [Evidence and resume checklist](docs/verification/2026-10-09-phase8-partial-acceptance-phase9-transition.md).
+
+## Historical Customer-Ready production acceptance — 2026-10-06
 
 - CR11 / [PR #19](https://github.com/barsikdan-hue/Planly/pull/19) merged at `4621cfdedef43b98a014a9f4c7e9ad83e9c435ba`; CR09 / [PR #18](https://github.com/barsikdan-hue/Planly/pull/18) merged at `49f9e7b09783ba1f420af3e6914f433abc2133be`. Their approved owner-lifetime/upload/recovery composition is included in current production; this is not a fresh exhaustive production owner-transition/upload fault campaign.
 - CR06 / [PR #20](https://github.com/barsikdan-hue/Planly/pull/20) merged at current production/main `a3875c6a52e4921e5d7c2aa3ce5b723388462aa8`. Existing Render deploy `dep-db2ej3ks728c73c5rji0` is live at that exact SHA; migrations through 0005 and build/start succeeded.
@@ -88,7 +97,7 @@ Functional MVP PASS combines the owner-confirmed production UI/media/MAX handoff
 - CR07 / CR08 / GAP01 require a separately approved scope and are not started. Closure does not start additional networks, Analytics, AI or infrastructure migration.
 - Historical browser file assignment was blocked by tool permission handling; this was an automation limitation, not a Planly defect or localhost gate. Current production media acceptance is recorded in the report above.
 - Fresh final provider evidence covers the Telegram PNG and scheduled-text scenarios above; earlier accepted UI/media/MAX evidence retains its original scope.
-- Phase 8 analytics design/plan and inline implementation were approved on 2026-10-08; feature-branch implementation awaits release and provider acceptance. AI is excluded.
+- Phase 8 is deployed and partially accepted: MAX two-post views and CSS verified; Telegram identity/activation/receipt work is deferred by Owner on 2026-10-09. Its unfinished work is tracked above. AI is excluded.
 - Owner-server DNS/TLS and backups have not yet been deployed.
 
 ## Accepted technical debt
