@@ -4,10 +4,10 @@ import {register} from 'node:module';
 import {fixture,text,nodes,preview,deferred,storage} from './helpers/scheduling-plan-fixture.mjs';
 import {persistPendingSchedulingPlan} from '../lib/client/scheduling-plan-recovery.ts';
 register('./helpers/planner-lifecycle-loader.mjs',import.meta.url);
-const module=await import('../components/planner/scheduling-plan.tsx').catch(()=>null);
+const schedulingModule=await import('../components/planner/scheduling-plan.tsx').catch(()=>null);
 const original={fetch:globalThis.fetch,window:globalThis.window};const hs=[];
 afterEach(()=>{hs.splice(0).forEach(h=>h.unmount());Object.assign(globalThis,original);});
-async function setup(opts){assert.ok(module,'SchedulingPlan exists');const f=await fixture(module.SchedulingPlan,opts);hs.push(f.h);return f;}
+async function setup(opts){assert.ok(schedulingModule,'SchedulingPlan exists');const f=await fixture(schedulingModule.SchedulingPlan,opts);hs.push(f.h);return f;}
 test('ordered selection survives filters; every full row needs its own review',async()=>{
  const f=await setup();await f.select('a');await f.select('b');await f.button('Выше b').props.onClick();await f.h.settle();f.field('Поиск черновиков').props.onChange({target:{value:'no matches'}});await f.h.settle();await f.loadPreview();
  for(const s of ['Full base a','Full base b','Full override a','Full override b','Channel','destination'])assert.ok(text(f.h.tree).includes(s));assert.equal(nodes(f.h.tree,n=>n.type==='img').length,2);assert.equal(nodes(f.h.tree,n=>n.type==='video').length,2);
