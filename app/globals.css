@@ -159,6 +159,7 @@
 .scheduling-weekdays { display:flex; flex-wrap:wrap; gap:12px; width:100%; }
 .scheduling-discovery-list,.scheduling-review { display:grid; gap:12px; }
 .scheduling-selection li { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+.scheduling-warning button,.scheduling-selection button { max-width:100%; height:auto; white-space:normal; overflow-wrap:anywhere; }
 .scheduling-review-row,.scheduling-warning,.scheduling-success { padding:20px; border:1px solid var(--border); border-radius:12px; background:white; overflow-wrap:anywhere; }
 .scheduling-full-text { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; }
 .scheduling-media { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; }

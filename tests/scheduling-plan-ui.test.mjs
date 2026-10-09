@@ -45,3 +45,18 @@ test('replayed receipt identifies the earlier application and does not assert de
  await f.button(`Проверить сохранение ${operationId}`).props.onClick();await f.h.settle();
  assert.ok(text(f.h.tree).includes('Результат предыдущего сохранения'));assert.ok(text(f.h.tree).includes('2019'));assert.ok(text(f.h.tree).includes('Текущие посты могли быть изменены или удалены'));assert.equal(f.commits().length,1);assert.deepEqual(f.commits()[0].body,input);assert.equal(cache.length,0);
 });
+test('a confirmed recovery receipt removes the obsolete uncertain-response alert',async()=>{
+ let attempts=0;
+ const f=await setup({mutation:r=>{
+   if(!r.url.endsWith('/commit'))return;
+   if(++attempts===1)throw new TypeError('uncertain browser response');
+   return Response.json({replayed:true,receipt:{operationId:r.body.operationId,appliedAt:'2026-10-09T12:00:00Z',rows:r.body.rows.map(row=>({postId:row.postId,targetIds:[`${row.postId}-target`],scheduledAt:row.scheduledAt}))}});
+ }});
+ await f.select('a');await f.loadPreview();await f.review('a');await f.button('Запланировать 1 постов').props.onClick();await f.h.settle();
+ assert.equal(nodes(f.h.tree,n=>n.props?.role==='alert').length,1);assert.equal(f.cache.length,1);
+ const original=f.commits()[0].body;
+ await f.button(`Проверить сохранение ${original.operationId}`).props.onClick();await f.h.settle();
+ assert.ok(text(f.h.tree).includes('Результат предыдущего сохранения'));
+ assert.equal(nodes(f.h.tree,n=>n.props?.role==='alert').length,0,'confirmed recovery must not keep asking the owner to repeat a failed operation');
+ assert.deepEqual(f.commits()[1].body,original);assert.equal(f.cache.length,0);
+});

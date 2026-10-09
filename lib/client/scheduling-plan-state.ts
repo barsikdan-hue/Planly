@@ -15,7 +15,7 @@ export function reduceSchedulingPlan(state:SchedulingPlanState,event:SchedulingP
     case 'REVIEW':{const row=state.preview?.rows.find(r=>r.post.id===event.postId);if(!row?.fingerprint||row.issue||!row.scheduledAt)return state;const reviewed={...state.reviewed};if(event.checked)reviewed[event.postId]=row.fingerprint;else delete reviewed[event.postId];return {...state,reviewed};}
     case 'RECOVERY':return {...state,recoveryBlocked:event.blocked};
     case 'COMMIT_START':return canConfirmSchedulingPlan(state)?{...state,committing:true,error:null}:state;
-    case 'COMMITTED':return {...state,committing:false,result:event.result,preview:null,reviewed:{}};
+    case 'COMMITTED':return {...state,committing:false,result:event.result,preview:null,reviewed:{},error:null};
     case 'ERROR':return {...state,error:event.message,preview:null,reviewed:{},committing:false,previewBusy:false,requestRevision:null};
   }
 }
