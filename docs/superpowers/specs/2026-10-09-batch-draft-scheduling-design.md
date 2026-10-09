@@ -1,6 +1,6 @@
 # Phase 9 — distribute reviewed drafts into free slots
 
-Status: OWNER WRITTEN-SPEC APPROVED on 2026-10-09 for PR34 head `7d2577746a7a35afc5afce8cc3a1a12c511234b6`, by explicit message `Одобряю спецификацию фазы 9`. Owner previously authorized the recommended first scenario: distribute existing drafts into free slots, preview, then explicitly confirm saving. [Implementation plan](../plans/2026-10-09-batch-draft-scheduling.md) is prepared for Owner review; plan approval and execution-method confirmation remain pending. Written-spec approval does not authorize implementation, merge, deployment, migrations or provider sends.
+Status: OWNER WRITTEN-SPEC APPROVED on 2026-10-09 for PR34 head `7d2577746a7a35afc5afce8cc3a1a12c511234b6`, by explicit message `Одобряю спецификацию фазы 9`. Owner previously authorized the recommended first scenario: distribute existing drafts into free slots, preview, then explicitly confirm saving. [Implementation plan](../plans/2026-10-09-batch-draft-scheduling.md) was approved at head `3217d13a633df27d7d7d8f84c7612571b4118582` on 2026-10-09 for native execution in this chat. Implementation is in PR34; local/native checks support development, while exact-head CI, independent review and desktop/mobile UI verification are release gates. No production merge, deploy, migration or provider send is authorized by plan approval.
 
 ## Intent and source authority
 
@@ -110,4 +110,4 @@ Acceptance: the Owner reviews every selected Post, sees the complete exact plan,
 
 ## Next gates
 
-The Owner approved this written spec on 2026-10-09. Review the linked implementation plan and confirm execution before implementing. Merge, production deploy, migrations and real provider verification retain their applicable gates. No new runtime behavior is implemented in this documentation branch.
+The Owner approved the written spec and the linked implementation plan on 2026-10-09, selecting native execution. Implementation is in PR34, pending release verification. Merge, production deploy, migrations and real provider verification retain their separate Owner gates.
