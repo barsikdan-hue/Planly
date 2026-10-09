@@ -2,13 +2,14 @@ import {readFile,realpath} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import path from 'node:path';
+import {collectReleaseCssChecks} from './release-css-contract.mjs';
 
 const require=createRequire(import.meta.url);
 const postcss=createRequire(require.resolve('@tailwindcss/postcss'))('postcss');
-const checks={controlsLayout:false,buttonSpacing:false,tableSpacing:false};
+let checks=collectReleaseCssChecks([]);
+const assets=[];const cssRoots=[];
 let sourceCssSha256=null;let stylesheetCount=0;
 class BuildCheckError extends Error{constructor(code){super(code);this.code=code;}}
-const spaced=rule=>rule.nodes.some(d=>d.type==='decl'&&d.prop==='padding'&&/[1-9]/.test(d.value));
 try{
   const root=process.cwd();
   const source=await readFile(path.join(root,'app/globals.css'));
@@ -31,17 +32,14 @@ try{
     const asset=await realpath(path.join(root,'.next',url.slice('/_next/'.length)));
     if(!asset.startsWith(staticRoot+path.sep))throw new BuildCheckError('ANALYTICS_CSS_ASSET_INVALID');
     const css=await readFile(asset,'utf8');stylesheetCount++;
-    postcss.parse(css).walkRules(rule=>{
-      const selectors=rule.selector.split(',').map(s=>s.trim().replace(/\s+/g,' '));
-      if(selectors.includes('.analytics-controls')&&rule.nodes.some(d=>d.type==='decl'&&d.prop==='display'&&['flex','inline-flex','grid','inline-grid'].includes(d.value)))checks.controlsLayout=true;
-      if(selectors.includes('.analytics-controls button')&&spaced(rule))checks.buttonSpacing=true;
-      if(selectors.includes('.analytics-results td')&&spaced(rule))checks.tableSpacing=true;
-    });
+    assets.push({path:url,bytes:Buffer.byteLength(css),sha256:createHash('sha256').update(css).digest('hex')});
+    cssRoots.push(postcss.parse(css));
   }
+  checks=collectReleaseCssChecks(cssRoots);
   const ok=Object.values(checks).every(Boolean);
-  console.log(JSON.stringify({code:ok?'ANALYTICS_CSS_OK':'ANALYTICS_CSS_MISSING',sourceCssSha256,stylesheetCount,checks}));
+  console.log(JSON.stringify({code:ok?'ANALYTICS_CSS_OK':'ANALYTICS_CSS_MISSING',sourceCssSha256,stylesheetCount,assets,checks}));
   if(!ok)process.exitCode=1;
 }catch(error){
-  console.log(JSON.stringify({code:error instanceof BuildCheckError?error.code:'ANALYTICS_CSS_BUILD_INVALID',sourceCssSha256,stylesheetCount,checks}));
+  console.log(JSON.stringify({code:error instanceof BuildCheckError?error.code:'ANALYTICS_CSS_BUILD_INVALID',sourceCssSha256,stylesheetCount,assets,checks}));
   process.exitCode=1;
 }
