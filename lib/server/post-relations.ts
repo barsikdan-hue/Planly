@@ -31,4 +31,3 @@ export async function validatePostRelations(
   if (accounts.length !== new Set(providers).size) throw new Error('Social account not found');
   return new Map(accounts.map(account => [account.provider, account.id]));
 }
-
