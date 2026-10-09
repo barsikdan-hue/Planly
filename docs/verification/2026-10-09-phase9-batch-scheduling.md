@@ -1,8 +1,52 @@
-# Phase 9 batch scheduling — implementation verification
+# Phase 9 batch scheduling — production acceptance and implementation verification
 
-Status: desktop/mobile local browser acceptance PASS after two reproduced UI fixes. Required exact-head CI/Self-host status and the Owner release gate are tracked in PR34. No production acceptance, merge, deploy, production migration or provider publication has been performed.
+Current status: **PHASE 9: DONE / PRODUCTION ACCEPTED**, 2026-10-09. PR34/PR35 are merged/deployed; main and Render LIVE are `fba293376e3ef502e52a6f8567dc813ed119a532`, health HTTP 200. A real production UI acceptance saved one reviewed two-post batch, verified receipt/reload/preservation and safely removed both disposable fixtures and their new media. Provider sends 0 within this bounded scheduling acceptance. No provider publication was performed. The closure change updates documentation only; no merge/deploy or new milestone is authorized.
 
-Owner approved the specification at `7d2577746a7a35afc5afce8cc3a1a12c511234b6` and the implementation plan at `3217d13a633df27d7d7d8f84c7612571b4118582`, selecting native execution in this chat on 2026-10-09. Repository: `barsikdan-hue/Planly`; branch: `codex/phase9-scheduling-design`; source baseline: `a2187cd1531e595816a044691ae76ee7930e1162`. Last verified production remains `2539796a7427175642d5b9e8c351382a4c18954c` from PR32; this report does not refresh production identity.
+Owner approved the specification at `7d2577746a7a35afc5afce8cc3a1a12c511234b6` and the implementation plan at `3217d13a633df27d7d7d8f84c7612571b4118582`, selecting native execution in this chat on 2026-10-09. Repository: `barsikdan-hue/Planly`; historical implementation branch: `codex/phase9-scheduling-design`; source baseline: `a2187cd1531e595816a044691ae76ee7930e1162`. PR32 production `2539796a7427175642d5b9e8c351382a4c18954c` was the earlier baseline; the production acceptance below supersedes that identity.
+
+## Production acceptance — 2026-10-09
+
+Render deploy `dep-db4bo65g1s2s738u6sj0` is LIVE at exact main SHA `fba293376e3ef502e52a6f8567dc813ed119a532`, finished `2026-10-09T10:06:48.632994Z`. Fresh Git main/source checks and read-only Render deploy lookup matched. `/api/health` returned HTTP 200 again after cleanup. Checkout was clean before creating the documentation-only closure branch.
+
+Owner explicitly authorized two disposable production DRAFT fixtures and cleanup through existing product flows. Settings discovery found the real connected destinations below. Owner confirmed these exact Telegram/MAX destinations before scheduling; “Агент без галстука” is a static composer/dashboard label, not the saved account name. That unrelated label was not changed.
+
+- Telegram: `-1004390954741`; MAX: `-78857616977254`; saved display name for both: `«Данил | Недвижимость у моря»`, enabled and CONNECTED.
+- A: `PHASE9_ACCEPTANCE_A`, post `114452f4-8516-46a1-816d-cbec1a044966`, 979 characters of synthetic text, no media. Normal Composer POST `/api/posts` returned 201.
+- B: `PHASE9_ACCEPTANCE_B`, post `792d831a-fe67-439f-af4b-f264b8ace371`, 95 characters of synthetic text and newly generated PNG `PHASE9_ACCEPTANCE_B.png`, media `572d6f1a-7cb4-436b-b0df-005398e5ddfc`. Normal upload and Composer creation both returned 201. PNG: 320×200, 1266 bytes, SHA256 `5f5f2986ff99ef477f04d2111c6a48e200da008d619b60dd40e9ff9abe5bbd0a`. No published/user media was reused.
+
+| Production acceptance | Result / observed evidence |
+|---|---|
+| Pre-commit safety | Fresh GET `/api/posts`: exactly these two new posts DRAFT; four active targets have `scheduledAt=null`, `publication=null`; originals unchanged. Correct preview revalidated both DRAFT snapshots/accounts with no eligibility issue. |
+| No pre-existing publication jobs | New post/target IDs, no publication history, and deployed creation/reconciliation path: DRAFT cannot create a publication row or queue job. Read-only preview requires no history. No raw Redis enumeration is claimed. |
+| Selection/order/preview | Real production Codex browser selected A then B. HTTP 200 preview preserved order, full text/end markers, original media and target IDs; both destination IDs visible. PNG decoded 320×200. |
+| Safe slots | A `2026-10-11T07:00:00.000Z` (10:00 Moscow); B `2026-10-11T15:00:00.000Z` (18:00 Moscow). Earliest slot was over 43 hours ahead immediately before commit, exceeding +24h. Both rows issue-free. |
+| Individual review gate | Confirm disabled at 0/2 and 1/2 checks; enabled only at 2/2. Each row was separately reviewed. |
+| Atomic commit/receipt | One button activation, one POST `/api/scheduling-plans/commit`, HTTP 200, `replayed=false`. One receipt, operation `59f518de-6813-40f1-a30b-255755062bbd`, applied `2026-10-09T11:11:35.410Z`, two ordered rows/four original target IDs and exact preview timestamps. UI displayed “План сохранён: 2 постов”. |
+| Persistence/reload | Following GET and fresh reload/bootstrap showed both READY, each target SCHEDULED at the expected timestamp, `remoteId/remoteUrl/error=null`. Text/media/target/account IDs and overrides unchanged. UI showed exactly two scheduled cards at 11 October 10:00/18:00. |
+| Duplicates | 0 observed: one commit response, one operation receipt, two unique post rows/four unique target IDs, exactly the two expected scheduled cards after reload; native transaction/history constraints supply duplicate protection. No unperformed raw database duplicate query is claimed. |
+| Provider sends | 0 for this probe, established by fresh DRAFT/no-history state, future SCHEDULED states without remote IDs, the exact deployed no-send commit path and due-only/delayed scheduler path, then cancellation before either slot. No provider call, Publish Now, synthetic callback or manual scheduler tick was used. This is bounded state/source evidence, not an independent provider traffic counter or a new delivery acceptance. |
+| Cleanup | Normal edit → Save DRAFT returned 200 for each post: four publications CANCELLED, target schedules null, remote IDs null. Only then normal post DELETEs returned 204; normal unreferenced-media DELETE returned 204. Reconciliation removes the delayed jobs before deletion; no direct DB/Redis/storage workaround. |
+| Final cleanup reload | Both fixture IDs and disposable media absent; no test schedule. Original two-post DTO SHA256 before/after exactly `5b25e900647ec731439d3a6a927cdb4eeb92c65834b4f75eae5b4ff1817b98f8`. Remaining media metadata (excluding expiring signed URLs), accounts and library exactly unchanged. Blank local composer recovery contained zero characters and no fixture media; it did not recreate a server post. |
+
+Safety source inspected at the deployed SHA: `app/api/posts/route.ts`, `app/api/scheduling-plans/commit/route.ts`, `lib/server/scheduling-plan-commit.ts`, `lib/server/publications.ts`, post update/delete and media deletion flows, `lib/server/scheduler/tick.ts`, `queue.ts`, `reconcile.ts`. Commit validates locked snapshots/history/slots and persists posts/publications/immutable receipt in one transaction; after commit it mirrors delayed queue changes without invoking a provider. Tick admits only due publications; queue delay is derived from the scheduled timestamp. Cleanup first saves DRAFT, cancelling open publications/removing jobs, before deleting disposable records.
+
+Direct Render PostgreSQL inspection was unavailable because external access is blocked by its current IP allowlist. No allowlist, env, secret or infrastructure change was made. Safety evidence uses the authenticated normal product responses and exact deployed data flow; no direct DB/queue counts or provider telemetry are invented.
+
+Automation deviation: browser `fill` on date inputs changed DOM values without updating React settings; initial read-only preview therefore returned nearer dates. No commit used that preview. A normal keyboard ArrowUp/ArrowDown change reproduced a React update, cleared preview, and the next HTTP preview returned exactly 11 October 10:00/18:00. This was a browser-driver input limitation; no speculative product fix or code change was made.
+
+## PR35 CSS incident closure
+
+Historical stale Render CSS root cause remains **NOT PROVEN / NOT REPRODUCED**. The diagnostic rebuild served correct CSS; this does not prove a cache/compiler mechanism. PR35 is a verification/release guardrail, not a root-cause fix. No speculative runtime, compiler, cache, CSS, env or infrastructure fix was added.
+
+At current merged production SHA `fba293376e3ef502e52a6f8567dc813ed119a532`, Render build log `2026-10-09T10:04:53.849839092Z` emitted `ANALYTICS_CSS_OK`: source CSS SHA256 `64b5bd607270b83d4bf3da8f5cea1c8d1519b222fc46a0a39978486cfa393ef0`; root-linked asset `/_next/static/chunks/2mon2c_vzimn7.css`, 200977 bytes, SHA256 `b9671e3e5ebf8a8159852479b565412d9373e557b5e185f95cbfb9bc109bd657`. All 13 analytics/Phase 9 contract booleans PASS. Production DOM links that same asset; a fresh HTTP 200 read after acceptance produced the identical SHA256 and all 13 checks PASS using the actual release CSS parser/contract. Current build/runtime are healthy, with guardrail active. [Historical investigation](2026-10-09-phase9-release-css-investigation.md).
+
+## Closure boundaries
+
+PR34 release verification and the bounded production acceptance are complete. The historical local desktop/mobile, video and fault/recovery checks below retain their original scope; production acceptance used real UI/API and a new image, without injecting failures or testing provider delivery. This report does not relabel local synthetic recovery/video evidence as production proof.
+
+This closure changes only this report, ROADMAP and AGENTS. Telegram analytics remains HOLD / Phase 8 PARTIALLY ACCEPTED; VK and Instagram remain HOLD; AI REMOVED; CR07/CR08/GAP01 remain not started. Phase 10 requires proven hosting need and separate Owner decision. No new phase, merge/deploy, provider sends, env or infrastructure work is authorized by closure.
+
+## Historical implementation evidence
 
 Implementation checkpoint: `0c27acfba59cd210ed1673648747bff03e9ba362`. A subsequent test-only lint binding correction is `a72275f5a95c0bcbb9c1c165d68591fe54257797`. Review fixes are at `94d6908433a038afe4e9003a76429a383d8528cf`. Final head and workflow evidence are recorded in [PR34](https://github.com/barsikdan-hue/Planly/pull/34) after checks finish; earlier heads are not evidence for a later head.
 
@@ -75,7 +119,9 @@ Focused UI/App/state/recovery/CSS suite after both fixes: 20/20 PASS, zero failu
 
 Screenshots: [desktop receipt](assets/phase9-browser/desktop-success.jpg), [mobile long text](assets/phase9-browser/mobile-text.jpg), [mobile media](assets/phase9-browser/mobile-media.jpg), [recovery before fix](assets/phase9-browser/mobile-recovery-before.jpg), [recovery after fix](assets/phase9-browser/mobile-recovery-after.jpg), [final mobile receipt](assets/phase9-browser/mobile-replay.jpg).
 
-## Remaining gates and deferred work
+## Historical pre-release gates and deferred work
+
+The release/production gates in the historical checklist below were subsequently completed through PR34/PR35 and the bounded production acceptance above. They describe the earlier implementation checkpoint, not current unfinished PR34 work. Deferred unrelated milestones remain unchanged.
 
 - Independent whole-branch review is complete. It found no Critical issue and two concrete fixes: restored receipts must be labelled historical with application time, and fractional non-slot timestamps must reject before Date loses precision. Both new regression tests were observed RED, then GREEN in 26/26 pure/client tests. Typecheck and focused lint passed. Reviewer follow-up at `94d6908433a038afe4e9003a76429a383d8528cf` confirmed both fixes resolved, with 2/2 targeted tests PASS. Native API/commit/preview rerun passed 24/24 with zero failures/cancellations/skips. Final exact-head CI remains required.
 - Exact final-head native CI and Self-host must both succeed, including full suite with zero failures/cancellations/skips, typecheck/lint/build, migration drift and scheduler recovery.
