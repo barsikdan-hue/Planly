@@ -6,7 +6,7 @@ const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url
 
 test('production runtime uses standard Next.js commands', () => {
   assert.equal(pkg.scripts.dev, 'next dev');
-  assert.equal(pkg.scripts.build, 'next build');
+  assert.equal(pkg.scripts.build, 'next build && node scripts/verify-analytics-build.mjs');
   assert.equal(pkg.scripts.start, 'next start');
   assert.equal(pkg.scripts.typecheck, 'tsc --noEmit');
   assert.ok(typeof pkg.scripts.test === 'string' && pkg.scripts.test.includes('node --test'));

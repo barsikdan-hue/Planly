@@ -17,6 +17,17 @@ test('MAX deadline survives garbage collection with a live parent signal',()=>{
 });
 const expected={destinationId:'123',remoteId:'mid_42'};
 const message={timestamp:1791360000000,recipient:{chat_id:123,chat_type:'channel'},body:{mid:'mid_42',seq:1,text:'Post',attachments:[]},stat:{views:0}};
+
+test('MAX reader preserves the persisted mid prefix in its fixed-host GET and validates returned identity',async()=>{
+  const reader=createMaxAnalyticsReader({token:'synthetic',fetcher:async(url)=>{
+    const u=new URL(String(url));
+    assert.equal(u.origin,'https://platform-api2.max.ru');assert.equal(u.search,'');
+    if(u.pathname==='/chats/123')return Response.json({chat_id:123,type:'channel',status:'active'});
+    assert.equal(u.pathname,'/messages/mid.synthetic_42');
+    return Response.json({...message,body:{...message.body,mid:'mid.synthetic_42'},stat:{views:7}});
+  }});
+  assert.deepEqual(await reader.read({destinationId:'123',remoteId:'mid.synthetic_42'}),{coverage:'AVAILABLE',value:7,error:null});
+});
 test('MAX collector reads channel once, fixed-host messages, with header-only credentials',async()=>{
   const calls:string[]=[];
   const reader=createMaxAnalyticsReader({token:'synthetic-max-test-token',fetcher:async(url,init)=>{

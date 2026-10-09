@@ -3,7 +3,7 @@ import type { AnalyticsError, MetricObservation } from './contracts/analytics.ts
 export const record = (v: unknown): Record<string, unknown> | null => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
 export const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 export const numericDestination = (v: string): boolean => /^-?[1-9]\d{0,15}$/.test(v) && Number.isSafeInteger(Number(v));
-export const validMaxMessageId = (v: string): boolean => /^[a-zA-Z0-9_-]{1,256}$/.test(v);
+export const validMaxMessageId = (v: string): boolean => v.length <= 256 && /^(?:mid\.)?[a-zA-Z0-9_-]+$/.test(v);
 
 export function publicationWindow(period: 7 | 30, now: Date): { from: Date; through: Date } {
   const moscow = new Date(now.getTime() + 3 * 3600000);

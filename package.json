@@ -8,7 +8,7 @@
   "scripts": {
     "install:ci": "bash scripts/install-pnpm.sh",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/verify-analytics-build.mjs",
     "start": "next start",
     "worker": "node --experimental-strip-types worker/index.ts",
     "typecheck": "tsc --noEmit",
