@@ -66,6 +66,7 @@ function jsonRequest(method: string, body: unknown): RequestInit {
 export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
 }
+export function loadSchedulingDrafts():Promise<PostDto[]> {return request('/api/posts');}
 
 export function previewSchedulingPlanRequest(input:SchedulingPlanPreviewInput):Promise<SchedulingPlanPreview> {
   return request('/api/scheduling-plans/preview',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Scheduling':'1'}});

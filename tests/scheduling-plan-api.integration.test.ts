@@ -4,7 +4,7 @@ import {register} from 'node:module';
 import {randomUUID} from 'node:crypto';
 import {eq} from 'drizzle-orm';
 import {closeDb,getDb} from '../db/index.ts';
-import {posts,socialAccounts} from '../db/schema.ts';
+import {posts,socialAccounts,schedulingPlanOperations} from '../db/schema.ts';
 import {createOwnerSession,SESSION_COOKIE_NAME} from '../lib/server/auth/session.ts';
 import {seedSchedulingFixture,cleanupSchedulingFixture,owner,settings,schedulingCounts} from './helpers/scheduling-plan-db.ts';
 register('./helpers/scheduling-api-loader.mjs',import.meta.url);
@@ -22,7 +22,8 @@ test('auth precedes validation and csrf fails closed independently of forwarded 
   assert.ok(previewRoute);assert.ok(commitRoute);
   for(const route of [previewRoute,commitRoute]){
     assert.equal((await route.POST(req({}, {cookie:''}))).status,401);
-    for(const headers of [{'X-Planly-Scheduling':''},{'X-Planly-Scheduling':'2'},{'content-type':'text/plain'},{'sec-fetch-site':'cross-site'},{'sec-fetch-site':'same-site'}]){
+    const invalidHeaders:Record<string,string>[]=[{'X-Planly-Scheduling':''},{'X-Planly-Scheduling':'2'},{'content-type':'text/plain'},{'sec-fetch-site':'cross-site'},{'sec-fetch-site':'same-site'}];
+    for(const headers of invalidHeaders){
       const r=await route.POST(req({}, {...headers,host:'public.example','x-forwarded-host':'public.example'}));assert.equal(r.status,403);assert.equal(r.headers.get('cache-control'),'no-store');
     }
   }
@@ -33,7 +34,7 @@ test('strict input, malformed json and foreign sources use safe precommit catego
     let r=await route.POST(req({unknown:true}));assert.equal(r.status,422);assert.deepEqual(await r.json(),{error:'Invalid scheduling input',code:'PLAN_INVALID_INPUT',commitApplied:false});
     r=await route.POST(new Request('http://localhost/api/scheduling-plans',{method:'POST',headers:{cookie,'content-type':'application/json','X-Planly-Scheduling':'1'},body:'{'}));assert.equal(r.status,400);assert.equal((await r.json()).code,'PLAN_BAD_JSON');
   }
-  const bodies=[];for(const id of ['foreign','missing']){const r=await previewRoute.POST(req({postIds:[id],settings}));assert.equal(r.status,404);bodies.push(await r.json());}assert.deepEqual(bodies[0],bodies[1]);assert.equal(bodies[0].commitApplied,false);
+  const bodies=[];for(const id of ['foreign','missing']){const r:Response=await previewRoute.POST(req({postIds:[id],settings}));assert.equal(r.status,404);bodies.push(await r.json());}assert.deepEqual(bodies[0],bodies[1]);assert.equal(bodies[0].commitApplied,false);
 });
 test('preview is readonly, commit schedules once and replay returns the original receipt',async()=>{
   assert.ok(commitRoute);const before=await schedulingCounts(owner);const body=await input();assert.deepEqual(await schedulingCounts(owner),before);
@@ -55,4 +56,12 @@ test('stale, unavailable, ineligible and slot conflicts never commit another row
 test('incomplete is a clearable conflict while unexpected failures remain pending',async()=>{
   const incomplete=schedulingPlanApiError(new SchedulingPlanConflictError('PLAN_INCOMPLETE'));assert.equal(incomplete.status,409);assert.equal((await incomplete.json()).commitApplied,false);
   const unknown=schedulingPlanApiError(new Error('private database diagnostic'));assert.equal(unknown.status,500);assert.deepEqual(await unknown.json(),{error:'Scheduling temporarily unavailable'});
+});
+test('a corrupted saved receipt cannot be misclassified as a proven precommit rejection',async()=>{
+  assert.ok(commitRoute);const body=await input();assert.equal((await commitRoute.POST(req(body))).status,200);
+  await getDb().update(schedulingPlanOperations).set({receipt:{} as never});
+  const response=await commitRoute.POST(req(body));assert.equal(response.status,500);assert.equal('commitApplied' in await response.json(),false);assert.equal((await schedulingCounts(owner)).publications,2);
+});
+test('oversized authenticated json is rejected before preview work',async()=>{
+  assert.ok(previewRoute);const r=await previewRoute.POST(new Request('http://localhost/api/scheduling-plans/preview',{method:'POST',headers:{cookie,'content-type':'application/json','X-Planly-Scheduling':'1'},body:JSON.stringify({postIds:['a'],settings})+' '.repeat(65536)}));assert.equal(r.status,422);assert.equal((await r.json()).commitApplied,false);
 });

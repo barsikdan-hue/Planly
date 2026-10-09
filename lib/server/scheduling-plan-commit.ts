@@ -25,7 +25,9 @@ export async function commitSchedulingPlan(userId:string,raw:SchedulingPlanCommi
     const [saved]=await tx.select().from(schedulingPlanOperations).where(and(eq(schedulingPlanOperations.userId,userId),eq(schedulingPlanOperations.operationId,input.operationId)));
     if(saved){
       if(saved.requestHash!==requestHash)throw new SchedulingPlanConflictError('PLAN_OPERATION_CONFLICT');
-      const receipt=schedulingPlanReceiptSchema.parse(saved.receipt);
+      const parsed=schedulingPlanReceiptSchema.safeParse(saved.receipt);
+      if(!parsed.success)throw new Error('Scheduling receipt invalid');
+      const receipt=parsed.data;
       if(receipt.operationId!==input.operationId||receipt.rows.length!==input.rows.length||receipt.rows.some((row,i)=>row.postId!==input.rows[i].postId||row.scheduledAt!==input.rows[i].scheduledAt))throw new Error('Scheduling receipt invalid');
       return {receipt,replayed:true,changes:[] as PublicationQueueChange[]};
     }
