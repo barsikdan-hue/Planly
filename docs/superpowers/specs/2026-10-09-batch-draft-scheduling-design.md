@@ -1,6 +1,6 @@
 # Phase 9 — distribute reviewed drafts into free slots
 
-Status: PROPOSED SPEC FOR OWNER REVIEW. Owner authorized the recommended first scenario on 2026-10-09: distribute existing drafts into free slots, preview, then explicitly confirm saving. The detailed contract below is proposed; written-spec approval, implementation-plan approval and execution-method selection remain pending. This document does not authorize implementation, merge, deployment, migrations or provider sends.
+Status: OWNER WRITTEN-SPEC APPROVED on 2026-10-09 for PR34 head `7d2577746a7a35afc5afce8cc3a1a12c511234b6`, by explicit message `Одобряю спецификацию фазы 9`. Owner previously authorized the recommended first scenario: distribute existing drafts into free slots, preview, then explicitly confirm saving. [Implementation plan](../plans/2026-10-09-batch-draft-scheduling.md) is prepared for Owner review; plan approval and execution-method confirmation remain pending. Written-spec approval does not authorize implementation, merge, deployment, migrations or provider sends.
 
 ## Intent and source authority
 
@@ -110,4 +110,4 @@ Acceptance: the Owner reviews every selected Post, sees the complete exact plan,
 
 ## Next gates
 
-Owner reviews this written spec and approves or corrects its limits, individual review flow and atomic scheduling contract. Only written-spec approval permits creating the implementation plan. The Owner then reviews that plan and chooses execution; merge, production deploy, migrations and real provider verification retain their applicable gates. No new runtime behavior is implemented in this documentation branch.
+The Owner approved this written spec on 2026-10-09. Review the linked implementation plan and confirm execution before implementing. Merge, production deploy, migrations and real provider verification retain their applicable gates. No new runtime behavior is implemented in this documentation branch.
