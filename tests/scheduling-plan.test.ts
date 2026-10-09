@@ -50,3 +50,11 @@ test('allocation handles future equality and leap-year/month boundaries', () => 
   assert.equal(feature.allocateDraftSlots(['a'], query,new Set(),new Date('2030-01-01T07:00Z'))[0].scheduledAt,'2030-01-01T15:00:00.000Z');
   assert.equal(feature.allocateDraftSlots(['a'], {...query,startDate:'2028-02-28',endDate:'2028-03-01',weekdays:[2]},new Set(),new Date('2028-02-27'))[0].scheduledAt,'2028-02-29T07:00:00.000Z');
 });
+test('fractional non-slot instants are rejected before Date can truncate them',()=>{
+  assert.ok(feature);assert.ok(contracts);
+  for(const scheduledAt of ['2030-01-01T07:00:00.0001Z','2030-01-01T10:00:00.0009+03:00','2030-01-01T07:00:00.001Z']){
+    assert.equal(feature.isSchedulingPlanSlot(settings,scheduledAt),false,scheduledAt);
+    assert.throws(()=>feature.canonicalSchedulingPlanCommit({...input,rows:[{...input.rows[0],scheduledAt}]}));
+  }
+  assert.deepEqual(feature.canonicalSchedulingPlanCommit({...input,rows:[{...input.rows[0],scheduledAt:'2030-01-01T10:00:00.000000+03:00'}]}),feature.canonicalSchedulingPlanCommit(input));
+});

@@ -37,3 +37,11 @@ test('changed fingerprints require separate reviews again and late owner respons
  let fingerprint='a';const f=await setup({mutation:r=>r.url.endsWith('/preview')?Response.json(preview(r.body,true,fingerprint)):undefined});await f.select('a');await f.loadPreview();await f.review('a');fingerprint='b';await f.loadPreview();assert.equal(f.field('Содержание проверено a').props.checked,false);
  const d=deferred();const g=await setup({mutation:r=>r.url.endsWith('/preview')?d.promise:undefined});await g.select('a');const pending=g.button('Обновить предпросмотр').props.onClick();g.deactivate();d.resolve(Response.json(preview({postIds:['a']})));await pending;await g.h.settle();assert.equal(nodes(g.h.tree,n=>n.props?.['aria-label']==='Содержание проверено a').length,0);assert.equal(g.commits().length,0);
 });
+test('replayed receipt identifies the earlier application and does not assert deleted posts still exist',async()=>{
+ const cache=storage(),operationId='33333333-3333-4333-8333-333333333333';
+ const input={operationId,settings:{startDate:'2020-01-01',endDate:'2020-01-01',weekdays:[1,2,3,4,5,6,7],times:['10:00']},rows:[{postId:'deleted-post',fingerprint:'a'.repeat(64),scheduledAt:'2020-01-01T07:00:00.000Z',reviewed:true}]};
+ persistPendingSchedulingPlan(cache,{version:1,ownerId:'owner',operationId,input});
+ const f=await setup({cache,mutation:r=>r.url.endsWith('/commit')?Response.json({replayed:true,receipt:{operationId,appliedAt:'2019-12-31T12:00:00.000Z',rows:[{postId:'deleted-post',targetIds:['deleted-target'],scheduledAt:input.rows[0].scheduledAt}]}}):undefined});
+ await f.button(`Проверить сохранение ${operationId}`).props.onClick();await f.h.settle();
+ assert.ok(text(f.h.tree).includes('Результат предыдущего сохранения'));assert.ok(text(f.h.tree).includes('2019'));assert.ok(text(f.h.tree).includes('Текущие посты могли быть изменены или удалены'));assert.equal(f.commits().length,1);assert.deepEqual(f.commits()[0].body,input);assert.equal(cache.length,0);
+});

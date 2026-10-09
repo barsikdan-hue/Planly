@@ -7,9 +7,11 @@ export const planSettingsSchema = z.object({startDate:shape.startDate,endDate:sh
   .refine(settings => slotQuerySchema.safeParse({...settings,providers:['telegram']}).success, 'Invalid scheduling settings');
 const postId = z.string().min(1).max(200);
 const distinct = (ids: string[]) => new Set(ids).size === ids.length;
+// Validate precision before JavaScript Date discards sub-millisecond digits.
+export const schedulingPlanInstantSchema=z.string().datetime({offset:true}).refine(value=>!/[1-9]/.test(value.match(/\.(\d+)/)?.[1]??''),'Scheduling requires zero fractional seconds');
 export const schedulingPlanPreviewInputSchema = z.object({postIds:z.array(postId).min(1).max(20).refine(distinct),settings:planSettingsSchema}).strict();
 export const schedulingPlanCommitInputSchema = z.object({operationId:z.string().uuid(),settings:planSettingsSchema,
-  rows:z.array(z.object({postId,fingerprint:z.string().regex(/^[a-f0-9]{64}$/),scheduledAt:z.string().datetime({offset:true}),reviewed:z.literal(true)}).strict())
+  rows:z.array(z.object({postId,fingerprint:z.string().regex(/^[a-f0-9]{64}$/),scheduledAt:schedulingPlanInstantSchema,reviewed:z.literal(true)}).strict())
     .min(1).max(20).refine(rows=>distinct(rows.map(row=>row.postId))),
 }).strict();
 export const schedulingPlanReceiptSchema = z.object({operationId:z.string().uuid(),appliedAt:z.string().datetime({offset:true}),

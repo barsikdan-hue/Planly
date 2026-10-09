@@ -1,4 +1,4 @@
-import { schedulingPlanCommitInputSchema, planSettingsSchema, type PlanSettings, type SchedulingPlanCommitInput } from './contracts/scheduling-plan.ts';
+import { schedulingPlanCommitInputSchema, planSettingsSchema, schedulingPlanInstantSchema, type PlanSettings, type SchedulingPlanCommitInput } from './contracts/scheduling-plan.ts';
 import type { SlotQuery } from './contracts/swipe-planner.ts';
 import { findNextSlot, slotMinuteKey } from './planner-slots.ts';
 
@@ -16,7 +16,7 @@ export function allocateDraftSlots(postIds: readonly string[], query: SlotQuery,
   });
 }
 export function isSchedulingPlanSlot(settings: PlanSettings, scheduledAt: string): boolean {
-  if(!planSettingsSchema.safeParse(settings).success) return false;
+  if(!planSettingsSchema.safeParse(settings).success||!schedulingPlanInstantSchema.safeParse(scheduledAt).success) return false;
   const instant = new Date(scheduledAt);
   if(!Number.isFinite(instant.getTime()) || instant.getUTCSeconds() !== 0 || instant.getUTCMilliseconds() !== 0) return false;
   const moscow = new Date(instant.getTime()+3*60*60*1000);
