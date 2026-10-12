@@ -13,6 +13,8 @@
     "worker": "node --experimental-strip-types worker/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=1 --experimental-strip-types tests/*.test.mjs tests/*.test.ts",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
+    "test:e2e:serve": "node node_modules/vite/bin/vite.js build --config tests/e2e/vite.config.ts && node node_modules/vite/bin/vite.js preview --config tests/e2e/vite.config.ts",
     "smoke:foundation": "node tests/foundation-smoke.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
@@ -48,6 +50,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@cloudflare/vite-plugin": "1.37.1",
     "@cloudflare/workers-types": "4.20260515.1",
     "@tailwindcss/postcss": "4.2.1",

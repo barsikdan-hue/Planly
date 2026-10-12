@@ -75,6 +75,23 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Install isolated browser test Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser pilot on synthetic loopback fixtures
+        run: pnpm test:e2e
+
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planly-browser-pilot
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Diagnose restored CSS build cache in isolation
         env:
           PLANLY_CSS_CACHE_DIAGNOSTIC: isolated-ci
