@@ -8,7 +8,7 @@
 
 **Tech Stack:** existing React/Next/Vite, pnpm 11.25.0, pinned Playwright Test/Chromium, existing GitHub/Render connectors.
 
-**Spec:** Owner-approved `PLANLY_CODEX_MASTER_HARNESS.md`, SHA256 recorded in verification report; source remains in Owner Downloads, no repository product phase starts.
+**Spec:** [Owner-approved master contract](../../harness/2026-10-12-owner-master-contract.md), original-source SHA256 recorded in verification report; no repository product phase starts.
 
 ## Constraints / review focus
 
@@ -20,13 +20,13 @@
 
 ## Tasks
 
-- [ ] Verify source/main/PR/CI/runtime, install inventory and official sources; record baseline timings and limitations.
-- [ ] Install missing trusted tools only; verify help/protocol/browser safely. Do not duplicate working plugins or grant new global access.
-- [ ] Add compact routing/autonomous-loop AGENTS rule plus three distinct UI/CI/API examples and inactive CI Doctor design.
-- [ ] Pin Playwright in package/lock; preserve all existing lock resolutions. Write browser scenarios before fixture; observe missing-harness RED, implement minimal isolated fixture, run desktop/mobile GREEN.
-- [ ] Prove controlled bootstrap503→visible error→explicit reload recovery; retain screenshots/trace outside committed production source. Confirm no real API/provider traffic.
-- [ ] Run relevant existing tests/typecheck/lint/build and deterministic browser CI; independent read-only Critic, fix proven defects, repeat affected checks.
-- [ ] Push separate branch/PR, inspect actual head/CI and leave Owner merge/deploy gate. Document exact evidence, cost limits, blockers and next safe action.
+- [x] Verify source/main/PR/CI/runtime, install inventory and official sources; record baseline timings and limitations.
+- [x] Install missing trusted tools only; verify help/protocol/browser safely. Do not duplicate working plugins or grant new global access.
+- [x] Add compact routing/autonomous-loop AGENTS rule plus three distinct UI/CI/API examples and inactive CI Doctor design.
+- [x] Pin Playwright in package/lock; preserve all existing lock resolutions. Write browser scenarios before fixture; observe missing-harness RED, implement minimal isolated fixture, run desktop/mobile GREEN.
+- [x] Prove controlled bootstrap503→visible error→explicit reload recovery; retain screenshots/trace outside committed production source. Confirm no real API/provider traffic.
+- [x] Run relevant existing tests/typecheck/lint/build and deterministic browser CI; independent read-only Critic, fix proven defects, repeat affected checks.
+- [x] Push separate branch/PR, inspect implementation HEAD/CI and leave Owner merge/deploy gate. Document exact evidence, cost limits, blockers and next safe action. Final documentation HEAD checks are linked from PR #39.
 
 ## Rulings / evidence ledger
 
