@@ -37,7 +37,7 @@ export function replacePendingEditor(storage: RecoveryStorage, ownerId: string, 
 
 // No submission occurs during hydration. The caller invokes this only for an explicit save/retry.
 export async function submitPendingCreation(storage: RecoveryStorage, ownerId: string, editorToken: string,
-  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent, options: { origin?: 'composer' | 'swipe-planner'; editorUi?: EditorUiIntent } = {}) {
+  editor: EditorFields, input: () => ComposerPostInput, intent: CreationIntent, options: { origin?: 'composer' | 'swipe-planner'; editorUi?: EditorUiIntent; isCurrent?: () => boolean } = {}) {
   let pending = readPendingCreation(storage, ownerId);
   if (!pending) {
     const editorUi = options.origin === 'swipe-planner' ? undefined : optionalEditorUiSchema.parse(options.editorUi);
@@ -54,13 +54,13 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
       // request while keeping the editor available for restore/retry or abandon.
       const sourceRejected = error.status === 409 && error.body && typeof error.body === 'object' &&
         'code' in error.body && ['LIBRARY_SOURCE_CONFLICT', 'LIBRARY_SOURCE_STALE', 'PLANNER_SLOT_CONFLICT'].includes(String(error.body.code));
-      if ([400, 404, 422].includes(error.status) || sourceRejected) completePendingCreation(storage, ownerId, pending.key);
+      if ((!options.isCurrent || options.isCurrent()) && ([400, 404, 422].includes(error.status) || sourceRejected)) completePendingCreation(storage, ownerId, pending.key);
     }
     throw error;
   }
   pending = { ...pending, activeEditorToken: readPendingCreation(storage, ownerId)?.activeEditorToken ?? pending.activeEditorToken, acknowledgedId: saved.id };
   // A failed acknowledgement write still leaves the original key safely replayable.
-  try { writePendingCreation(storage, ownerId, pending); } catch { /* Original durable request remains. */ }
+  try { if ((!options.isCurrent || options.isCurrent()) && readPendingCreation(storage,ownerId)?.key === pending.key) writePendingCreation(storage, ownerId, pending); } catch { /* Original durable request remains. */ }
   const belongsToEditor = pending.editorToken === editorToken;
   let updateError: unknown;
   if (belongsToEditor && pending.origin !== 'swipe-planner') {

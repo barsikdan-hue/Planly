@@ -128,6 +128,12 @@ Completed goal: conveniently store content prepared outside Planly. Prepared con
 - ContentSuggestion remains a suggestion until approval, then becomes a Post.
 - Suggestions use non-AI sources. AI is excluded.
 
+### Swipe Planner 2.0 delivery (owner-approved PR42, 2026-10-13)
+
+- Task 1 adds the Dashboard READY queue, origin return, existing Library editor entry, native card motion and owner-generation guards. Local fixture verification is recorded separately; it does not establish deployed acceptance.
+- This intermediate UI keeps draft/manual/next modes. The positive action says «В черновики» for draft and «В календарь» for scheduling; each decision still needs explicit approval.
+- Task 2 safe future-slot setup and Task 3 transactional feedback/private export remain dependent stages. Merge, deploy, production migration and provider sends require the owner gate.
+
 ## Later-phase boundaries
 
 - Owner authorized Phase 7A VK on 2026-10-07 and deferred it on 2026-10-08. Instagram remains HOLD until a separate Owner decision; deferring VK does not authorize Instagram or CR07 / CR08 / GAP01.

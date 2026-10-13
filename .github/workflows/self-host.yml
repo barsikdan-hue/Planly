@@ -2,7 +2,7 @@ name: Self-host build
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/swipe-planner-2-*']
   push:
     branches: [main, feat/self-host-build]
 

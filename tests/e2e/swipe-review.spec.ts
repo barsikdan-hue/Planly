@@ -74,11 +74,11 @@ test('Swipe gestures and decision buttons still work from the review text', asyn
   };
   await swipe(105);
   await expect(card).toHaveAttribute('aria-label', 'Заготовка: Review b');
-  await review.getByRole('button', { name: 'Отклонить', exact: true }).click();
+  await review.getByRole('button', { name: 'Не нравится', exact: true }).click();
   await expect(card).toHaveAttribute('aria-label', 'Заготовка: Review c');
   await swipe(-105);
   await expect(card).toHaveAttribute('aria-label', 'Заготовка: Review d');
-  await review.getByRole('button', { name: 'Одобрить', exact: true }).click();
+  await review.getByRole('button', { name: 'В черновики', exact: true }).click();
   await expect(review.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
   expect(swipeFixture.decisions.map(({ action, itemId }) => ({ action, itemId }))).toEqual([
     { action: 'approve', itemId: 'a' }, { action: 'reject', itemId: 'b' },
