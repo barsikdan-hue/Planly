@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { createHarness } from './helpers/planner-hook-harness.mjs';
 import { toast } from 'sonner';
+import { writePendingCreation } from '../lib/client/pending-creation.ts';
+import { blankPost } from '../lib/planner.ts';
 register('./helpers/composer-continuation-loader.mjs', import.meta.url);
 const { default: PlannerApp } = await import('../components/planner/app.tsx');
 const { Composer } = await import('../components/planner/composer.tsx');
@@ -367,25 +369,35 @@ test('standalone Composer without optional parent control retains single-upload 
     assert.deepEqual(value.props.draft.mediaIds, ['late']); assert.deepEqual(value.recovery.mediaIds, ['late']);
   } finally { standalone.unmount(); }
 });
-for (const origin of ['composer', 'swipe-planner']) {
+for (const origin of ['composer', 'swipe-planner', 'legacy-swipe-planner']) {
   test(`global ${origin} retry entrypoint cannot replay a Post while current editor upload is pending`, async () => {
     const item = { id: 'source', title: null, text: 'Library source', mediaIds: [], status: 'READY', sourcePostId: null,
       createdAt: '2026-10-05T00:00:00.000Z', updatedAt: '2026-10-05T00:00:00.000Z' };
-    const value = await fixture({ libraryItems: [item], mutation: () => { throw Error('Response lost after commit'); } });
+    const seedCache = new Map();
+    if (origin === 'legacy-swipe-planner') {
+      const token = crypto.randomUUID();
+      writePendingCreation({ getItem: key => seedCache.get(key) ?? null, setItem: (key, value) => seedCache.set(key, value), removeItem: key => seedCache.delete(key) }, 'owner', {
+        version: 1, key: crypto.randomUUID(), input: {baseText:item.text,status:'DRAFT',targets:[],mediaIds:[],sourceLibraryItemId:item.id},
+        editor: {...blankPost(),text:item.text,sourceLibraryItemId:item.id}, intent:'draft', editorToken:token,activeEditorToken:token,origin:'swipe-planner',
+      });
+    }
+    const value = await fixture({ libraryItems: [item], seedCache, mutation: () => { throw Error('Response lost after commit'); } });
     if (origin === 'composer') { await value.props.save(value.props.draft, 'draft'); await value.settle(); }
-    else {
+    else if (origin === 'swipe-planner') {
       await value.navigate('content'); value.app.find('ContentLibrary').props.startReview(); await value.settle();
-      await assert.rejects(value.app.find('SwipePlanner').props.onApprove(item, { mode: 'draft', providers: [], scheduledAt: null }), /Response lost/);
+      await assert.rejects(value.app.find('SwipePlanner').props.onApprove(item, { mode: 'next', providers: ['telegram'], scheduledAt: '2099-01-01T07:00:00Z' }), /Response lost/);
       await value.settle(); await value.navigate('create');
     }
-    assert.equal(value.postRequests.length, 1); assert.ok(value.pending);
+    const originalRequests = origin === 'legacy-swipe-planner' ? 0 : 1;
+    assert.equal(value.postRequests.length, originalRequests); assert.ok(value.pending);
+    if (origin === 'legacy-swipe-planner') { assert.equal(JSON.parse(value.pending).input.status,'DRAFT'); assert.equal(JSON.parse(value.pending).input.swipeReview,undefined); }
     const capturedRetry = find(value.app.tree, node => text(node) === 'Повторить сохранение' && typeof node.props?.onClick === 'function');
     assert.ok(capturedRetry); assert.equal(capturedRetry.props.disabled, false, 'retry is available before upload');
     value.begin(); await value.settle(); const pending = value.pending;
     const retry = find(value.app.tree, node => text(node) === 'Повторить сохранение' && typeof node.props?.onClick === 'function');
     assert.ok(retry); assert.equal(retry.props.disabled, true, 'active editor upload disables the real retry button');
     capturedRetry.props.onClick(); await value.settle();
-    assert.equal(value.postRequests.length, 1, 'retry must check parent upload state before replay dispatch');
+    assert.equal(value.postRequests.length, originalRequests, 'retry must check parent upload state before replay dispatch');
     assert.equal(value.pending, pending);
     value.finish(); await value.settle(); assert.deepEqual(value.props.draft.mediaIds, ['late']);
   });
