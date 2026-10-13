@@ -24,15 +24,15 @@ test('Library review opens without creating any Post; skip/reject/approve are se
  const review=h.find('SwipePlanner');assert.ok(review);assert.equal(typeof review.props.onApprove,'function');assert.equal(typeof review.props.onReject,'function');
  assert.equal(requests.filter(r=>r.init?.method==='POST').length,0);
 });
-test('explicit draft queue approve creates source-linked Post without scheduler time and updates Library',async()=>{
+test('explicit scheduled queue approve creates source-linked Post with safe slot and updates Library',async()=>{
  let savedInput;
  const {h,storage}=await app(undefined,(url,init)=>{
   if(url==='/api/posts'){savedInput=JSON.parse(init.body);return Response.json({id:'saved',title:savedInput.title,baseText:savedInput.baseText,status:'DRAFT',targets:[],mediaIds:[],createdAt:item.createdAt,updatedAt:item.updatedAt});}
   if(url==='/api/library-items')return Response.json([{...item,status:'USED',sourcePostId:'saved'}]);throw Error(`Unexpected ${url}`);
  });
  h.find('ContentLibrary').props.startReview();await h.settle();
- await h.find('SwipePlanner').props.onApprove(item,{mode:'draft',providers:[],scheduledAt:null});await h.settle();
- assert.equal(savedInput.status,'DRAFT');assert.deepEqual(savedInput.targets,[]);assert.equal(savedInput.sourceLibraryItemId,item.id);
+ await h.find('SwipePlanner').props.onApprove(item,{mode:'next',providers:['telegram'],scheduledAt:'2099-01-01T07:00:00Z'});await h.settle();
+ assert.equal(savedInput.status,'READY');assert.equal(savedInput.targets[0].scheduledAt,'2099-01-01T07:00:00Z');assert.equal(savedInput.requireFreeSlot,true);assert.equal(savedInput.sourceLibraryItemId,item.id);
  assert.equal(savedInput.sourceLibraryUpdatedAt,item.updatedAt);assert.equal(savedInput.title,item.title);
  assert.equal(readPendingCreation(storage,'owner'),null);assert.equal(h.find('SwipePlanner').props.items[0].status,'USED');
 });
@@ -55,7 +55,7 @@ for(const action of ['onApprove','onReject'])test(`stale ${action} refreshes car
   if(url==='/api/library-items')return Response.json([{...item,text:'Updated elsewhere',updatedAt:'2026-10-04T10:00:00Z'}]);
   return Response.json({error:'Source changed',code:'LIBRARY_SOURCE_STALE'},{status:409});
  });h.find('ContentLibrary').props.startReview();await h.settle();
- await assert.rejects(h.find('SwipePlanner').props[action](item,{mode:'draft',providers:[],scheduledAt:null}));await h.settle();
+ await assert.rejects(h.find('SwipePlanner').props[action](item,{mode:'next',providers:['telegram'],scheduledAt:'2099-01-01T07:00:00Z'}));await h.settle();
  assert.equal(h.find('SwipePlanner').props.items[0].text,'Updated elsewhere');
 });
 

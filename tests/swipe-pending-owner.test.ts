@@ -6,7 +6,7 @@ const originalFetch=globalThis.fetch;
 afterEach(()=>{globalThis.fetch=originalFetch;});
 function storage(){const map=new Map<string,string>();return{getItem:(key:string)=>map.get(key)??null,setItem:(key:string,value:string)=>{map.set(key,value);},removeItem:(key:string)=>{map.delete(key);}};}
 const item={id:'library',title:'Title',text:'Body',status:'READY' as const,mediaIds:[],sourcePostId:null,createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z'};
-const approval={mode:'draft' as const,providers:[],scheduledAt:null};
+const approval={mode:'next' as const,providers:['telegram' as const],scheduledAt:'2099-01-01T07:00:00Z'};
 for(const result of ['success','rejection'] as const) test(`late ${result} after A B A preserves newer same-owner request`,async()=>{
  const cache=storage();let finish!:()=>void;const gate=new Promise<void>(r=>{finish=r;});let current=true;
  globalThis.fetch=async()=>{await gate;return result==='success'?Response.json({id:'old-ack'}):Response.json({error:'stale',code:'LIBRARY_SOURCE_STALE'},{status:409});};

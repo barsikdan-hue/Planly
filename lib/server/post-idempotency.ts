@@ -4,14 +4,15 @@ import type { SavePostInput } from '../contracts/planner.ts';
 import { canonicalCreationInput } from '../post-creation.ts';
 
 export const creationKeySchema = z.string().uuid().transform(value => value.toLowerCase());
-export type PlannerCreationContext = { sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean };
+export type PlannerCreationContext = { sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean; swipeReview?: import('../contracts/planner.ts').SwipeReview };
 export function creationInputHash(input: SavePostInput, sourceLibraryItemId?: string, planner?: PlannerCreationContext): string {
   const canonical = canonicalCreationInput(input);
-  const hasPlannerContext = planner?.sourceLibraryUpdatedAt !== undefined || planner?.requireFreeSlot !== undefined;
+  const hasPlannerContext = planner?.sourceLibraryUpdatedAt !== undefined || planner?.requireFreeSlot !== undefined || planner?.swipeReview !== undefined;
   const identity = hasPlannerContext
     ? JSON.stringify({ canonical, sourceLibraryItemId, planner: {
       sourceLibraryUpdatedAt: planner?.sourceLibraryUpdatedAt === undefined ? undefined : new Date(planner.sourceLibraryUpdatedAt).toISOString(),
       requireFreeSlot: planner?.requireFreeSlot,
+      ...(planner?.swipeReview ? { swipeReview: planner.swipeReview } : {}),
     } })
     : sourceLibraryItemId === undefined ? canonical : JSON.stringify({ canonical, sourceLibraryItemId });
   return createHash('sha256').update(identity).digest('hex');

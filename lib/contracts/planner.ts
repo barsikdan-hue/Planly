@@ -27,13 +27,18 @@ export const savePostInputSchema = z.object({
   path: ['baseText'],
 });
 export type SavePostInput = z.infer<typeof savePostInputSchema>;
+export const swipeReviewSchema = z.object({ inputMethod: z.enum(['button','gesture','keyboard']) }).strict();
+export type SwipeReview = z.infer<typeof swipeReviewSchema>;
 
 export const createPostSourceSchema = z.object({
   sourceLibraryItemId: z.string().min(1).max(200).optional(),
   sourceLibraryUpdatedAt: z.string().datetime({ offset: true }).optional(),
   requireFreeSlot: z.boolean().optional(),
+  swipeReview: swipeReviewSchema.optional(),
 }).refine(input => (!input.requireFreeSlot && input.sourceLibraryUpdatedAt === undefined) || !!input.sourceLibraryItemId, {
   message: 'Planner approval requires a library source', path: ['sourceLibraryItemId'],
+}).refine(input => !input.swipeReview || !!input.sourceLibraryItemId && input.sourceLibraryUpdatedAt !== undefined && input.requireFreeSlot === true, {
+  message: 'Swipe approval requires source revision and a free slot', path: ['swipeReview'],
 });
 
 export type PublicationDto = {

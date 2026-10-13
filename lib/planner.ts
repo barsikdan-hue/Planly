@@ -1,6 +1,6 @@
 import type { PostDto, SavePostInput } from './contracts/planner.ts';
 
-export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string; sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean };
+export type ComposerPostInput = SavePostInput & { sourceLibraryItemId?: string; sourceLibraryUpdatedAt?: string; requireFreeSlot?: boolean; swipeReview?: import('./contracts/planner.ts').SwipeReview };
 
 export type Network = 'telegram' | 'max' | 'vk';
 export type Status = 'draft' | 'scheduled' | 'published' | 'failed';

@@ -54,7 +54,13 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
       // request while keeping the editor available for restore/retry or abandon.
       const sourceRejected = error.status === 409 && error.body && typeof error.body === 'object' &&
         'code' in error.body && ['LIBRARY_SOURCE_CONFLICT', 'LIBRARY_SOURCE_STALE', 'PLANNER_SLOT_CONFLICT'].includes(String(error.body.code));
-      if ((!options.isCurrent || options.isCurrent()) && ([400, 404, 422].includes(error.status) || sourceRejected)) completePendingCreation(storage, ownerId, pending.key);
+      const typedValidation = error.status === 422 && error.body && typeof error.body === 'object' && (
+        'code' in error.body && [
+          'SWIPE_APPROVAL_INVALID','PLANNER_ACCOUNT_UNAVAILABLE','TELEGRAM_CONTENT_LIMIT','TELEGRAM_MEDIA_FORMAT','TELEGRAM_MEDIA_SIZE','TELEGRAM_PHOTO_DIMENSIONS',
+          'MAX_CONTENT','MAX_MEDIA','VK_CONTENT_LIMIT','VK_MEDIA_FORMAT','VK_MEDIA_SIZE',
+        ].includes(String(error.body.code)));
+      const rejected = pending.input.swipeReview ? sourceRejected || typedValidation : [400,404,422].includes(error.status) || sourceRejected;
+      if ((!options.isCurrent || options.isCurrent()) && rejected) completePendingCreation(storage, ownerId, pending.key);
     }
     throw error;
   }

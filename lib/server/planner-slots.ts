@@ -1,11 +1,14 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../../db/index.ts';
 import { posts, postTargets, publications, socialAccounts, users } from '../../db/schema.ts';
 import { toDbProvider, type Provider } from '../contracts/planner.ts';
 import { slotQuerySchema, type SlotQuery } from '../contracts/swipe-planner.ts';
 import { findNextSlot, slotMinuteKey } from '../planner-slots.ts';
+import { ZodError } from 'zod';
 
 export type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+// Construct only at a known precommit validation boundary, never from a generic catch.
+export class SwipeApprovalValidationError extends ZodError {}
 
 export class PlannerSlotConflictError extends Error {
   constructor() { super('Выбранный слот уже занят или прошёл. Обнови слот и подтверди снова.'); this.name = 'PlannerSlotConflictError'; }
@@ -23,11 +26,12 @@ export async function lockOwnerSchedule(tx: Transaction, userId: string): Promis
   if (!owner) throw new Error('Owner not found');
 }
 
-export async function requirePlannerAccounts(tx: Transaction, userId: string, providers: Provider[]): Promise<void> {
+export async function requirePlannerAccounts(tx: Transaction, userId: string, providers: Provider[], lock = false): Promise<void> {
   if (!providers.length) throw new PlannerAccountUnavailableError();
-  const rows = await tx.select().from(socialAccounts).where(and(
+  const selected = tx.select().from(socialAccounts).where(and(
     eq(socialAccounts.userId, userId), inArray(socialAccounts.provider, providers.map(toDbProvider)),
-  ));
+  )).orderBy(asc(socialAccounts.id));
+  const rows = await (lock ? selected.for('update') : selected);
   if (rows.length !== new Set(providers).size || rows.some(account => !account.enabled || account.connectionStatus !== 'CONNECTED')) {
     throw new PlannerAccountUnavailableError();
   }
@@ -49,10 +53,13 @@ export async function occupiedSlotMinutes(tx: Transaction, userId: string, query
   return new Set(scheduled.filter(target => latest.get(target.id) !== 'CANCELLED').map(target => slotMinuteKey(target.scheduledAt!.toISOString())));
 }
 
-export async function previewPlannerSlot(userId: string, raw: SlotQuery, now = new Date()): Promise<{ scheduledAt: string | null }> {
+export async function previewPlannerSlot(userId: string, raw: SlotQuery, now?: Date): Promise<{ scheduledAt: string | null }> {
   const query = slotQuerySchema.parse(raw);
   return getDb().transaction(async tx => {
     await requirePlannerAccounts(tx, userId, query.providers);
-    return { scheduledAt: findNextSlot(query, await occupiedSlotMinutes(tx, userId, query), now) };
+    const occupied = await occupiedSlotMinutes(tx,userId,query);
+    const instant = now?.getTime() ?? Date.now();
+    // findNextSlot is strictly after its cutoff; Swipe includes exactly now+60s.
+    return { scheduledAt: findNextSlot(query,occupied,new Date(instant+(query.swipeReview?59_999:0))) };
   });
 }

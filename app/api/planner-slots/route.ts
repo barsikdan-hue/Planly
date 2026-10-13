@@ -8,6 +8,7 @@ export async function GET(request: Request): Promise<Response> {
     const owner = await requireApiOwner(request);
     const params = new URL(request.url).searchParams;
     const query = slotQuerySchema.parse({
+      swipeReview: params.has('swipeReview') ? params.get('swipeReview') === 'true' ? true : params.get('swipeReview') === 'false' ? false : params.get('swipeReview') : undefined,
       providers: params.get('providers')?.split(','), startDate: params.get('startDate'), endDate: params.get('endDate'),
       weekdays: params.get('weekdays')?.split(',').map(Number), times: params.get('times')?.split(','),
     });
