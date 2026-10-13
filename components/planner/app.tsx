@@ -16,6 +16,8 @@ import { ContentLibrary } from './content-library';
 import { SchedulingPlan } from './scheduling-plan';
 import { SwipePlanner } from './swipe-planner';
 import { submitSwipeApproval, retrySwipeApproval, type SwipeApproval } from '@/lib/client/swipe-planner';
+import {readPendingDislike,submitSwipeDislike,retrySwipeDislike,isDecisionResultDeleted,type SwipeDecisionOutcome} from '@/lib/client/swipe-feedback';
+import {SwipePreferences} from './swipe-preferences';
 import { Settings } from './settings';
 import { Analytics } from './analytics';
 import { normalizePlannerView } from '@/lib/planner-navigation';
@@ -36,7 +38,7 @@ import {
     createLibraryItem,
     updateLibraryItem,
     removeLibraryItem,
-    archiveLibraryItem as archiveLibraryItemApi,
+
     loadPlannerSlot,
     PlanlyApiError,
     savePost as savePostApi,
@@ -101,6 +103,9 @@ export default function PlannerApp() {
     const editorToken = useRef(initialEditorToken);
     const [editorKey, setEditorKey] = useState(initialEditorToken);
     const [creationPending, setCreationPending] = useState(false);
+    const [dislikePending,setDislikePending]=useState(false);
+    const [decisionNotice,setDecisionNotice]=useState<string|null>(null);
+    const queueToken=useRef<object|null>(null);
     const ownerLifetime = useRef<OwnerLifetime | null>(null);
     const [ownerContext, setOwnerContext] = useState<OwnerLifetime | null>(null);
     const ownerMounted = useRef(true);
@@ -315,6 +320,7 @@ export default function PlannerApp() {
             }
             try {
                 const pending = readPendingCreation(storage, snapshot.profile.id);
+                setDislikePending(!!readPendingDislike(storage,snapshot.profile.id));
                 if (pending) {
                     if (pending.origin !== 'swipe-planner') updateEditorToken(pending.activeEditorToken);
                     setCreationPending(true);
@@ -350,7 +356,7 @@ export default function PlannerApp() {
         assignEditorUi(initialEditorUi(next));
         draftRef.current = next; editorRevision.current += 1;
         setDraftState(next); persistedEditor.current = null; persistedEditorUi.current = null;
-        setCreationPending(false); setRecoveryNotice(null); recoveryErrorShown.current = false;
+        setCreationPending(false); setDislikePending(false);setDecisionNotice(null);queueToken.current=null; setRecoveryNotice(null); recoveryErrorShown.current = false;
         setConfirm(current => current?.type === 'media' ? null : current);
         updateEditorToken(crypto.randomUUID());
         const context = { id: snapshot.profile.id, generation: {} };
@@ -633,18 +639,25 @@ export default function PlannerApp() {
     };
 
     const acknowledgeQueue = async (result: Awaited<ReturnType<typeof submitSwipeApproval>>, context: OwnerLifetime) => {
+        const storage = sessionRecoveryStorage();
+        if (!isOwnerCurrent(context) || !storage || readPendingCreation(storage,context.id)?.key!==result.pending.key) return {status:'stale' as const};
         const saved = fromServerPost(result.saved);
-        const outcome = { id: saved.id, scheduledAt: result.saved.targets.find(target => target.scheduledAt)?.scheduledAt ?? null };
-        if (!isOwnerCurrent(context)) return outcome;
+        const outcome = { status:'confirmed' as const,id: saved.id, scheduledAt: result.saved.targets.find(target => target.scheduledAt)?.scheduledAt ?? null };
         setData(current => ({ ...current, posts: current.posts.some(post => post.id === saved.id)
             ? current.posts.map(post => post.id === saved.id ? saved : post) : [saved, ...current.posts] }));
-        const storage = sessionRecoveryStorage();
-        if (!storage) throw new Error('Не удалось завершить восстановление. Повтори сохранение.');
         completePendingCreation(storage, context.id, result.pending.key);
-        if (!isOwnerCurrent(context)) return outcome;
+        if (!isOwnerCurrent(context)) return {status:'stale' as const};
         setCreationPending(false); setRecoveryNotice(null);
         await refreshSourceLibrary({ ...blankPost(), sourceLibraryItemId: result.pending.input.sourceLibraryItemId }, result, context);
-        return outcome;
+        return isOwnerCurrent(context) ? outcome : {status:'stale' as const};
+    };
+
+    const terminalQueue = async (context:OwnerLifetime) => {
+        if(!isOwnerCurrent(context))return {status:'stale' as const};
+        setDecisionNotice('Результат подтверждённого решения удалён. Новое решение не создано.');setRecoveryNotice(null);
+        const revision=++libraryRevision.current;
+        try{const libraryItems=await loadLibraryItems();if(isOwnerCurrent(context)&&revision===libraryRevision.current)setData(current=>({...current,libraryItems}));}catch{/* The terminal receipt is final even when refresh is unavailable. */}
+        return {status:isOwnerCurrent(context)?'terminal':'stale'} as const;
     };
 
     const refreshQueueConflict = async (error: unknown, context: OwnerLifetime) => {
@@ -660,33 +673,49 @@ export default function PlannerApp() {
     const approveQueueItem = async (item: LibraryItemDto, approval: SwipeApproval) => {
         const context = ownerContext;
         if (!isOwnerCurrent(context)) throw new Error('Владелец пространства изменился.');
-        if (saveLock.current || creationPending) throw new Error('Сначала восстанови предыдущее сохранение.');
+        if (saveLock.current || creationPending || dislikePending) throw new Error('Сначала восстанови предыдущее сохранение.');
         const storage = sessionRecoveryStorage();
         if (!storage) throw new Error('Повторяемый запрос недоступен. Новый пост не отправлен.');
         queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
+        const operation={};queueToken.current=operation;
         try { return await acknowledgeQueue(await submitSwipeApproval(storage, context!.id, item, approval, () => isOwnerCurrent(context)), context!); }
         catch (error) {
             if (isOwnerCurrent(context)) {
                 const pending = readPendingCreation(storage, context!.id); setCreationPending(!!pending);
+                if(isDecisionResultDeleted(error) && !pending)return terminalQueue(context!);
                 if (pending) setRecoveryNotice('Результат одобрения пока не подтверждён. Повтори сохранение с исходным запросом.');
                 await refreshQueueConflict(error, context!);
             }
             throw error;
-        } finally { if (isOwnerCurrent(context)) { queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
+        } finally { if (isOwnerCurrent(context) && queueToken.current===operation) {queueToken.current=null; queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
     };
 
-    const rejectQueueItem = async (item: LibraryItemDto) => {
+    const applyDislikeOutcome=async(outcome:SwipeDecisionOutcome,context:OwnerLifetime)=>{
+        if(!isOwnerCurrent(context)||outcome.status==='stale')return {status:'stale' as const};
+        setDislikePending(false);
+        if(outcome.status==='terminal')return terminalQueue(context);
+        libraryRevision.current+=1;setData(current=>({...current,libraryItems:current.libraryItems.map(value=>value.id===outcome.saved.id?outcome.saved:value)}));
+        return {status:'confirmed' as const};
+    };
+    const rejectQueueItem = async (item: LibraryItemDto,inputMethod:SwipeApproval['inputMethod']='button') => {
         const context = ownerContext;
         if (!isOwnerCurrent(context)) throw new Error('Владелец пространства изменился.');
-        if (saveLock.current || creationPending) throw new Error('Сначала восстанови предыдущее сохранение.');
+        if (saveLock.current || creationPending || dislikePending) throw new Error('Сначала восстанови предыдущее сохранение.');
+        const storage=sessionRecoveryStorage();if(!storage)throw Error('Повторяемый запрос недоступен.');
+        const operation={};queueToken.current=operation;
         queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
         try {
-            const archived = await archiveLibraryItemApi(item.id, item.updatedAt);
-            if (!isOwnerCurrent(context)) return;
-            libraryRevision.current += 1;
-            setData(current => ({ ...current, libraryItems: current.libraryItems.map(value => value.id === archived.id ? archived : value) }));
-        } catch (error) { await refreshQueueConflict(error, context!); throw error; }
-        finally { if (isOwnerCurrent(context)) { queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
+            return await applyDislikeOutcome(await submitSwipeDislike(storage,context!.id,item,inputMethod,()=>isOwnerCurrent(context)),context!);
+        } catch (error) {if(isOwnerCurrent(context))setDislikePending(!!readPendingDislike(storage,context!.id)); await refreshQueueConflict(error, context!); throw error; }
+        finally { if (isOwnerCurrent(context) && queueToken.current===operation) {queueToken.current=null; queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
+    };
+
+    const retryDislike=async()=>{
+        const context=ownerContext,storage=sessionRecoveryStorage();if(!isOwnerCurrent(context)||!storage||saveLock.current)return;
+        const operation={};queueToken.current=operation;queueOperationOwner.current=context;saveLock.current=true;setSaveBusy(true);
+        try{await applyDislikeOutcome(await retrySwipeDislike(storage,context!.id,()=>isOwnerCurrent(context)),context!);}
+        catch(error){if(isOwnerCurrent(context)){setDislikePending(!!readPendingDislike(storage,context!.id));toast.error(errorMessage(error,'Не удалось восстановить решение.'));}}
+        finally{if(isOwnerCurrent(context)&&queueToken.current===operation){queueToken.current=null;queueOperationOwner.current=null;saveLock.current=false;setSaveBusy(false);}}
     };
 
     const reschedule = async (post: Post, date: string, time: string) => {
@@ -913,9 +942,11 @@ export default function PlannerApp() {
             if (!pending) return;
             if (pending.origin === 'swipe-planner') {
                 if (saveLock.current) return;
+                const operation={};queueToken.current=operation;
                 queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
                 try { await acknowledgeQueue(await retrySwipeApproval(storage, context!.id, () => isOwnerCurrent(context)), context!); }
-                finally { if (isOwnerCurrent(context)) { setCreationPending(!!readPendingCreation(storage, context!.id)); queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
+                catch(error){if(isOwnerCurrent(context)&&isDecisionResultDeleted(error)&&!readPendingCreation(storage,context!.id))await terminalQueue(context!);else throw error;}
+                finally { if (isOwnerCurrent(context)&&queueToken.current===operation) {queueToken.current=null; setCreationPending(!!readPendingCreation(storage, context!.id)); queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
                 return;
             }
             if (pending.intent === 'now') await publishNow(draftRef.current);
@@ -995,5 +1026,5 @@ export default function PlannerApp() {
         }
     };
 
-    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy || composer.uploadControl.busy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && !reviewing && <Dashboard readyCount={data.libraryItems.filter(item => item.status === 'READY' && !item.sourcePostId).length} startReview={() => { if (isOwnerCurrent(ownerContext)) { setReviewOrigin('dashboard'); setScheduling(false); setReviewing(true); } }} startLibraryEditor={() => { navigate('content'); libraryEditorControl.onChange({ title: '', text: '', mediaIds: [] }); }} ownerContext={ownerContext} createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {ownerContext && <Button variant="outline" onClick={() => { setReviewing(false); setScheduling(true); setView('content'); }}>Распределить по слотам</Button>}{view === 'content' && scheduling && ownerContext && <SchedulingPlan key={ownerContext.id} ownerContext={ownerContext} isOwnerCurrent={isOwnerCurrent} media={[]} onClose={() => setScheduling(false)} onSaved={async () => { const context=ownerContext; const snapshot=await loadPlanner(); if (!isOwnerCurrent(context)) return; if (snapshot.profile.id !== context.id) { transitionOwner(snapshot); return; } setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts})); }}/>} {(view === 'content' || view === 'dashboard') && reviewing && !scheduling && <SwipePlanner key={ownerContext?.id} origin={reviewOrigin} onAddItem={() => { setReviewing(false); navigate('content'); libraryEditorControl.onChange({ title: '', text: '', mediaIds: [] }); }} items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => { setReviewing(false); navigate(reviewOrigin); }} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && !scheduling && <ContentLibrary editorControl={libraryEditorControl} startReview={() => { if (isOwnerCurrent(ownerContext)) { setReviewOrigin('content'); setReviewing(true); } }} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content startScheduling={() => setScheduling(true)} posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics ownerContext={ownerContext}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} disconnect={disconnectVk} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
+    return <SidebarProvider style={{ '--sidebar-width': '228px', '--sidebar-width-icon': '72px' } as CSSProperties}><Navigation view={view} navigate={navigate} posts={data.posts}/><div className="app-main"><header className="topbar"><div className="topbar-left"><SidebarTrigger className="mobile-menu"/><div className="global-search"><Search size={18}/><input placeholder="Поиск по постам, медиа, хештегам…" aria-label="Поиск по постам, медиа, хештегам" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { navigate('content'); setContentTab('publications'); } }}/><kbd>↵</kbd></div></div><div className="topbar-right"><span className="demo-pill">MVP</span><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="notifications" aria-label="Уведомления"><Bell size={19}/>{data.posts.some(p => p.status === 'failed') && <i />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="notification-menu"><DropdownMenuLabel>Уведомления</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('calendar')}><Clock size={16}/>{data.posts.filter(p => p.status === 'scheduled').length} поста в расписании</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="topbar-divider"/><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="profile-button"><span className="user-avatar">{data.name.slice(0, 1).toUpperCase()}</span><span>{data.name}</span><ChevronDown size={14}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => navigate('settings')}><SettingsIcon size={16}/>Настройки профиля</DropdownMenuItem><DropdownMenuItem onClick={() => navigate('settings')}><Share2 size={16}/>Мои соцсети</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header><main className={`workspace view-${view}`} id="workspace">{decisionNotice && <p role="status">{decisionNotice}</p>}{dislikePending && <div className="notice"><p>Проверь результат предыдущего решения.</p><Button disabled={saveBusy} onClick={()=>{void retryDislike();}}>Повторить решение</Button></div>}{creationPending && <div className="notice"><Info size={18}/><p>Проверь результат предыдущего создания поста перед новым сохранением.</p><Button onClick={() => { void retryCreation(); }} disabled={saveBusy || composer.uploadControl.busy}>Повторить сохранение</Button></div>}{loadError && <div className="notice error"><Info size={18}/><p>Не удалось загрузить серверные данные. Обнови страницу после восстановления соединения.</p></div>}{recoveryNotice && <div className="notice"><Info size={18}/><p>{recoveryNotice} На сервер он попадёт после сохранения.</p><button className="inline-link" onClick={() => navigate('create')}>Открыть редактор</button></div>}{!ready ? <div className="loading-state"><Loader2 className="animate-spin"/><p>Открываем твоё пространство…</p></div> : <>{view === 'dashboard' && !reviewing && <Dashboard readyCount={data.libraryItems.filter(item => item.status === 'READY' && !item.sourcePostId).length} startReview={() => { if (isOwnerCurrent(ownerContext)) { setReviewOrigin('dashboard'); setScheduling(false); setReviewing(true); } }} startLibraryEditor={() => { navigate('content'); libraryEditorControl.onChange({ title: '', text: '', mediaIds: [] }); }} ownerContext={ownerContext} createPost={() => createPost()} posts={data.posts} media={data.media} accounts={accounts} navigate={navigate} openPost={p => setDetailId(p.id)} composer={composer} name={data.name}/>} {view === 'create' && <><div className="page-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>{editorBlockedReason ? 'Просмотр поста' : draft.id ? 'Редактировать пост' : 'Создать пост'}</h1><p>Текст, медиа и площадки — всё на одном экране.</p></div><span className="pill neutral">Content Core</span></div><Composer key={editorKey} {...composer}/></>}{view === 'calendar' && <Calendar posts={data.posts} openPost={p => setDetailId(p.id)} createPost={createPost} reschedule={reschedule}/>} {ownerContext && <Button variant="outline" onClick={() => { setReviewing(false); setScheduling(true); setView('content'); }}>Распределить по слотам</Button>}{view === 'content' && scheduling && ownerContext && <SchedulingPlan key={ownerContext.id} ownerContext={ownerContext} isOwnerCurrent={isOwnerCurrent} media={[]} onClose={() => setScheduling(false)} onSaved={async () => { const context=ownerContext; const snapshot=await loadPlanner(); if (!isOwnerCurrent(context)) return; if (snapshot.profile.id !== context.id) { transitionOwner(snapshot); return; } setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts})); }}/>} {(view === 'content' || view === 'dashboard') && reviewing && !scheduling && <SwipePlanner key={ownerContext?.id} origin={reviewOrigin} onAddItem={() => { setReviewing(false); navigate('content'); libraryEditorControl.onChange({ title: '', text: '', mediaIds: [] }); }} items={data.libraryItems} media={data.media} socialAccounts={data.socialAccounts} busy={saveBusy} pending={creationPending || dislikePending} preferences={<SwipePreferences key={ownerContext?.id} isCurrent={()=>isOwnerCurrent(ownerContext)}/>} onPreview={loadPlannerSlot} onApprove={approveQueueItem} onReject={rejectQueueItem} onEdit={createFromLibrary} onClose={() => { setReviewing(false); navigate(reviewOrigin); }} onOpenPost={setDetailId}/>} {view === 'content' && !reviewing && !scheduling && <ContentLibrary editorControl={libraryEditorControl} startReview={() => { if (isOwnerCurrent(ownerContext)) { setReviewOrigin('content'); setReviewing(true); } }} items={data.libraryItems} media={data.media} posts={data.posts} activeTab={contentTab} onTabChange={setContentTab} upload={upload} saveItem={saveLibraryItem} deleteItem={deleteLibraryItem} createPublication={createFromLibrary} openPublication={setDetailId}><Content startScheduling={() => setScheduling(true)} posts={data.posts} media={data.media} query={query} setQuery={setQuery} openPost={p => setDetailId(p.id)} editPost={editPost} create={() => createPost()} deletePost={p => setConfirm({ type: 'post', id: p.id, label: p.text.split('\n')[0] })} duplicatePost={duplicatePost}/></ContentLibrary>}{view === 'media' && <MediaLibrary media={data.media} upload={upload} remove={m => setConfirm({ type: 'media', id: m.id, label: m.name })} useMedia={m => { replaceEditor({ ...blankPost(), mediaIds: [m.id] }); }}/>}{view === 'analytics' && <Analytics ownerContext={ownerContext}/>} {view === 'settings' && <Settings name={data.name} saveName={name => { void updateName(name); }} accounts={data.socialAccounts} connect={connectSocial} disconnect={disconnectVk} toggle={(id, value) => { void updateAccount(id, value); }}/>}</>}</main></div><Sheet open={!!details} onOpenChange={open => { if (!open) setDetailId(null); }}><SheetContent className="post-sheet">{details && <><SheetTitle>Публикация</SheetTitle><SheetDescription>{dateLabel(details.date)} · {details.time} МСК</SheetDescription><StatusBadge status={details.status}/><Poster post={details} media={data.media}/><p className="detail-text">{details.text}</p><div className="target-statuses"><h3>Статус по каждой соцсети</h3>{details.targets.map(t => <div key={t.network}><SocialIcon network={t.network} small/><span>{networkNames[t.network]}</span><StatusBadge status={t.status}/>{t.error && <small role="status">{t.error}</small>}{t.remoteUrl && <a href={t.remoteUrl} target="_blank" rel="noopener noreferrer">Открыть в {networkNames[t.network]}</a>}</div>)}</div><div className="detail-actions">{details.editBlockedReason ? <><p className="mini-note" role="status">{details.editBlockedReason}</p><Action secondary onClick={() => duplicatePost(details)}><Copy size={16}/>Дублировать в черновик</Action></> : <Action secondary onClick={() => editPost(details)}><Pencil size={16}/>Редактировать / перенести</Action>}<Button variant="ghost" className="delete-button" onClick={() => setConfirm({ type: 'post', id: details.id, label: details.text.split('\n')[0] })}><Trash2 size={16}/>Удалить пост</Button></div></>}</SheetContent></Sheet><AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogTitle>{confirm?.type === 'media' ? 'Удалить файл?' : 'Удалить публикацию?'}</AlertDialogTitle><AlertDialogDescription>«{confirm?.label}» будет удалён из Planly.{confirm?.type === 'media' ? ' Прикреплённый к посту файл удалить нельзя.' : ' Уже опубликованные сообщения в Telegram и MAX останутся. Это действие нельзя отменить.'}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction className="destructive-action" onClick={() => { void confirmDelete(); }}>Удалить</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog><Toaster position="bottom-right" richColors theme="light"/></SidebarProvider>;
 }

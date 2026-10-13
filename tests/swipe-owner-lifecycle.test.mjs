@@ -18,7 +18,7 @@ for(const action of ['onApprove','onReject','retry'])for(const failure of [false
  const fetchOriginal=globalThis.fetch; globalThis.fetch=(url,init)=>url==='/api/bootstrap'?pollGate.promise:fetchOriginal(url,init); await value.poll();
  const captured=value.app.find('SwipePlanner').props;
 
- const a=action==='retry' ? Promise.resolve(find(value.app.tree,n=>typeof n.props?.onClick==='function'&&text(n)==='Повторить сохранение').props.onClick()) : captured[action](item('A'),approval).catch(()=>{}); await value.settle();
+ const a=action==='retry' ? Promise.resolve(find(value.app.tree,n=>typeof n.props?.onClick==='function'&&text(n)==='Повторить сохранение').props.onClick()) : captured[action](item('A'),action==='onReject'?'button':approval).catch(()=>{}); await value.settle();
  value.snapshot.profile={id:'B',displayName:'B'}; value.snapshot.libraryItems=[item('B')]; pollGate.resolve(Response.json(value.snapshot)); await value.settle();
  assert.equal(value.app.find('SwipePlanner'),null,'owner transition ends old review');
  value.props().startReview(); await value.settle(); const b=value.app.find('SwipePlanner').props.onApprove(item('B'),approval); await value.settle();
@@ -50,8 +50,8 @@ test('A to B to A uses a new owner generation so old rejection cannot release re
  const rejected=value.app.find('SwipePlanner').props.onReject(item('old-A'));await value.settle();
  value.snapshot.profile={id:'B',displayName:'B'};value.snapshot.libraryItems=[];pollGate.resolve(Response.json(value.snapshot));await value.settle();
  globalThis.fetch=fetchOriginal;value.snapshot.profile={id:'owner',displayName:'Returned A'};value.snapshot.libraryItems=[item('new-A')];await value.poll();
- value.props().startReview();await value.settle();const approved=value.app.find('SwipePlanner').props.onApprove(item('new-A'),approval);await value.settle();
+ value.props().startReview();await value.settle();assert.equal(value.app.find('SwipePlanner').props.pending,true); const approved=Promise.resolve(find(value.app.tree,n=>typeof n.props?.onClick==='function'&&text(n)==='Повторить решение').props.onClick());await value.settle();
  oldA.resolve(Response.json({...item('old-A'),status:'ARCHIVED'}));await rejected;await value.settle();
  assert.equal(value.app.find('SwipePlanner').props.busy,true,'same ID must not authorize old generation finally');assert.deepEqual(value.app.find('SwipePlanner').props.items.map(i=>i.id),['new-A']);
- newA.resolve(saved('returned-A-post'));await approved;await value.settle();
+ newA.resolve(Response.json({...item('old-A'),status:'ARCHIVED'}));await approved;await value.settle();
 });

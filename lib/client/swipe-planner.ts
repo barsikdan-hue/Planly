@@ -4,6 +4,7 @@ import { savePostInputSchema, type Provider } from '../contracts/planner.ts';
 import { blankPost, type ComposerPostInput } from '../planner.ts';
 import { readPendingCreation, submitPendingCreation } from './pending-creation.ts';
 import type { RecoveryStorage } from './editor-recovery.ts';
+import {readPendingDislike} from './swipe-feedback.ts';
 export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null; inputMethod?: ReviewInputMethod };
 export function buildSwipeApproval(item: LibraryItemDto, approval: SwipeApproval): ComposerPostInput {
   if (item.status !== 'READY' || item.sourcePostId) throw new Error('Заготовка уже недоступна для одобрения. Обнови библиотеку.');
@@ -13,7 +14,7 @@ export function buildSwipeApproval(item: LibraryItemDto, approval: SwipeApproval
     sourceLibraryItemId:item.id,sourceLibraryUpdatedAt:item.updatedAt,requireFreeSlot:true,swipeReview:{inputMethod:approval.inputMethod??'button'} };
 }
 export async function submitSwipeApproval(storage: RecoveryStorage, ownerId: string, item: LibraryItemDto, approval: SwipeApproval, isCurrent?: () => boolean) {
-  if(readPendingCreation(storage,ownerId)) throw new Error('Сначала восстанови предыдущее сохранение.');
+  if(readPendingCreation(storage,ownerId)||readPendingDislike(storage,ownerId)) throw new Error('Сначала восстанови предыдущее сохранение.');
   const input=buildSwipeApproval(item,approval);
   const editor={...blankPost(),text:item.text,sourceLibraryItemId:item.id,mediaIds:[...item.mediaIds],networks:[...approval.providers]};
   return submitPendingCreation(storage,ownerId,crypto.randomUUID(),editor,()=>input,'scheduled',{origin:'swipe-planner',isCurrent});

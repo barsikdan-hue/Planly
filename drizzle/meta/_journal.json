@@ -64,6 +64,13 @@
       "when": 1791528131621,
       "tag": "0008_scheduling_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791879344955,
+      "tag": "0009_swipe_feedback",
+      "breakpoints": true
     }
   ]
 }

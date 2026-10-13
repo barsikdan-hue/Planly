@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import type { LibraryItemDto } from '@/lib/contracts/library';
 import type { Provider, SocialAccountDto } from '@/lib/contracts/planner';
@@ -18,8 +18,9 @@ export type SwipePlannerProps = {
     socialAccounts: SocialAccountDto[];
     busy?: boolean;
     pending?: boolean;
+    preferences?:ReactNode;
     onPreview: (query: SlotQuery) => Promise<{ scheduledAt: string | null }>;
-    onApprove: (item: LibraryItemDto, approval: SwipeApproval) => Promise<{ id: string; scheduledAt?: string | null } | void>;
+    onApprove: (item: LibraryItemDto, approval: SwipeApproval) => Promise<{ id: string; scheduledAt?: string | null;status?:'confirmed' } | {status:'terminal'|'stale'} | void>;
     onReject: (item: LibraryItemDto, inputMethod?: ReviewInputMethod) => Promise<unknown>;
     onEdit: (item: LibraryItemDto) => void;
     onClose: () => void;
@@ -35,7 +36,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const interactive = (target: EventTarget | null) => !!(target as Element | null)?.closest?.('button, input, textarea, select, a, video, audio, img, [contenteditable], [data-swipe-ignore]');
 const scheduleLabel = (iso: string) => new Date(iso).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'medium', timeStyle: 'short' });
 
-export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost }: SwipePlannerProps) {
+export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, preferences, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost }: SwipePlannerProps) {
     const [now, setNow] = useState(Date.now);
     const [startDate, setStartDate] = useState(todayMoscow);
     const refreshWindow = () => setStartDate(todayMoscow());
@@ -114,9 +115,11 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
         try {
             if (action === 'approve') {
                 const saved = await onApprove(current, { mode, providers: [...chosen], scheduledAt, inputMethod });
-                if (mounted.current) { setApproved(value => value + 1); if (saved) setResult({ ...saved, scheduledAt: saved.scheduledAt ?? scheduledAt }); }
+                if(saved && 'status' in saved && (saved.status==='terminal'||saved.status==='stale'))return;
+                if (mounted.current) { setApproved(value => value + 1); if (saved && 'id' in saved) setResult({ ...saved, scheduledAt: saved.scheduledAt ?? scheduledAt }); }
             } else {
-                await onReject(current, inputMethod);
+                const result=await onReject(current, inputMethod);
+                if(result && typeof result==='object' && 'status' in result && (result.status==='terminal'||result.status==='stale'))return;
                 if (mounted.current) { setRejected(value => value + 1); setArchiveResult(true); }
             }
             if (!mounted.current) return;
@@ -166,6 +169,7 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); await decide(event.key === 'ArrowRight' ? 'approve' : 'reject', 'keyboard'); }
     };
     return <section className="swipe-planner" aria-label="Разбор заготовок">
+        {preferences}
         <div className="page-heading"><div><div className="eyebrow">SMART CONTENT QUEUE</div><h1>Разбор заготовок</h1><p>Каждую публикацию одобряешь отдельно.</p></div><Button variant="outline" disabled={working || busy} onClick={onClose}>{origin === 'dashboard' ? 'Назад на главную' : 'Назад в библиотеку'}</Button></div>
         <div className="swipe-progress" role="status">Одобрено: {approved} · Отклонено: {rejected} · Пропущено: {skipped.length} · Осталось: {ready.filter(item => !skipped.includes(item.id) && !finished.includes(item.id)).length}</div>
         {pending && <p className="notice" role="alert">Предыдущее создание ещё не подтверждено. Закрой разбор и повтори исходный запрос в уведомлении восстановления.</p>}

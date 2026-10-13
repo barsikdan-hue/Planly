@@ -2,6 +2,7 @@ import { patchLibraryItemInputSchema } from '../../../../lib/contracts/library.t
 import { requireApiOwner } from '../../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../../lib/server/http.ts';
 import { archiveLibraryItem, deleteLibraryItem, updateLibraryItem } from '../../../../lib/server/library-items.ts';
+import { swipeDislikeSchema } from '../../../../lib/contracts/swipe-feedback.ts';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -11,7 +12,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
     const { id } = await context.params;
     const input = patchLibraryItemInputSchema.parse(await readJson(request));
     return json('expectedUpdatedAt' in input
-      ? await archiveLibraryItem(owner.id, id, input.expectedUpdatedAt)
+      ? await archiveLibraryItem(owner.id, id, input.expectedUpdatedAt,input.swipeReview ? swipeDislikeSchema.parse({operationId:request.headers.get('idempotency-key'),inputMethod:input.swipeReview.inputMethod}) : undefined)
       : await updateLibraryItem(owner.id, id, input));
   } catch (error) {
     return apiError(error);
