@@ -664,7 +664,7 @@ export default function PlannerApp() {
         const storage = sessionRecoveryStorage();
         if (!storage) throw new Error('Повторяемый запрос недоступен. Новый пост не отправлен.');
         queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
-        try { return await acknowledgeQueue(await submitSwipeApproval(storage, context!.id, item, approval), context!); }
+        try { return await acknowledgeQueue(await submitSwipeApproval(storage, context!.id, item, approval, () => isOwnerCurrent(context)), context!); }
         catch (error) {
             if (isOwnerCurrent(context)) {
                 const pending = readPendingCreation(storage, context!.id); setCreationPending(!!pending);
@@ -914,7 +914,7 @@ export default function PlannerApp() {
             if (pending.origin === 'swipe-planner') {
                 if (saveLock.current) return;
                 queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
-                try { await acknowledgeQueue(await retrySwipeApproval(storage, context!.id), context!); }
+                try { await acknowledgeQueue(await retrySwipeApproval(storage, context!.id, () => isOwnerCurrent(context)), context!); }
                 finally { if (isOwnerCurrent(context)) { setCreationPending(!!readPendingCreation(storage, context!.id)); queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
                 return;
             }
