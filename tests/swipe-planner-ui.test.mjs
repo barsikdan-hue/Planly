@@ -19,7 +19,7 @@ const nodes = (node, predicate) => {
   return [...(predicate(node) ? [node] : []), ...(Array.isArray(children) ? children : [children]).flatMap(child => nodes(child, predicate))];
 };
 const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : node && typeof node === 'object' ? (Array.isArray(node) ? node : [node.props?.children]).flat(Infinity).map(text).join('') : '';
-function button(h, label) { const n = nodes(h.tree, n => typeof n.props?.onClick === 'function' && text(n) === label)[0]; assert.ok(n, `Missing button ${label}`); return n; }
+function button(h, label) { if(label==='В черновики' && nodes(h.tree,n=>n.type==='select' && n.props.id==='swipe-mode')[0]?.props.value!=='draft') label='В календарь'; const n = nodes(h.tree, n => typeof n.props?.onClick === 'function' && text(n) === label)[0]; assert.ok(n, `Missing button ${label}`); return n; }
 function field(h, label) { const n = nodes(h.tree, n => n.props?.['aria-label'] === label)[0]; assert.ok(n, `Missing field ${label}`); return n; }
 const card = h => nodes(h.tree, n => n.type === 'article')[0];
 async function click(h, label) { const n = button(h, label); assert.equal(!!n.props.disabled, false, `${label} disabled`); await n.props.onClick(); await h.settle(); }
@@ -41,7 +41,7 @@ function ui(props = {}) {
 test('READY unlinked cards are oldest first, ties by id; skip writes nothing and new session restores it', async () => {
   const { h, calls, state } = ui({ items: [item('later', '2026-10-05T09:00:00Z'), item('b'), item('a'), item('archived', undefined, { status: 'ARCHIVED' }), item('linked', undefined, { sourcePostId: 'post' })] });
   assert.match(text(card(h)), /Текст a/);
-  await click(h, 'Пропустить');
+  await click(h, 'Позже');
   assert.match(text(card(h)), /Текст b/);
   assert.deepEqual(calls.approve, []); assert.deepEqual(calls.reject, []);
   assert.match(text(card(ui(state).h)), /Текст a/);
@@ -51,38 +51,38 @@ test('draft starts without selected providers and submits null schedule preservi
   const { h, calls } = ui({ items: [source], media: [{ id: 'image', name: 'image', type: 'image/jpeg', url: '/i', size: 1 }, { id: 'video', name: 'video', type: 'video/webm', url: '/v', size: 1 }] });
   assert.equal(button(h, 'Telegram').props['aria-pressed'], false);
   assert.deepEqual(nodes(card(h), n => n.type === 'video' || n.type === 'img').map(n => n.props.src), ['/v', '/i']);
-  await click(h, 'Одобрить');
-  assert.deepEqual(calls.approve, [[source, { mode: 'draft', providers: [], scheduledAt: null }]]);
-  assert.match(text(h.tree), /Одобрено: 1/); assert.match(text(h.tree), /created|Публикация создана/);
+  await click(h, 'В черновики');
+  assert.deepEqual(calls.approve, [[source, { mode: 'draft', providers: [], scheduledAt: null, inputMethod: 'button' }]]);
+  assert.match(text(h.tree), /Одобрено: 1/); assert.match(text(h.tree), /created|В черновиках/);
 });
 test('manual scheduling requires explicit connected provider and converts Moscow date/time to UTC', async () => {
   const { h, calls } = ui({ socialAccounts: [account('telegram'), account('max', { connectionStatus: 'DISCONNECTED' })] });
   await change(h, 'Режим одобрения', 'manual');
-  assert.equal(button(h, 'Одобрить').props.disabled, true); assert.equal(button(h, 'MAX').props.disabled, true);
+  assert.equal(button(h, 'В черновики').props.disabled, true); assert.equal(button(h, 'MAX').props.disabled, true);
   await click(h, 'Telegram'); await change(h, 'Дата публикации', '2099-10-04'); await change(h, 'Время публикации', '10:00');
-  await click(h, 'Одобрить');
-  assert.deepEqual(calls.approve[0][1], { mode: 'manual', providers: ['telegram'], scheduledAt: '2099-10-04T07:00:00.000Z' });
+  await click(h, 'В черновики');
+  assert.deepEqual(calls.approve[0][1], { mode: 'manual', providers: ['telegram'], scheduledAt: '2099-10-04T07:00:00.000Z', inputMethod: 'button' });
 });
 test('manual Moscow midnight is valid even when its UTC date is the previous day', async () => {
   const { h, calls } = ui(); await change(h, 'Режим одобрения', 'manual'); await click(h, 'Telegram');
   await change(h, 'Дата публикации', '2099-10-04'); await change(h, 'Время публикации', '00:30');
-  await click(h, 'Одобрить'); assert.equal(calls.approve[0][1].scheduledAt, '2099-10-03T21:30:00.000Z');
+  await click(h, 'В черновики'); assert.equal(calls.approve[0][1].scheduledAt, '2099-10-03T21:30:00.000Z');
 });
 test('returning to next mode cannot approve stale preview while a new preview is loading', async () => {
   let count = 0; let resolve;
   const { h } = ui({ onPreview: async () => ++count === 1 ? { scheduledAt: '2099-10-04T07:00:00.000Z' } : new Promise(r => { resolve = r; }) });
   await change(h, 'Режим одобрения', 'next'); await click(h, 'Telegram');
-  assert.equal(button(h, 'Одобрить').props.disabled, false);
+  assert.equal(button(h, 'В черновики').props.disabled, false);
   await change(h, 'Режим одобрения', 'draft'); await change(h, 'Режим одобрения', 'next');
-  assert.equal(button(h, 'Одобрить').props.disabled, true);
-  resolve({ scheduledAt: null }); await h.settle(); assert.equal(button(h, 'Одобрить').props.disabled, true);
+  assert.equal(button(h, 'В черновики').props.disabled, true);
+  resolve({ scheduledAt: null }); await h.settle(); assert.equal(button(h, 'В черновики').props.disabled, true);
 });
 test('a slot conflict refreshes preview but keeps the card for another explicit approval', async () => {
   const approvals = []; let previewCount = 0;
   const { h } = ui({ onPreview: async () => ({ scheduledAt: ++previewCount === 1 ? '2099-10-04T07:00:00.000Z' : '2099-10-05T07:00:00.000Z' }), onApprove: async (source, approval) => { approvals.push([source, approval]); if (approvals.length === 1) throw Error('Слот занят'); return { id: 'saved' }; } });
-  await change(h, 'Режим одобрения', 'next'); await click(h, 'Telegram'); await click(h, 'Одобрить');
+  await change(h, 'Режим одобрения', 'next'); await click(h, 'Telegram'); await click(h, 'В черновики');
   assert.match(text(card(h)), /Текст a/); assert.equal(approvals.length, 1);
-  await click(h, 'Одобрить'); assert.equal(approvals[1][1].scheduledAt, '2099-10-05T07:00:00.000Z');
+  await click(h, 'В черновики'); assert.equal(approvals[1][1].scheduledAt, '2099-10-05T07:00:00.000Z');
 });
 test('next slot preview uses presets and inclusive 7/30 Moscow dates; no slot disables approval', async () => {
   const queries = [];
@@ -90,7 +90,7 @@ test('next slot preview uses presets and inclusive 7/30 Moscow dates; no slot di
   await change(h, 'Режим одобрения', 'next'); await click(h, 'Telegram');
   const first = queries.at(-1); assert.deepEqual(first.times, ['10:00']); assert.deepEqual(first.weekdays, [1,2,3,4,5,6,7]);
   assert.equal((Date.parse(first.endDate) - Date.parse(first.startDate)) / 86400000, 6);
-  assert.equal(button(h, 'Одобрить').props.disabled, true);
+  assert.equal(button(h, 'В черновики').props.disabled, true);
   await change(h, 'Горизонт планирования', '30'); await change(h, 'Расписание', 'weekdays10');
   const last = queries.at(-1); assert.deepEqual(last.weekdays, [1,2,3,4,5]);
   assert.equal((Date.parse(last.endDate) - Date.parse(last.startDate)) / 86400000, 29);
@@ -99,39 +99,39 @@ test('custom schedule validates weekdays and 1–4 unique times before preview',
   const { h, calls } = ui(); await change(h, 'Режим одобрения', 'next'); await click(h, 'Telegram'); await change(h, 'Расписание', 'custom');
   await change(h, 'Время слота 1', '10:00'); await click(h, 'Добавить время');
   await change(h, 'Время слота 2', '10:00');
-  assert.equal(button(h, 'Одобрить').props.disabled, true);
+  assert.equal(button(h, 'В черновики').props.disabled, true);
   await change(h, 'Время слота 2', '18:00');
   assert.deepEqual(calls.preview.at(-1).times, ['10:00', '18:00']);
   for (const label of ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']) await click(h, label);
-  assert.equal(button(h, 'Одобрить').props.disabled, true);
+  assert.equal(button(h, 'В черновики').props.disabled, true);
 });
 test('equivalent preset switches refresh preview instead of leaving next-slot approval loading', async () => {
   const {h,calls}=ui(); await change(h,'Режим одобрения','next'); await click(h,'Telegram');
-  const count=calls.preview.length; assert.equal(button(h,'Одобрить').props.disabled,false);
+  const count=calls.preview.length; assert.equal(button(h,'В черновики').props.disabled,false);
   await change(h,'Расписание','custom');
-  assert.equal(calls.preview.length,count+1); assert.equal(button(h,'Одобрить').props.disabled,false);
+  assert.equal(calls.preview.length,count+1); assert.equal(button(h,'В черновики').props.disabled,false);
   await change(h,'Расписание','daily10');
-  assert.equal(calls.preview.length,count+2); assert.equal(button(h,'Одобрить').props.disabled,false);
+  assert.equal(calls.preview.length,count+2); assert.equal(button(h,'В черновики').props.disabled,false);
 });
 test('approve failure retains card; in flight double click and skip cannot advance; success advances once', async () => {
   let resolve; let attempts = 0;
   const { h } = ui({ onApprove: async () => { attempts++; if (attempts === 1) throw Error('Не сохранено'); await new Promise(r => { resolve = r; }); return { id: 'saved' }; } });
-  await click(h, 'Одобрить'); assert.match(text(card(h)), /Текст a/); assert.match(text(h.tree), /Не сохранено/);
-  const approve = button(h, 'Одобрить').props.onClick; const promise = approve(); approve(); await h.settle();
-  assert.equal(button(h, 'Пропустить').props.disabled, true); assert.equal(attempts, 2); assert.match(text(card(h)), /Текст a/);
+  await click(h, 'В черновики'); assert.match(text(card(h)), /Текст a/); assert.match(text(h.tree), /Не сохранено/);
+  const approve = button(h, 'В черновики').props.onClick; const promise = approve(); approve(); await h.settle();
+  assert.equal(button(h, 'Позже').props.disabled, true); assert.equal(attempts, 2); assert.match(text(card(h)), /Текст a/);
   resolve(); await promise; await h.settle(); assert.match(text(card(h)), /Текст b/); assert.match(text(h.tree), /Одобрено: 1/);
 });
 test('reject invokes archive callback only, failure retains card and success does not increment approval', async () => {
   let attempts = 0; const sources = [];
   const { h, calls } = ui({ onReject: async value => { sources.push(value); if (++attempts === 1) throw Error('Изменена'); } });
-  await click(h, 'Отклонить'); assert.match(text(card(h)), /Текст a/);
-  await click(h, 'Отклонить'); assert.match(text(card(h)), /Текст b/);
+  await click(h, 'Не нравится'); assert.match(text(card(h)), /Текст a/);
+  await click(h, 'Не нравится'); assert.match(text(card(h)), /Текст b/);
   assert.equal(sources[0].updatedAt, '2026-10-04T09:00:00.000Z'); assert.deepEqual(calls.approve, []); assert.match(text(h.tree), /Одобрено: 0/);
 });
 test('global busy or unresolved pending blocks approval, rejection, skip and editing', async () => {
   for (const state of [{ busy: true }, { pending: true }]) {
     const { h, calls } = ui(state);
-    for (const label of ['Одобрить','Отклонить','Пропустить','Открыть редактор']) { assert.equal(button(h, label).props.disabled, true); await button(h, label).props.onClick(); }
+    for (const label of ['В черновики','Не нравится','Позже','Открыть редактор']) { assert.equal(button(h, label).props.disabled, true); await button(h, label).props.onClick(); }
     assert.deepEqual(calls.approve, []); assert.deepEqual(calls.reject, []); assert.deepEqual(calls.edit, []); assert.match(text(card(h)), /Текст a/);
   }
 });
@@ -155,6 +155,31 @@ test('arrow actions require card focus, and ignore input/media focus, repeats an
   await n.props.onKeyDown(event); await h.settle(); assert.equal(calls.approve.length, 1); assert.equal(prevented, 1);
 });
 test('empty start and exhausted review remain distinguishable', async () => {
-  assert.match(text(ui({ items: [] }).h.tree), /Нет готовых заготовок/);
-  const { h } = ui({ items: [item('only')] }); await click(h, 'Пропустить'); assert.match(text(h.tree), /Разбор завершён/); assert.match(text(h.tree), /Пропущено: 1/);
+  assert.match(text(ui({ items: [] }).h.tree), /Пока нет готовых заготовок/);
+  const { h } = ui({ items: [item('only')] }); await click(h, 'Позже'); assert.match(text(h.tree), /Разбор завершён/); assert.match(text(h.tree), /Пропущено: 1/);
+});
+
+test('horizontal direction lock moves and tilts card; insufficient travel springs back without decision', async () => {
+  const {h,calls}=ui(); const target={closest:()=>null}; let captures=0;
+  const e={pointerId:1,button:0,isPrimary:true,clientX:100,clientY:100,target,currentTarget:{setPointerCapture(){captures++;}}};
+  card(h).props.onPointerDown(e); assert.equal(captures,0,'capture only after horizontal direction lock');
+  card(h).props.onPointerMove({...e,clientX:179}); await h.settle();
+  assert.equal(card(h).props['data-motion'],'dragging'); assert.match(card(h).props.style.transform,/79px/); assert.equal(captures,1);
+  await card(h).props.onPointerUp({...e,clientX:179}); await h.settle();
+  assert.deepEqual(calls.approve,[]); assert.equal(card(h).props['data-motion'],'idle');
+});
+test('vertical lock and lost capture cancel the gesture with zero decisions', async () => {
+ const {h,calls}=ui(); const target={closest:()=>null}; const e={pointerId:1,button:0,isPrimary:true,clientX:100,clientY:100,target};
+ card(h).props.onPointerDown(e); card(h).props.onPointerMove({...e,clientY:112});
+ await card(h).props.onPointerUp({...e,clientX:220}); await h.settle(); assert.deepEqual(calls.approve,[]);
+ card(h).props.onPointerDown(e); card(h).props.onPointerMove({...e,clientX:180}); await h.settle();
+ card(h).props.onLostPointerCapture({...e,currentTarget:target}); await card(h).props.onPointerUp({...e,clientX:220}); await h.settle(); assert.deepEqual(calls.approve,[]);
+});
+
+test('touch implicit capture transferring from text to card does not cancel the horizontal decision',async()=>{
+ const {h,calls}=ui(); const child={closest:()=>null},element={closest:()=>null,setPointerCapture(){}};
+ const e={pointerId:1,button:0,isPrimary:true,clientX:100,clientY:100,target:child,currentTarget:element};
+ card(h).props.onPointerDown(e);card(h).props.onPointerMove({...e,clientX:130});await h.settle();
+ card(h).props.onLostPointerCapture({...e});
+ await card(h).props.onPointerUp({...e,target:element,clientX:200});await h.settle();assert.equal(calls.approve.length,1);
 });

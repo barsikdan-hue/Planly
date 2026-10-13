@@ -1,9 +1,10 @@
+import type { ReviewInputMethod } from './swipe-motion.ts';
 import type { LibraryItemDto } from '../contracts/library.ts';
 import { savePostInputSchema, type Provider } from '../contracts/planner.ts';
 import { blankPost, type ComposerPostInput } from '../planner.ts';
 import { readPendingCreation, submitPendingCreation } from './pending-creation.ts';
 import type { RecoveryStorage } from './editor-recovery.ts';
-export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null };
+export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null; inputMethod?: ReviewInputMethod };
 export function buildSwipeApproval(item: LibraryItemDto, approval: SwipeApproval): ComposerPostInput {
   if (item.status !== 'READY' || item.sourcePostId) throw new Error('Заготовка уже недоступна для одобрения. Обнови библиотеку.');
   const scheduled = approval.mode !== 'draft';

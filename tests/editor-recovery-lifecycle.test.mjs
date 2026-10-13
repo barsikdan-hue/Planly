@@ -26,8 +26,8 @@ function fixture({ cache = storage(), snapshot, mutation } = {}) {
   };
   globalThis.document = { hidden: false };
   globalThis.fetch = async (url, init) => {
-    if (url === '/api/bootstrap') return Response.json(snapshot ?? {
-      profile: { id: 'owner', displayName: 'Owner', email: 'fixture@example.test' }, posts: [], media: [], socialAccounts: [],
+    if (url === '/api/bootstrap') return Response.json(snapshot ? { libraryItems: [], ...snapshot } : {
+      profile: { id: 'owner', displayName: 'Owner', email: 'fixture@example.test' }, posts: [], media: [], socialAccounts: [], libraryItems: [],
     });
     if (mutation) return mutation(url, init);
     throw Error(`Unexpected fixture endpoint: ${url}`);

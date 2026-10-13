@@ -58,3 +58,17 @@ for(const action of ['onApprove','onReject'])test(`stale ${action} refreshes car
  await assert.rejects(h.find('SwipePlanner').props[action](item,{mode:'draft',providers:[],scheduledAt:null}));await h.settle();
  assert.equal(h.find('SwipePlanner').props.items[0].text,'Updated elsewhere');
 });
+
+test('Dashboard READY count starts review in Dashboard and returns to its origin without writes',async()=>{
+ const {h,requests}=await app(); h.find('Navigation').props.navigate('dashboard'); await h.settle();
+ const dashboard=h.find('Dashboard'); assert.equal(dashboard.props.readyCount,1);
+ dashboard.props.startReview(); await h.settle(); assert.ok(h.find('SwipePlanner')); assert.equal(h.find('Dashboard'),null);
+ assert.equal(window.location.hash,'dashboard'); h.find('SwipePlanner').props.onClose(); await h.settle(); assert.ok(h.find('Dashboard'));
+ assert.equal(requests.filter(r=>r.init?.method==='POST').length,0);
+});
+test('empty review Add opens existing Library editor without a write',async()=>{
+ const {h,requests}=await app(); h.find('ContentLibrary').props.startReview(); await h.settle();
+ h.find('SwipePlanner').props.onAddItem(); await h.settle();
+ assert.deepEqual(h.find('ContentLibrary').props.editorControl.editor,{title:'',text:'',mediaIds:[]});
+ assert.equal(requests.filter(r=>r.init?.method==='POST').length,0);
+});

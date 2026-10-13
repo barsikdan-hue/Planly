@@ -6,10 +6,13 @@ import type { Provider, SocialAccountDto } from '@/lib/contracts/planner';
 import { slotQuerySchema, type SlotQuery } from '@/lib/contracts/swipe-planner';
 import { slotPresets } from '@/lib/planner-slots';
 import { moscowDate, networkNames, type Media } from '@/lib/planner';
+import { swipeDirection, swipeDecision, swipeRotation, type ReviewInputMethod } from '@/lib/client/swipe-motion';
 import { orderedPostMedia } from '@/lib/post-media';
 
-export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null };
+export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null; inputMethod?: ReviewInputMethod };
 export type SwipePlannerProps = {
+    origin?: 'dashboard' | 'content';
+    onAddItem?: () => void;
     items: LibraryItemDto[];
     media: Media[];
     socialAccounts: SocialAccountDto[];
@@ -17,7 +20,7 @@ export type SwipePlannerProps = {
     pending?: boolean;
     onPreview: (query: SlotQuery) => Promise<{ scheduledAt: string | null }>;
     onApprove: (item: LibraryItemDto, approval: SwipeApproval) => Promise<{ id: string; scheduledAt?: string | null } | void>;
-    onReject: (item: LibraryItemDto) => Promise<unknown>;
+    onReject: (item: LibraryItemDto, inputMethod?: ReviewInputMethod) => Promise<unknown>;
     onEdit: (item: LibraryItemDto) => void;
     onClose: () => void;
     onOpenPost?: (id: string) => void;
@@ -32,7 +35,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const interactive = (target: EventTarget | null) => !!(target as Element | null)?.closest?.('button, input, textarea, select, a, video, audio, img, [contenteditable], [data-swipe-ignore]');
 const scheduleLabel = (iso: string) => new Date(iso).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'medium', timeStyle: 'short' });
 
-export function SwipePlanner({ items, media, socialAccounts, busy = false, pending = false, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost }: SwipePlannerProps) {
+export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost }: SwipePlannerProps) {
     const [now, setNow] = useState(Date.now);
     const [mode, setMode] = useState<SwipeApproval['mode']>('draft');
     const [selected, setSelected] = useState<Provider[]>([]);
@@ -53,7 +56,12 @@ export function SwipePlanner({ items, media, socialAccounts, busy = false, pendi
     const [refresh, setRefresh] = useState(0);
     const mounted = useRef(true);
     const locked = useRef(false);
-    const gesture = useRef<{ id: number; x: number; y: number } | null>(null);
+    const gesture = useRef<{ id: number; x: number; y: number; direction: 'pending' | 'horizontal' } | null>(null);
+    const cardRef = useRef<HTMLElement | null>(null);
+    const [heldCard, setHeldCard] = useState<LibraryItemDto | null>(null);
+    const [motion, setMotion] = useState<{ phase: 'idle' | 'dragging' | 'submitting' | 'exit'; x: number }>({ phase: 'idle', x: 0 });
+    const [archiveResult, setArchiveResult] = useState(false);
+    const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const previewCallback = useRef(onPreview);
     useEffect(() => { previewCallback.current = onPreview; }, [onPreview]);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -61,7 +69,10 @@ export function SwipePlanner({ items, media, socialAccounts, busy = false, pendi
     const blocked = busy || pending || working;
     const ready = items.filter(item => item.status === 'READY' && !item.sourcePostId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const [initialCount] = useState(() => ready.length);
-    const current = ready.find(item => !skipped.includes(item.id) && !finished.includes(item.id));
+    const nextCard = ready.find(item => !skipped.includes(item.id) && !finished.includes(item.id));
+    const current = working && heldCard ? heldCard : nextCard;
+    const focusNext = useRef(false);
+    useEffect(() => { if (focusNext.current) { focusNext.current = false; cardRef.current?.focus({ preventScroll: true }); } }, [current?.id]);
     const available = providers.filter(provider => socialAccounts.some(account => account.provider === provider && account.enabled && account.connectionStatus === 'CONNECTED'));
     const chosen = selected.filter(provider => available.includes(provider));
     const startDate = new Date(now + 3 * 3600000).toISOString().slice(0, 10);
@@ -84,48 +95,70 @@ export function SwipePlanner({ items, media, socialAccounts, busy = false, pendi
     const manualValid = manualDate && Number.isFinite(manualDate.getTime()) && new Date(manualDate.getTime() + 3 * 3600000).toISOString().slice(0, 10) === date && manualDate.getTime() > now;
     const scheduledAt = mode === 'draft' ? null : mode === 'manual' ? manualValid ? manualDate!.toISOString() : null : previewReady ? preview!.scheduledAt : null;
     const canApprove = !!current && !blocked && (mode === 'draft' || chosen.length > 0 && !!scheduledAt && Date.parse(scheduledAt) > now);
-    const decide = async (action: 'approve' | 'reject') => {
+    const decide = async (action: 'approve' | 'reject', inputMethod: ReviewInputMethod = 'button') => {
         if (!current || blocked || locked.current || action === 'approve' && !canApprove) return;
-        locked.current = true; setWorking(true); setError(null); gesture.current = null;
+        locked.current = true; setHeldCard(current); setWorking(true); setError(null); gesture.current = null; setMotion({ phase: 'submitting', x: 0 });
         try {
             if (action === 'approve') {
-                const saved = await onApprove(current, { mode, providers: [...chosen], scheduledAt });
+                const saved = await onApprove(current, { mode, providers: [...chosen], scheduledAt, inputMethod });
                 if (mounted.current) { setApproved(value => value + 1); if (saved) setResult(saved); }
             } else {
-                await onReject(current);
-                if (mounted.current) setRejected(value => value + 1);
+                await onReject(current, inputMethod);
+                if (mounted.current) { setRejected(value => value + 1); setArchiveResult(true); }
             }
+            if (!mounted.current) return;
+            setMotion({ phase: 'exit', x: action === 'approve' ? 800 : -800 });
+            if (!reducedMotion()) await new Promise(resolve => setTimeout(resolve, 180));
+            focusNext.current = true;
             if (mounted.current) { setFinished(value => [...value, current.id]); if (mode === 'next') { setPreview(null); setRefresh(value => value + 1); } }
         } catch (cause) {
             if (mounted.current) { setError(errorMessage(cause)); if (mode === 'next') { setPreview(null); setRefresh(value => value + 1); } }
         } finally {
             locked.current = false;
-            if (mounted.current) setWorking(false);
+            if (mounted.current) { setWorking(false); setMotion({ phase: 'idle', x: 0 }); }
         }
     };
-    const skip = () => { if (!current || blocked || locked.current) return; setSkipped(value => [...value, current.id]); setError(null); gesture.current = null; };
+    const skip = () => { if (!current || blocked || locked.current) return; focusNext.current = true; setSkipped(value => [...value, current.id]); setError(null); gesture.current = null; };
+    const cancelGesture = () => { gesture.current = null; if (!locked.current) setMotion({ phase: 'idle', x: 0 }); };
+    const hasSelection = () => typeof window !== 'undefined' && !!window.getSelection?.()?.toString();
     const pointerDown = (event: PointerEvent<HTMLElement>) => {
-        gesture.current = null;
-        if (blocked || locked.current || event.button !== 0 || event.isPrimary === false || interactive(event.target)) return;
-        gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-        event.currentTarget?.setPointerCapture?.(event.pointerId);
+        cancelGesture();
+        if (blocked || locked.current || event.button !== 0 || event.isPrimary === false || interactive(event.target) || hasSelection()) return;
+        gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, direction: 'pending' };
+    };
+    const pointerMove = (event: PointerEvent<HTMLElement>) => {
+        const start = gesture.current;
+        if (!start || start.id !== event.pointerId || locked.current) return;
+        if (hasSelection()) { cancelGesture(); return; }
+        const dx = event.clientX - start.x, dy = event.clientY - start.y;
+        if (start.direction === 'pending') {
+            const direction = swipeDirection(dx, dy);
+            if (direction === 'vertical') { cancelGesture(); return; }
+            if (direction === 'pending') return;
+            start.direction = 'horizontal';
+            event.currentTarget?.setPointerCapture?.(event.pointerId);
+        }
+        setMotion({ phase: 'dragging', x: dx });
     };
     const pointerUp = async (event: PointerEvent<HTMLElement>) => {
-        const start = gesture.current; gesture.current = null;
-        if (!start || start.id !== event.pointerId || interactive(event.target)) return;
-        const dx = event.clientX - start.x; const dy = event.clientY - start.y;
-        if (Math.abs(dx) >= 80 && Math.abs(dx) > Math.abs(dy)) await decide(dx > 0 ? 'approve' : 'reject');
+        const start = gesture.current;
+        cancelGesture();
+        if (!start || start.id !== event.pointerId || interactive(event.target) || hasSelection()) return;
+        const action = swipeDecision(event.clientX - start.x, event.clientY - start.y);
+        if (action) await decide(action, 'gesture');
     };
     const keyDown = async (event: KeyboardEvent<HTMLElement>) => {
         if (event.target !== event.currentTarget || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || blocked) return;
-        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); await decide(event.key === 'ArrowRight' ? 'approve' : 'reject'); }
+        if (event.key === ' ') { event.preventDefault(); skip(); return; }
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); await decide(event.key === 'ArrowRight' ? 'approve' : 'reject', 'keyboard'); }
     };
     return <section className="swipe-planner" aria-label="Разбор заготовок">
-        <div className="page-heading"><div><div className="eyebrow">SMART CONTENT QUEUE</div><h1>Разбор заготовок</h1><p>Каждую публикацию одобряешь отдельно.</p></div><Button variant="outline" disabled={working || busy} onClick={onClose}>Закрыть разбор</Button></div>
+        <div className="page-heading"><div><div className="eyebrow">SMART CONTENT QUEUE</div><h1>Разбор заготовок</h1><p>Каждую публикацию одобряешь отдельно.</p></div><Button variant="outline" disabled={working || busy} onClick={onClose}>{origin === 'dashboard' ? 'Назад на главную' : 'Назад в библиотеку'}</Button></div>
         <div className="swipe-progress" role="status">Одобрено: {approved} · Отклонено: {rejected} · Пропущено: {skipped.length} · Осталось: {ready.filter(item => !skipped.includes(item.id) && !finished.includes(item.id)).length}</div>
         {pending && <p className="notice" role="alert">Предыдущее создание ещё не подтверждено. Закрой разбор и повтори исходный запрос в уведомлении восстановления.</p>}
         {error && <p className="notice error" role="alert">{error}</p>}
-        {result && <p className="notice" role="status">Публикация создана{result.scheduledAt ? ` · ${scheduleLabel(result.scheduledAt)} МСК` : ''}. {onOpenPost && <Button variant="outline" disabled={blocked} onClick={() => onOpenPost(result.id)}>Открыть публикацию</Button>}</p>}
+        {archiveResult && <p className="notice" role="status">Не нравится · в архиве</p>}
+        {result && <p className="notice" role="status">{result.scheduledAt ? 'В календаре' : 'В черновиках'}{result.scheduledAt ? ` · ${scheduleLabel(result.scheduledAt)} МСК` : ''}. {onOpenPost && <Button variant="outline" disabled={blocked} onClick={() => onOpenPost(result.id)}>Открыть публикацию</Button>}</p>}
         {current ? <div className="swipe-layout">
             <div className="swipe-settings planner-card">
                 <h2>Куда отправить</h2><p className="mini-note">Время — московское (МСК). Настройки действуют в этом разборе.</p>
@@ -144,15 +177,15 @@ export function SwipePlanner({ items, media, socialAccounts, busy = false, pendi
                 <p className="swipe-destination" aria-live="polite">{mode === 'draft' ? 'Черновик · без расписания' : scheduledAt ? `${scheduleLabel(scheduledAt)} МСК` : 'Дата и время пока не выбраны'}{chosen.length > 0 ? ` · ${chosen.map(provider => networkNames[provider]).join(', ')}` : ''}</p>
             </div>
             <div className="swipe-review">
-                <article className="content-card swipe-card" tabIndex={0} aria-label={`Заготовка: ${current.title || 'Без названия'}`} aria-describedby="swipe-instructions" aria-busy={working} onPointerDown={pointerDown} onPointerUp={pointerUp} onPointerCancel={() => { gesture.current = null; }} onPointerMove={event => { const start = gesture.current; if (start && Math.abs(event.clientY - start.y) > 12 && Math.abs(event.clientY - start.y) >= Math.abs(event.clientX - start.x)) gesture.current = null; }} onKeyDown={keyDown}>
+                <article key={current.id} ref={cardRef} data-motion={motion.phase} style={{ transform: `translateX(${motion.x}px) rotate(${swipeRotation(motion.x)}deg)` }} className="content-card swipe-card" tabIndex={0} aria-label={`Заготовка: ${current.title || 'Без названия'}`} aria-describedby="swipe-instructions" aria-busy={working} onPointerDown={pointerDown} onPointerUp={pointerUp} onPointerCancel={cancelGesture} onLostPointerCapture={event => { if (event.target === event.currentTarget) cancelGesture(); }} onPointerMove={pointerMove} onKeyDown={keyDown}>
                     {current.mediaIds.length > 0 && <div className="library-media-preview" data-swipe-ignore>{orderedPostMedia(current.mediaIds, media).map(asset => asset.type.startsWith('video/') ? <video key={asset.id} src={asset.url} controls playsInline aria-label={asset.name}/> : <img key={asset.id} src={asset.url} alt={asset.name}/>)}</div>}
                     <div className="content-card-body"><span className="pill library-status-ready">Готово</span><h2>{current.title || current.text.split('\n')[0] || 'Без названия'}</h2><p className="swipe-text">{current.text || 'Заготовка с медиа'}</p><Button variant="outline" disabled={blocked} onClick={() => { if (!blocked && !locked.current) onEdit(current); }}>Открыть редактор</Button></div>
                 </article>
                 <p id="swipe-instructions" className="mini-note">Свайп вправо — одобрить, влево — отклонить. Стрелки работают, когда выбрана карточка.</p>
-                <div className="swipe-actions"><Button variant="outline" disabled={blocked} onClick={() => decide('reject')}>Отклонить</Button><Button variant="outline" disabled={blocked} onClick={skip}>Пропустить</Button><Button disabled={!canApprove} onClick={() => decide('approve')}>Одобрить</Button></div>
+                <div className="swipe-actions"><Button variant="outline" disabled={blocked} onClick={() => decide('reject')}>Не нравится</Button><Button variant="outline" disabled={blocked} onClick={skip}>Позже</Button><Button disabled={!canApprove} onClick={() => decide('approve')}>{mode === 'draft' ? 'В черновики' : 'В календарь'}</Button></div>
                 {working && <p role="status" className="mini-note">Сохраняем решение…</p>}
             </div>
-        </div> : <div className="planner-card empty-state"><h2>{initialCount === 0 && finished.length === 0 && skipped.length === 0 ? 'Нет готовых заготовок' : 'Разбор завершён'}</h2><p>Пропущенные заготовки появятся в следующем разборе. Отклонённые можно вернуть из архива библиотеки.</p></div>}
+        </div> : <div className="planner-card empty-state"><h2>{initialCount === 0 && finished.length === 0 && skipped.length === 0 ? 'Пока нет готовых заготовок' : 'Разбор завершён'}</h2><Button onClick={onAddItem}>Добавить заготовку</Button><p>Пропущенные заготовки появятся в следующем разборе. Отклонённые можно вернуть из архива библиотеки.</p></div>}
     </section>;
 }
 
