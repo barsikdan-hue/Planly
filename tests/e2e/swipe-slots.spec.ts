@@ -45,6 +45,20 @@ test('next conflict and parent busy release keep original slot until explicit re
  await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(card).toHaveAttribute('aria-label','Заготовка: Review b');expect(swipeFixture.decisions).toHaveLength(1);
  expect(JSON.parse(swipeFixture.requests[0].body).targets[0].scheduledAt).toBe('2099-01-01T07:00:00.000Z');expect(JSON.parse(swipeFixture.requests[1].body).targets[0].scheduledAt).toBe('2099-01-02T07:00:00.000Z');
 });
+test('Moscow midnight after actual Next conflict retains slot and GET count until explicit setup',async({page,swipeFixture})=>{
+ await page.clock.install({time:new Date('2030-01-01T20:59:50Z')});swipeFixture.slot='2030-01-02T07:00:00.000Z';swipeFixture.conflictOnce=true;
+ const queryDates:string[]=[];page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/planner-slots')queryDates.push(url.searchParams.get('startDate')!);});
+ await page.goto('/#content');await page.getByRole('button',{name:'Разобрать заготовки',exact:true}).click();await setupReview(page);
+ swipeFixture.slot='2030-01-03T07:00:00.000Z';await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Fixture manual slot occupied');
+ await page.clock.runFor(15_000);const card=page.locator('.swipe-card');await expect(card.locator('.swipe-destination')).toContainText('2 янв. 2030');expect(queryDates).toEqual(['2030-01-01']);expect(swipeFixture.requests).toHaveLength(1);expect(swipeFixture.decisions).toHaveLength(0);
+ await page.getByRole('button',{name:'Изменить расписание',exact:true}).click();await page.getByRole('button',{name:'Начать разбор',exact:true}).click();await expect(card.locator('.swipe-destination')).toContainText('3 янв. 2030');expect(queryDates).toEqual(['2030-01-01','2030-01-02']);
+});
+test('disconnected selected network is removed only by explicit owner action before MAX approval',async({page,swipeFixture})=>{
+ swipeFixture.scheduled=true;swipeFixture.maxConnected=true;await page.clock.install();await page.goto('/#content');await page.getByRole('button',{name:'Разобрать заготовки',exact:true}).click();await setupReview(page);
+ swipeFixture.telegramConnected=false;await page.clock.runFor(5_000);const telegram=page.getByRole('button',{name:'Telegram',exact:true});await expect(page.getByRole('button',{name:'В календарь',exact:true})).toBeDisabled();await expect(telegram).toHaveAttribute('aria-pressed','true');expect(swipeFixture.decisions).toHaveLength(0);
+ await page.getByRole('button',{name:'Изменить расписание',exact:true}).click();await page.getByRole('button',{name:'MAX',exact:true}).click();await expect(telegram).toBeEnabled();await telegram.click();await expect(telegram).toHaveAttribute('aria-pressed','false');await expect(telegram).toBeDisabled();
+ await page.getByRole('button',{name:'Начать разбор',exact:true}).click();await expect(page.locator('.swipe-card .swipe-destination')).toContainText('MAX');await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect.poll(()=>swipeFixture.decisions.length).toBe(1);expect(JSON.parse(swipeFixture.requests[0].body).targets.map((target:{provider:string})=>target.provider)).toEqual(['max']);await page.clock.runFor(200);
+});
 test('unknown committed response reload recovers original marked slot and UUID without a new approval',async({page,swipeFixture})=>{
  swipeFixture.loseResponse=true;await page.goto('/#content');await page.getByRole('button',{name:'Разобрать заготовки',exact:true}).click();await setupReview(page);
  await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(page.getByRole('button',{name:'Повторить сохранение',exact:true})).toBeVisible();

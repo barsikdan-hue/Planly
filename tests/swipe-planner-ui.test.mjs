@@ -123,6 +123,20 @@ test('parent busy toggles after a failed approval cannot silently replace the or
  await click(h,'В календарь');assert.equal(count,1);assert.match(text(card(h)),/4 окт\./);assert.match(text(h.tree),/Слот занят/);
  await click(h,'Обновить слот');assert.equal(count,2);assert.match(text(card(h)),/5 окт\./);
 });
+test('Moscow midnight after conflict preserves query window and original slot until explicit refresh',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:Date.parse('2030-01-01T20:59:50Z')});
+ const queries=[];const {h}=await ui({onPreview:async query=>{queries.push(query);return{scheduledAt:queries.length===1?'2030-01-02T07:00:00Z':'2030-01-03T07:00:00Z'};},onApprove:async()=>{throw Error('Слот занят');}});
+ await click(h,'В календарь');assert.equal(queries.length,1);
+ t.mock.timers.tick(15_000);await h.settle();assert.equal(queries.length,1);assert.match(text(card(h)),/2 янв\./);assert.equal(queries[0].startDate,'2030-01-01');
+ await click(h,'Обновить слот');assert.equal(queries.length,2);assert.equal(queries[1].startDate,'2030-01-02');assert.match(text(card(h)),/3 янв\./);
+});
+test('selected disconnected network can only be removed explicitly, enabling selected connected replacement',async()=>{
+ const {h,state,calls}=await ui();state.socialAccounts=[account('telegram',{connectionStatus:'DISCONNECTED'}),account('max')];h.render();await h.settle();
+ assert.equal(button(h,'Telegram').props['aria-pressed'],true);assert.equal(button(h,'В календарь').props.disabled,true);
+ await click(h,'Изменить расписание');await click(h,'MAX');assert.equal(button(h,'Telegram').props.disabled,false);
+ await click(h,'Telegram');assert.equal(button(h,'Telegram').props['aria-pressed'],false);assert.equal(button(h,'Telegram').props.disabled,true);
+ await click(h,'Начать разбор');await click(h,'В календарь');assert.deepEqual(calls.approve[0][1].providers,['max']);
+});
 test('next slot preview uses presets and inclusive 7/30 Moscow dates; no slot disables approval', async () => {
   const queries = [];
   const { h } = await ui({ onPreview: async q => { queries.push(q); return { scheduledAt: null }; } });
