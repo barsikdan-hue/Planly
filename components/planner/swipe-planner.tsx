@@ -37,7 +37,10 @@ const scheduleLabel = (iso: string) => new Date(iso).toLocaleString('ru-RU', { t
 
 export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost }: SwipePlannerProps) {
     const [now, setNow] = useState(Date.now);
-    const [mode, setMode] = useState<SwipeApproval['mode']>('draft');
+    const [startDate, setStartDate] = useState(todayMoscow);
+    const refreshWindow = () => setStartDate(todayMoscow());
+    const [mode, setMode] = useState<'manual' | 'next'>('next');
+    const [started, setStarted] = useState(false);
     const [selected, setSelected] = useState<Provider[]>([]);
     const [preset, setPreset] = useState<Preset>('daily10');
     const [days, setDays] = useState(7);
@@ -63,6 +66,7 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     const [archiveResult, setArchiveResult] = useState(false);
     const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const previewCallback = useRef(onPreview);
+    const previewAttempt = useRef<{ key: string; refresh: number } | null>(null);
     useEffect(() => { previewCallback.current = onPreview; }, [onPreview]);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
@@ -72,36 +76,45 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     const nextCard = ready.find(item => !skipped.includes(item.id) && !finished.includes(item.id));
     const current = working && heldCard ? heldCard : nextCard;
     const focusNext = useRef(false);
-    useEffect(() => { if (focusNext.current) { focusNext.current = false; cardRef.current?.focus({ preventScroll: true }); } }, [current?.id]);
+    useEffect(() => { if (focusNext.current) { focusNext.current = false; cardRef.current?.focus({ preventScroll: true }); } }, [current?.id, started]);
     const available = providers.filter(provider => socialAccounts.some(account => account.provider === provider && account.enabled && account.connectionStatus === 'CONNECTED'));
-    const chosen = selected.filter(provider => available.includes(provider));
-    const startDate = new Date(now + 3 * 3600000).toISOString().slice(0, 10);
+    const chosen = selected;
+    const accountsReady = chosen.length > 0 && chosen.every(provider => available.includes(provider));
     const schedule = preset === 'custom' ? { weekdays, times } : slotPresets[preset];
-    const rawQuery = { providers: chosen, startDate, endDate: endDate(startDate, days), weekdays: schedule.weekdays, times: schedule.times };
+    const rawQuery = { swipeReview: true, providers: chosen, startDate, endDate: endDate(startDate, days), weekdays: schedule.weekdays, times: schedule.times };
     const queryKey = mode === 'next' && slotQuerySchema.safeParse(rawQuery).success ? JSON.stringify(rawQuery) : '';
     const hasQuery = !!queryKey;
     useEffect(() => {
-        if (!queryKey || pending || busy) return;
+        if (!queryKey) { previewAttempt.current = null; return; }
+        if (pending || busy) return;
+        if (previewAttempt.current?.key === queryKey && previewAttempt.current.refresh === refresh) return;
+        const attempt = {key:queryKey,refresh};
+        previewAttempt.current = attempt;
         let cancelled = false;
+        let settled = false;
         void previewCallback.current(JSON.parse(queryKey) as SlotQuery).then(value => {
+            settled = true;
             if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: value.scheduledAt });
         }).catch(cause => {
+            settled = true;
             if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: null, error: errorMessage(cause) });
         });
-        return () => { cancelled = true; };
+        return () => { cancelled = true; if(!settled && previewAttempt.current === attempt) previewAttempt.current = null; };
     }, [queryKey, refresh, pending, busy]);
     const previewReady = !!queryKey && preview?.key === queryKey;
     const manualDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? moscowDate(date, time) : null;
-    const manualValid = manualDate && Number.isFinite(manualDate.getTime()) && new Date(manualDate.getTime() + 3 * 3600000).toISOString().slice(0, 10) === date && manualDate.getTime() > now;
-    const scheduledAt = mode === 'draft' ? null : mode === 'manual' ? manualValid ? manualDate!.toISOString() : null : previewReady ? preview!.scheduledAt : null;
-    const canApprove = !!current && !blocked && (mode === 'draft' || chosen.length > 0 && !!scheduledAt && Date.parse(scheduledAt) > now);
+    const manualValid = manualDate && Number.isFinite(manualDate.getTime()) && new Date(manualDate.getTime() + 3 * 3600000).toISOString().slice(0, 10) === date && manualDate.getTime() >= now+60_000;
+    const scheduledAt = mode === 'manual' ? manualValid ? manualDate!.toISOString() : null : previewReady ? preview!.scheduledAt : null;
+    const canStart = accountsReady && (mode === 'manual' ? !!manualValid : hasQuery);
+    const canApprove = started && !!current && !blocked && accountsReady && !!scheduledAt && Date.parse(scheduledAt) >= now+60_000;
     const decide = async (action: 'approve' | 'reject', inputMethod: ReviewInputMethod = 'button') => {
-        if (!current || blocked || locked.current || action === 'approve' && !canApprove) return;
+        if (!started || !current || blocked || locked.current) return;
+        if (action === 'approve' && (!canApprove || !scheduledAt || Date.parse(scheduledAt) < Date.now()+60_000)) { setError('Выбери подключённые сети и свободный слот не раньше чем через минуту (МСК).'); return; }
         locked.current = true; setHeldCard(current); setWorking(true); setError(null); gesture.current = null; setMotion({ phase: 'submitting', x: 0 });
         try {
             if (action === 'approve') {
                 const saved = await onApprove(current, { mode, providers: [...chosen], scheduledAt, inputMethod });
-                if (mounted.current) { setApproved(value => value + 1); if (saved) setResult(saved); }
+                if (mounted.current) { setApproved(value => value + 1); if (saved) setResult({ ...saved, scheduledAt: saved.scheduledAt ?? scheduledAt }); }
             } else {
                 await onReject(current, inputMethod);
                 if (mounted.current) { setRejected(value => value + 1); setArchiveResult(true); }
@@ -110,15 +123,15 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
             setMotion({ phase: 'exit', x: action === 'approve' ? 800 : -800 });
             if (!reducedMotion()) await new Promise(resolve => setTimeout(resolve, 180));
             focusNext.current = true;
-            if (mounted.current) { setFinished(value => [...value, current.id]); if (mode === 'next') { setPreview(null); setRefresh(value => value + 1); } }
+            if (mounted.current) { setFinished(value => [...value, current.id]); if (mode === 'next') { refreshWindow(); setPreview(null); setRefresh(value => value + 1); } }
         } catch (cause) {
-            if (mounted.current) { setError(errorMessage(cause)); if (mode === 'next') { setPreview(null); setRefresh(value => value + 1); } }
+            if (mounted.current) { setError(errorMessage(cause)); }
         } finally {
             locked.current = false;
             if (mounted.current) { setWorking(false); setMotion({ phase: 'idle', x: 0 }); }
         }
     };
-    const skip = () => { if (!current || blocked || locked.current) return; focusNext.current = true; setSkipped(value => [...value, current.id]); setError(null); gesture.current = null; };
+    const skip = () => { if (!started || !current || blocked || locked.current) return; refreshWindow(); focusNext.current = true; setSkipped(value => [...value, current.id]); setError(null); gesture.current = null; };
     const cancelGesture = () => { gesture.current = null; if (!locked.current) setMotion({ phase: 'idle', x: 0 }); };
     const hasSelection = () => typeof window !== 'undefined' && !!window.getSelection?.()?.toString();
     const pointerDown = (event: PointerEvent<HTMLElement>) => {
@@ -161,30 +174,31 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
         {result && <p className="notice" role="status">{result.scheduledAt ? 'В календаре' : 'В черновиках'}{result.scheduledAt ? ` · ${scheduleLabel(result.scheduledAt)} МСК` : ''}. {onOpenPost && <Button variant="outline" disabled={blocked} onClick={() => onOpenPost(result.id)}>Открыть публикацию</Button>}</p>}
         {current ? <div className="swipe-layout">
             <div className="swipe-settings planner-card">
-                <h2>Куда отправить</h2><p className="mini-note">Время — московское (МСК). Настройки действуют в этом разборе.</p>
-                <label htmlFor="swipe-mode">Режим одобрения</label><select id="swipe-mode" aria-label="Режим одобрения" className="form-input" value={mode} disabled={blocked} onChange={event => { setPreview(null); setMode(event.target.value as SwipeApproval['mode']); setError(null); }}><option value="draft">Черновик</option><option value="manual">Вручную</option><option value="next">Следующий слот</option></select>
-                <div className="network-choices" role="group" aria-label="Соцсети публикации">{providers.map(provider => <Button key={provider} variant={chosen.includes(provider) ? 'default' : 'outline'} aria-pressed={chosen.includes(provider)} disabled={blocked || !available.includes(provider)} onClick={() => { if (blocked || locked.current) return; setPreview(null); setSelected(value => value.includes(provider) ? value.filter(p => p !== provider) : [...value, provider]); }}>{networkNames[provider]}</Button>)}</div>
-                {chosen.length === 0 && <p className="mini-note">{mode === 'draft' ? 'Черновик можно сохранить без соцсетей.' : 'Выбери хотя бы одну подключённую соцсеть.'}</p>}
+                <h2>{started ? 'Расписание разбора' : 'Настрой разбор'}</h2><p className="mini-note">Время — московское (МСК). Настройки действуют в этом разборе.</p>
+                <label htmlFor="swipe-mode">Режим одобрения</label><select id="swipe-mode" aria-label="Режим одобрения" className="form-input" value={mode} disabled={blocked} onChange={event => { refreshWindow(); setPreview(null); setMode(event.target.value as 'manual' | 'next'); setError(null); }}><option value="manual">Вручную</option><option value="next">Следующий слот</option></select>
+                <div className="network-choices" role="group" aria-label="Соцсети публикации">{providers.map(provider => <Button key={provider} variant={chosen.includes(provider) ? 'default' : 'outline'} aria-pressed={chosen.includes(provider)} disabled={blocked || (!available.includes(provider) && !chosen.includes(provider))} onClick={() => { if (blocked || locked.current) return; refreshWindow(); setPreview(null); setSelected(value => value.includes(provider) ? value.filter(p => p !== provider) : [...value, provider]); }}>{networkNames[provider]}</Button>)}</div>
+                {chosen.length === 0 && <p className="mini-note">Выбери хотя бы одну подключённую соцсеть.</p>}
                 {available.length < 2 && <p className="mini-note">Недоступные сети подключи и включи в настройках.</p>}
                 {mode === 'manual' && <div className="date-inputs"><label>Дата публикации<input type="date" aria-label="Дата публикации" value={date} disabled={blocked} onChange={event => setDate(event.target.value)}/></label><label>Время публикации<input type="time" aria-label="Время публикации" value={time} disabled={blocked} onChange={event => setTime(event.target.value)}/></label></div>}
                 {mode === 'next' && <>
-                    <label htmlFor="swipe-preset">Расписание</label><select id="swipe-preset" className="form-input" aria-label="Расписание" value={preset} disabled={blocked} onChange={event => { setPreview(null); setPreset(event.target.value as Preset); setRefresh(value => value + 1); }}><option value="daily10">Ежедневно в 10:00</option><option value="weekdays10">Будни в 10:00</option><option value="daily10and18">Ежедневно в 10:00 и 18:00</option><option value="custom">Своё расписание</option></select>
-                    {preset === 'custom' && <><div className="swipe-weekdays" role="group" aria-label="Дни недели">{weekdayNames.map((label, index) => <Button key={label} variant={weekdays.includes(index + 1) ? 'default' : 'outline'} aria-pressed={weekdays.includes(index + 1)} disabled={blocked} onClick={() => { setPreview(null); setWeekdays(value => value.includes(index + 1) ? value.filter(day => day !== index + 1) : [...value, index + 1].sort((a, b) => a - b)); }}>{label}</Button>)}</div><div className="swipe-times">{times.map((value, index) => <label key={index}>Время слота {index + 1}<input type="time" aria-label={`Время слота ${index + 1}`} value={value} disabled={blocked} onChange={event => { setPreview(null); setTimes(current => current.map((time, i) => i === index ? event.target.value : time)); }}/>{times.length > 1 && <Button variant="ghost" disabled={blocked} aria-label={`Убрать время ${index + 1}`} onClick={() => { setPreview(null); setTimes(current => current.filter((_, i) => i !== index)); }}>Убрать</Button>}</label>)}</div><Button variant="outline" disabled={blocked || times.length >= 4} onClick={() => { setPreview(null); setTimes(value => [...value, '']); }}>Добавить время</Button></>}
-                    <label htmlFor="swipe-horizon">Горизонт планирования</label><select id="swipe-horizon" className="form-input" aria-label="Горизонт планирования" value={days} disabled={blocked} onChange={event => { setPreview(null); setDays(Number(event.target.value)); }}><option value="7">7 дней, включая сегодня</option><option value="30">30 дней, включая сегодня</option></select>
-                    <p className="mini-note">{!hasQuery ? 'Выбери сеть, дни недели и 1–4 разных времени.' : !previewReady ? 'Ищем свободный слот…' : preview?.error ? preview.error : !scheduledAt ? 'Свободных слотов нет. Измени расписание или выбери вручную / черновик.' : 'Слот проверится ещё раз при одобрении.'}</p>
-                    <Button variant="outline" disabled={blocked || !hasQuery} onClick={() => { setPreview(null); setRefresh(value => value + 1); }}>Обновить слот</Button>
+                    <label htmlFor="swipe-preset">Расписание</label><select id="swipe-preset" className="form-input" aria-label="Расписание" value={preset} disabled={blocked} onChange={event => { refreshWindow(); setPreview(null); setPreset(event.target.value as Preset); setRefresh(value => value + 1); }}><option value="daily10">Ежедневно в 10:00</option><option value="weekdays10">Будни в 10:00</option><option value="daily10and18">Ежедневно в 10:00 и 18:00</option><option value="custom">Своё расписание</option></select>
+                    {preset === 'custom' && <><div className="swipe-weekdays" role="group" aria-label="Дни недели">{weekdayNames.map((label, index) => <Button key={label} variant={weekdays.includes(index + 1) ? 'default' : 'outline'} aria-pressed={weekdays.includes(index + 1)} disabled={blocked} onClick={() => { refreshWindow(); setPreview(null); setWeekdays(value => value.includes(index + 1) ? value.filter(day => day !== index + 1) : [...value, index + 1].sort((a, b) => a - b)); }}>{label}</Button>)}</div><div className="swipe-times">{times.map((value, index) => <label key={index}>Время слота {index + 1}<input type="time" aria-label={`Время слота ${index + 1}`} value={value} disabled={blocked} onChange={event => { refreshWindow(); setPreview(null); setTimes(current => current.map((time, i) => i === index ? event.target.value : time)); }}/>{times.length > 1 && <Button variant="ghost" disabled={blocked} aria-label={`Убрать время ${index + 1}`} onClick={() => { refreshWindow(); setPreview(null); setTimes(current => current.filter((_, i) => i !== index)); }}>Убрать</Button>}</label>)}</div><Button variant="outline" disabled={blocked || times.length >= 4} onClick={() => { refreshWindow(); setPreview(null); setTimes(value => [...value, '']); }}>Добавить время</Button></>}
+                    <label htmlFor="swipe-horizon">Горизонт планирования</label><select id="swipe-horizon" className="form-input" aria-label="Горизонт планирования" value={days} disabled={blocked} onChange={event => { refreshWindow(); setPreview(null); setDays(Number(event.target.value)); }}><option value="7">7 дней, включая сегодня</option><option value="30">30 дней, включая сегодня</option></select>
+                    <p className="mini-note">{!hasQuery ? 'Выбери сеть, дни недели и 1–4 разных времени.' : !previewReady ? 'Ищем свободный слот…' : preview?.error ? preview.error : !scheduledAt ? 'Свободных слотов нет. Измени расписание или выбери время вручную.' : 'Слот проверится ещё раз при одобрении.'}</p>
+                    <Button variant="outline" disabled={blocked || !hasQuery} onClick={() => { refreshWindow(); setPreview(null); setRefresh(value => value + 1); }}>Обновить слот</Button>
                 </>}
-                <p className="swipe-destination" aria-live="polite">{mode === 'draft' ? 'Черновик · без расписания' : scheduledAt ? `${scheduleLabel(scheduledAt)} МСК` : 'Дата и время пока не выбраны'}{chosen.length > 0 ? ` · ${chosen.map(provider => networkNames[provider]).join(', ')}` : ''}</p>
+                <p className="swipe-destination" aria-live="polite">{scheduledAt ? `${scheduleLabel(scheduledAt)} МСК` : 'Дата и время пока не выбраны'}{chosen.length > 0 ? ` · ${chosen.map(provider => networkNames[provider]).join(', ')}` : ''}</p>
             </div>
-            <div className="swipe-review">
+            {started ? <div className="swipe-review">
+                <Button variant="outline" disabled={blocked} onClick={() => { setStarted(false); refreshWindow(); setPreview(null); setRefresh(value=>value+1); setError(null); }}>Изменить расписание</Button>
                 <article key={current.id} ref={cardRef} data-motion={motion.phase} style={{ transform: `translateX(${motion.x}px) rotate(${swipeRotation(motion.x)}deg)` }} className="content-card swipe-card" tabIndex={0} aria-label={`Заготовка: ${current.title || 'Без названия'}`} aria-describedby="swipe-instructions" aria-busy={working} onPointerDown={pointerDown} onPointerUp={pointerUp} onPointerCancel={cancelGesture} onLostPointerCapture={event => { if (event.target === event.currentTarget) cancelGesture(); }} onPointerMove={pointerMove} onKeyDown={keyDown}>
                     {current.mediaIds.length > 0 && <div className="library-media-preview" data-swipe-ignore>{orderedPostMedia(current.mediaIds, media).map(asset => asset.type.startsWith('video/') ? <video key={asset.id} src={asset.url} controls playsInline aria-label={asset.name}/> : <img key={asset.id} src={asset.url} alt={asset.name}/>)}</div>}
-                    <div className="content-card-body"><span className="pill library-status-ready">Готово</span><h2>{current.title || current.text.split('\n')[0] || 'Без названия'}</h2><p className="swipe-text">{current.text || 'Заготовка с медиа'}</p><Button variant="outline" disabled={blocked} onClick={() => { if (!blocked && !locked.current) onEdit(current); }}>Открыть редактор</Button></div>
+                    <div className="content-card-body"><p className="swipe-destination">{scheduledAt ? `${scheduleLabel(scheduledAt)} МСК` : 'Свободный слот пока недоступен'} · {chosen.map(provider => networkNames[provider]).join(', ')}</p><span className="pill library-status-ready">Готово</span><h2>{current.title || current.text.split('\n')[0] || 'Без названия'}</h2><p className="swipe-text">{current.text || 'Заготовка с медиа'}</p><Button variant="outline" disabled={blocked} onClick={() => { if (!blocked && !locked.current) onEdit(current); }}>Открыть редактор</Button></div>
                 </article>
                 <p id="swipe-instructions" className="mini-note">Свайп вправо — одобрить, влево — отклонить. Стрелки работают, когда выбрана карточка.</p>
-                <div className="swipe-actions"><Button variant="outline" disabled={blocked} onClick={() => decide('reject')}>Не нравится</Button><Button variant="outline" disabled={blocked} onClick={skip}>Позже</Button><Button disabled={!canApprove} onClick={() => decide('approve')}>{mode === 'draft' ? 'В черновики' : 'В календарь'}</Button></div>
+                <div className="swipe-actions"><Button variant="outline" disabled={blocked} onClick={() => decide('reject')}>Не нравится</Button><Button variant="outline" disabled={blocked} onClick={skip}>Позже</Button><Button disabled={!canApprove} onClick={() => decide('approve')}>В календарь</Button></div>
                 {working && <p role="status" className="mini-note">Сохраняем решение…</p>}
-            </div>
+            </div> : <div className="planner-card"><p>Выбери сети и расписание перед первой карточкой. Без календаря доступны «Не нравится» и «Позже».</p><Button disabled={blocked} onClick={() => { if (!blocked) { refreshWindow(); setStarted(true); setError(canStart ? null : 'Для одобрения выбери подключённые сети и корректное расписание.'); focusNext.current = true; } }}>Начать разбор</Button></div>}
         </div> : <div className="planner-card empty-state"><h2>{initialCount === 0 && finished.length === 0 && skipped.length === 0 ? 'Пока нет готовых заготовок' : 'Разбор завершён'}</h2><Button onClick={onAddItem}>Добавить заготовку</Button><p>Пропущенные заготовки появятся в следующем разборе. Отклонённые можно вернуть из архива библиотеки.</p></div>}
     </section>;
 }

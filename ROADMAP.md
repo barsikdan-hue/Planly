@@ -131,8 +131,8 @@ Completed goal: conveniently store content prepared outside Planly. Prepared con
 ### Swipe Planner 2.0 delivery (owner-approved PR42, 2026-10-13)
 
 - Task 1 adds the Dashboard READY queue, origin return, existing Library editor entry, native card motion and owner-generation guards. Local fixture verification is recorded separately; it does not establish deployed acceptance.
-- This intermediate UI keeps draft/manual/next modes. The positive action says «В черновики» for draft and «В календарь» for scheduling; each decision still needs explicit approval.
-- Task 2 safe future-slot setup and Task 3 transactional feedback/private export remain dependent stages. Merge, deploy, production migration and provider sends require the owner gate.
+- Task 2 replaces new Swipe draft approval with explicit session setup, default next free slot, optional manual time and Moscow time on each card. Networks stay explicitly selected; skip/reject remain available when scheduling is unavailable. New approvals carry an immutable Swipe marker, require a free minute on connected locked accounts and a fresh server cutoff of at least 60 seconds; marked POST originals/replays never run the inline scheduler. Legacy unmarked pending requests retain their original recovery payload and UUID.
+- Task 2 local evidence and staged limitations are recorded in `.superpowers/sdd/2026-10-13-swipe-planner-2/task-2-report.md`. GitHub CI/Critic and production acceptance are separate gates; Task 3 transactional feedback/private export remains dependent. Merge, deploy, production migration and provider sends require the owner gate.
 
 ## Later-phase boundaries
 

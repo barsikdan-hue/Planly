@@ -252,3 +252,61 @@ test('planner/source conflicts have explicit precommit HTTP codes', async () => 
   assert.deepEqual(await apiError(new mod.PlannerSlotConflictError()).json(), { error: new mod.PlannerSlotConflictError().message, code: 'PLANNER_SLOT_CONFLICT' });
   assert.equal(apiError(new mod.LibrarySourceStaleError()).status, 409);
 });
+
+test('marked cutoff accepts exactly sixty seconds and rejects fifty-nine; scoped preview preserves ordinary cutoff', async t => {
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2030-01-01T06:59:00Z')});
+  const opts={...await options(),creationKey:'77777777-7777-4777-8777-777777777777',swipeReview:{inputMethod:'button' as const}};
+  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:undefined}),{name:'ZodError'});
+  await assert.rejects(()=>createPost(owner,{...input,targets:[{...input.targets[0],scheduledAt:'2030-01-01T06:59:59Z'}]},opts),{name:'PlannerSlotConflictError'});
+  const {previewPlannerSlot}=await server();
+  t.mock.timers.setTime(Date.parse('2030-01-01T06:59:01Z'));
+  assert.equal((await previewPlannerSlot(owner,query,new Date())).scheduledAt,'2030-01-01T07:00:00.000Z');
+  assert.equal((await previewPlannerSlot(owner,{...query,swipeReview:true},new Date())).scheduledAt,'2030-01-01T15:00:00.000Z');
+  t.mock.timers.setTime(Date.parse('2030-01-01T06:59:00Z'));
+  const saved=await createPost(owner,input,opts);
+  t.mock.timers.setTime(Date.parse('2031-01-01T00:00:00Z'));
+  await getDb().update(socialAccounts).set({enabled:false}).where(eq(socialAccounts.id,'slot-tg'));
+  assert.equal((await createPost(owner,input,opts)).id,saved.id);
+  await assert.rejects(()=>createPost(owner,input,{...opts,swipeReview:{inputMethod:'keyboard'}}),{name:'CreationConflictError'});
+  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:'88888888-8888-4888-8888-888888888888'}),{name:'LibrarySourceConflictError'});
+});
+
+async function waitForLock(gate: Client, table: string) {
+ const deadline=performance.now()+5000;
+ while(performance.now()<deadline){
+  await gate.query('SELECT pg_stat_clear_snapshot()');
+  const result=await gate.query("SELECT query FROM pg_stat_activity WHERE wait_event_type='Lock' AND query ILIKE $1 AND query ILIKE '%for update%' AND datname=current_database()",[`%${table}%`]);
+  if(result.rows.length) return String(result.rows[0].query);
+  await delay(20);
+ }
+ assert.fail(`Expected proven native ${table} lock wait`);
+}
+test('marked selected account locks observe disconnect committed while waiting, in sorted ID order',native,async()=>{
+ const opts={...await options(),creationKey:'99999999-9999-4999-8999-999999999999',swipeReview:{inputMethod:'gesture' as const}};
+ const both={...input,targets:[{provider:'telegram' as const,scheduledAt:input.targets[0].scheduledAt,textOverride:null},{provider:'max' as const,scheduledAt:input.targets[0].scheduledAt,textOverride:null}]};
+ const gate=new Client({connectionString:process.env.DATABASE_URL});await gate.connect();let pending:Promise<unknown>|undefined;
+ try{
+  await gate.query('BEGIN');await gate.query('SELECT id FROM social_accounts WHERE id=$1 FOR UPDATE',['slot-max']);
+  pending=createPost(owner,both,opts).catch(error=>error);
+  const waiting=await waitForLock(gate,'social_accounts');assert.match(waiting,/order by "social_accounts"\."id" asc for update/i);
+  await gate.query("UPDATE social_accounts SET connection_status='DISCONNECTED' WHERE id=$1",['slot-max']);await gate.query('COMMIT');
+  assert.equal((await pending as Error).name,'PlannerAccountUnavailableError');
+  assert.deepEqual(await getDb().select().from(posts),[]);assert.deepEqual(await getDb().select().from(postTargets),[]);assert.deepEqual(await getDb().select().from(publications),[]);assert.equal((await listLibraryItems(owner))[0].status,'READY');
+ }finally{await gate.query('ROLLBACK');await pending;await gate.end();}
+});
+test('marked cutoff uses fresh clock after proven account lock wait',native,async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2030-01-01T06:58:59Z')});
+ const opts={...await options(),creationKey:'abababab-abab-4bab-8bab-abababababab',swipeReview:{inputMethod:'button' as const}};
+ const gate=new Client({connectionString:process.env.DATABASE_URL});await gate.connect();let pending:Promise<unknown>|undefined;
+ try{
+  await gate.query('BEGIN');await gate.query('SELECT id FROM social_accounts WHERE id=$1 FOR UPDATE',['slot-tg']);
+  pending=createPost(owner,input,opts).catch(error=>error);await waitForLock(gate,'social_accounts');
+  t.mock.timers.setTime(Date.parse('2030-01-01T06:59:01Z'));await gate.query('COMMIT');
+  assert.equal((await pending as Error).name,'PlannerSlotConflictError');assert.deepEqual(await getDb().select().from(posts),[]);assert.equal((await listLibraryItems(owner))[0].status,'READY');
+ }finally{await gate.query('ROLLBACK');await pending;await gate.end();}
+});
+test('two marked manual contenders reserve one minute, including seconds, without rescheduling',native,async()=>{
+ const opts=await Promise.all([options(),options()]);
+ const results=await Promise.allSettled(opts.map((option,index)=>createPost(owner,{...input,targets:[{...input.targets[0],scheduledAt:index?'2030-01-01T07:00:30Z':input.targets[0].scheduledAt}]},{...option,creationKey:index?'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd':'dededede-dede-4ede-8ede-dededededede',swipeReview:{inputMethod:'button'}})));
+ assert.equal(results.filter(x=>x.status==='fulfilled').length,1);const failed=results.find(x=>x.status==='rejected');assert.equal(failed?.reason.name,'PlannerSlotConflictError');assert.equal((await getDb().select().from(posts)).length,1);
+});

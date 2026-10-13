@@ -98,6 +98,7 @@ export function loadLibraryItems(): Promise<LibraryItemDto[]> {
 export function loadPlannerSlot(query: SlotQuery): Promise<{ scheduledAt: string | null }> {
   const params = new URLSearchParams({providers:query.providers.join(','),startDate:query.startDate,endDate:query.endDate,
     weekdays:query.weekdays.join(','),times:query.times.join(',')});
+  if(query.swipeReview !== undefined) params.set('swipeReview',String(query.swipeReview));
   return request(`/api/planner-slots?${params}`);
 }
 export function archiveLibraryItem(id: string, expectedUpdatedAt: string): Promise<LibraryItemDto> {

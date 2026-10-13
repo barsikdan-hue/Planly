@@ -4,7 +4,7 @@ import {fixture,cleanup,item,deferred,find,text} from './helpers/library-editor-
 import {writePendingCreation,readPendingCreation} from '../lib/client/pending-creation.ts';
 import {blankPost} from '../lib/planner.ts';
 afterEach(cleanup);
-const approval={mode:'draft',providers:[],scheduledAt:null};
+const approval={mode:'next',providers:['telegram'],scheduledAt:'2099-01-01T07:00:00Z'};
 const saved=(id)=>Response.json({id,baseText:'Server text',status:'DRAFT',targets:[],mediaIds:[],createdAt:new Date(0).toISOString(),updatedAt:new Date(0).toISOString()});
 for(const action of ['onApprove','onReject','retry'])for(const failure of [false,true])test(`late owner A ${action} failure=${failure} cannot apply cards or release owner B busy lock`,async()=>{
  const gateA=deferred(),gateB=deferred(),pollGate=deferred(); let calls=0;

@@ -17,7 +17,7 @@ import { validatePostRelations } from './post-relations.ts';
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
-import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts } from './planner-slots.ts';
+import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts, SwipeApprovalValidationError } from './planner-slots.ts';
 import { slotMinuteKey } from '../planner-slots.ts';
 
 const providerOrder = { telegram: 0, max: 1, vk: 2 } as const;
@@ -28,6 +28,7 @@ type PostPersistenceOptions = {
   sourceLibraryItemId?: string;
   sourceLibraryUpdatedAt?: string;
   requireFreeSlot?: boolean;
+  swipeReview?: import('../contracts/planner.ts').SwipeReview;
 };
 
 async function mirrorQueueBestEffort(
@@ -108,10 +109,11 @@ export async function createPost(
   options: PostPersistenceOptions = {},
 ): Promise<PostDto> {
   const input = savePostInputSchema.parse(rawInput);
-  const { sourceLibraryItemId, sourceLibraryUpdatedAt, requireFreeSlot } = createPostSourceSchema.parse(options);
+  const { sourceLibraryItemId, sourceLibraryUpdatedAt, requireFreeSlot, swipeReview } = createPostSourceSchema.parse(options);
   const postId = randomUUID();
   const creationKey = options.creationKey === undefined ? null : creationKeySchema.parse(options.creationKey);
-  const inputHash = creationKey ? creationInputHash(input, sourceLibraryItemId, { sourceLibraryUpdatedAt, requireFreeSlot }) : null;
+  if (swipeReview && !creationKey) throw new SwipeApprovalValidationError([{code:'custom',path:['creationKey'],message:'Swipe approval requires an immutable operation key'}]);
+  const inputHash = creationKey ? creationInputHash(input, sourceLibraryItemId, { sourceLibraryUpdatedAt, requireFreeSlot, swipeReview }) : null;
   const db = getDb();
 
   const result = await db.transaction(async tx => {
@@ -142,7 +144,10 @@ export async function createPost(
         .where(and(eq(posts.sourceLibraryItemId, sourceLibraryItemId), eq(posts.userId, userId))).limit(1);
       // Returning a USED source is a lookup: preserve the canonical key/hash and
       // leave any fresh key unreserved, as decided by the owner.
-      if (linked) return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
+      if (linked) {
+        if (swipeReview) throw new LibrarySourceConflictError('Library source already converted');
+        return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
+      }
       if (sourceLibraryUpdatedAt !== undefined && source.updatedAt.getTime() !== Date.parse(sourceLibraryUpdatedAt)) throw new LibrarySourceStaleError();
       if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
       if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
@@ -150,10 +155,11 @@ export async function createPost(
     const schedules = input.targets.map(target => target.scheduledAt);
     if (requireFreeSlot && (input.status !== 'READY' || !schedules.length || schedules.some(value => value === null)
       || new Set(schedules.map(value => value === null ? null : Date.parse(value))).size !== 1)) {
-      throw new ZodError([{ code: 'custom', path: ['targets'], message: 'Free-slot approval requires READY with identical nonnull target times' }]);
+      const ValidationError = swipeReview ? SwipeApprovalValidationError : ZodError;
+      throw new ValidationError([{ code: 'custom', path: ['targets'], message: 'Free-slot approval requires READY with identical nonnull target times' }]);
     }
     if (requireFreeSlot || (sourceLibraryUpdatedAt !== undefined && schedules.some(value => value !== null))) {
-      await requirePlannerAccounts(tx, userId, input.targets.map(target => target.provider));
+      await requirePlannerAccounts(tx, userId, input.targets.map(target => target.provider), !!swipeReview);
       if (schedules.some(value => value !== null && Date.parse(value) <= Date.now())) throw new PlannerSlotConflictError();
     }
     if (requireFreeSlot) {
@@ -162,6 +168,7 @@ export async function createPost(
     }
     const accounts = await validatePostRelations(tx, userId, input);
     const now = new Date();
+    if (swipeReview && schedules.some(value => value !== null && Date.parse(value) < now.getTime()+60_000)) throw new PlannerSlotConflictError();
     const inserted = await tx.insert(posts).values({
       id: postId,
       userId,

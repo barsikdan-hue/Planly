@@ -5,7 +5,7 @@ import { CreationConflictError } from './post-idempotency.ts';
 import { LibraryCreationConflictError, LibraryCreationDeletedError } from './library-creation.ts';
 import { PostEditConflictError } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
-import { LibrarySourceStaleError, PlannerAccountUnavailableError, PlannerSlotConflictError } from './planner-slots.ts';
+import { LibrarySourceStaleError, PlannerAccountUnavailableError, PlannerSlotConflictError, SwipeApprovalValidationError } from './planner-slots.ts';
 
 export function json(data: unknown, status = 200): Response {
   return Response.json(data, { status });
@@ -14,6 +14,7 @@ export function json(data: unknown, status = 200): Response {
 export function apiError(error: unknown): Response {
   if (error instanceof UnauthorizedError) return json({ error: 'Unauthorized' }, 401);
   if (error instanceof SyntaxError) return json({ error: 'Malformed JSON' }, 400);
+  if (error instanceof SwipeApprovalValidationError) return json({error:'Validation failed',code:'SWIPE_APPROVAL_INVALID',issues:error.issues},422);
   if (error instanceof ZodError) return json({ error: 'Validation failed', issues: error.issues }, 422);
   if (error instanceof PublicationContentError) return json({ error: error.message, code: error.code }, 422);
   if (error instanceof CreationConflictError) return json({ error: error.message, code: 'CREATION_KEY_CONFLICT' }, 409);

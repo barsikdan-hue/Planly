@@ -1,4 +1,4 @@
-import { test, expect, reviewText, reviewTail } from './swipe-fixture';
+import { test, expect, reviewText, reviewTail, setupReview } from './swipe-fixture';
 
 test('complete Swipe text is readable through the last line without changing Library teasers', async ({ page, swipeFixture }, testInfo) => {
   await page.goto('/#content');
@@ -13,7 +13,7 @@ test('complete Swipe text is readable through the last line without changing Lib
   expect(await publicationPreview.evaluate(element => ({ height: element.clientHeight,
     overflow: getComputedStyle(element).overflow, clamp: getComputedStyle(element).webkitLineClamp }))).toEqual(teaser);
   await page.getByRole('tab', { name: 'Заготовки', exact: true }).click();
-  await page.getByRole('button', { name: 'Разобрать заготовки', exact: true }).click();
+  await page.getByRole('button', { name: 'Разобрать заготовки', exact: true }).click(); await setupReview(page);
   const text = page.locator('.swipe-text');
   await expect(text).toHaveText(reviewText);
   await text.scrollIntoViewIfNeeded();
@@ -54,7 +54,7 @@ test('complete Swipe text is readable through the last line without changing Lib
 
 test('Swipe gestures and decision buttons still work from the review text', async ({ page, swipeFixture }, testInfo) => {
   await page.goto('/#content');
-  await page.getByRole('button', { name: 'Разобрать заготовки', exact: true }).click();
+  await page.getByRole('button', { name: 'Разобрать заготовки', exact: true }).click(); await setupReview(page);
   const review = page.locator('.swipe-planner');
   const card = page.locator('.swipe-card');
   const swipe = async (distance: number) => {
@@ -78,7 +78,7 @@ test('Swipe gestures and decision buttons still work from the review text', asyn
   await expect(card).toHaveAttribute('aria-label', 'Заготовка: Review c');
   await swipe(-105);
   await expect(card).toHaveAttribute('aria-label', 'Заготовка: Review d');
-  await review.getByRole('button', { name: 'В черновики', exact: true }).click();
+  await review.getByRole('button', { name: 'В календарь', exact: true }).click();
   await expect(review.getByRole('heading', { name: 'Разбор завершён', exact: true })).toBeVisible();
   expect(swipeFixture.decisions.map(({ action, itemId }) => ({ action, itemId }))).toEqual([
     { action: 'approve', itemId: 'a' }, { action: 'reject', itemId: 'b' },
