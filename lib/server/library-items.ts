@@ -15,6 +15,8 @@ import {
 import { LibrarySourceStaleError, lockOwnerSchedule } from './planner-slots.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibraryCreationConflictError, LibraryCreationDeletedError, libraryCreationInputHash } from './library-creation.ts';
+import { swipeDislikeSchema, type SwipeDislike } from '../contracts/swipe-feedback.ts';
+import { captureSwipeSource, dislikeRequestHash, readSwipeReceipt, recordSwipeDecision, DecisionResultDeletedError } from './swipe-feedback.ts';
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
@@ -139,9 +141,20 @@ export async function deleteLibraryItem(userId: string, id: string): Promise<voi
   });
 }
 
-export async function archiveLibraryItem(userId: string, id: string, expectedUpdatedAt: string): Promise<LibraryItemDto> {
+export async function archiveLibraryItem(userId: string, id: string, expectedUpdatedAt: string, rawIntent?: SwipeDislike): Promise<LibraryItemDto> {
   const input = archiveLibraryItemInputSchema.parse({ status: 'ARCHIVED', expectedUpdatedAt });
-  await getDb().transaction(async tx => {
+  const intent=rawIntent ? swipeDislikeSchema.parse(rawIntent) : undefined;
+  const hash=intent ? dislikeRequestHash(id,expectedUpdatedAt,intent) : undefined;
+  const result=await getDb().transaction(async tx => {
+    if(intent) {
+      await lockOwnerSchedule(tx,userId);
+      const receipt=await readSwipeReceipt(tx,userId,intent.operationId,hash!,'DISLIKE');
+      if(receipt){
+        const [owned]=await tx.select({id:libraryItems.id}).from(libraryItems).where(and(eq(libraryItems.id,receipt.sourceId),eq(libraryItems.userId,userId))).limit(1).for('update');
+        if(!owned) throw new DecisionResultDeletedError();
+        return readOwnedLibraryItem(userId,owned.id,tx);
+      }
+    }
     const [owned] = await tx.select().from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
     if (!owned || owned.updatedAt.getTime() !== Date.parse(input.expectedUpdatedAt)) throw new LibrarySourceStaleError();
@@ -149,8 +162,13 @@ export async function archiveLibraryItem(userId: string, id: string, expectedUpd
     const [linked] = await tx.select({ id: posts.id }).from(posts)
       .where(and(eq(posts.sourceLibraryItemId, id), eq(posts.userId, userId))).limit(1);
     if (linked) throw new LibrarySourceConflictError('Used library item cannot be rejected');
+    const snapshot=intent ? await captureSwipeSource(tx,userId,owned) : undefined;
     await tx.update(libraryItems).set({ status: 'ARCHIVED', updatedAt: new Date(Math.max(Date.now(), owned.updatedAt.getTime() + 1)) })
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));
+    if(intent && snapshot){
+      await recordSwipeDecision(tx,{...snapshot,userId,operationId:intent.operationId,requestHash:hash!,decision:'DISLIKE',origin:'swipe-planner',inputMethod:intent.inputMethod,confirmedAt:new Date(),providers:[],scheduledAt:null,resultPostId:null});
+      return readOwnedLibraryItem(userId,id,tx);
+    }
   });
-  return readOwnedLibraryItem(userId, id);
+  return result ?? readOwnedLibraryItem(userId, id);
 }

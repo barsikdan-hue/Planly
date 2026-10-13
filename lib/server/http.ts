@@ -1,4 +1,5 @@
 import { ZodError } from 'zod';
+import { DecisionResultDeletedError } from './swipe-feedback.ts';
 import { UnauthorizedError } from './auth/owner.ts';
 import { PublicationContentError } from '../publication-content.ts';
 import { CreationConflictError } from './post-idempotency.ts';
@@ -12,6 +13,7 @@ export function json(data: unknown, status = 200): Response {
 }
 
 export function apiError(error: unknown): Response {
+  if(error instanceof DecisionResultDeletedError) return json({error:error.message,code:'DECISION_RESULT_DELETED'},410);
   if (error instanceof UnauthorizedError) return json({ error: 'Unauthorized' }, 401);
   if (error instanceof SyntaxError) return json({ error: 'Malformed JSON' }, 400);
   if (error instanceof SwipeApprovalValidationError) return json({error:'Validation failed',code:'SWIPE_APPROVAL_INVALID',issues:error.issues},422);

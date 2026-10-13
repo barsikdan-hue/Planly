@@ -59,7 +59,8 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
           'SWIPE_APPROVAL_INVALID','PLANNER_ACCOUNT_UNAVAILABLE','TELEGRAM_CONTENT_LIMIT','TELEGRAM_MEDIA_FORMAT','TELEGRAM_MEDIA_SIZE','TELEGRAM_PHOTO_DIMENSIONS',
           'MAX_CONTENT','MAX_MEDIA','VK_CONTENT_LIMIT','VK_MEDIA_FORMAT','VK_MEDIA_SIZE',
         ].includes(String(error.body.code)));
-      const rejected = pending.input.swipeReview ? sourceRejected || typedValidation : [400,404,422].includes(error.status) || sourceRejected;
+      const terminal = error.status===410 && error.body && typeof error.body==='object' && 'code' in error.body && error.body.code==='DECISION_RESULT_DELETED';
+      const rejected = pending.input.swipeReview ? sourceRejected || typedValidation || terminal : [400,404,422].includes(error.status) || sourceRejected;
       if ((!options.isCurrent || options.isCurrent()) && rejected) completePendingCreation(storage, ownerId, pending.key);
     }
     throw error;

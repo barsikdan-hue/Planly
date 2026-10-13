@@ -255,3 +255,27 @@ export const publicationMetrics = pgTable('publication_metrics', {
 }, table=>[
   check('publication_metrics_value_check', sql`${table.value} IS NULL OR (${table.value} >= 0 AND ${table.value} <= 9007199254740991)`),
 ]);
+// Retained safe snapshots: source/result deletion must never erase a decision.
+export const swipeDecisionReceipts = pgTable('swipe_decision_receipts', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  operationId: uuid('operation_id').notNull(),
+  requestHash: text('request_hash').notNull(),
+  sourceId: text('source_id').notNull(),
+  sourceRevision: timestamp('source_revision', {withTimezone:true,mode:'date'}).notNull(),
+  contentFingerprint: text('content_fingerprint').notNull(),
+  textLength: integer('text_length').notNull(),
+  mediaTypes: jsonb('media_types').$type<string[]>().notNull(),
+  mediaCount: integer('media_count').notNull(),
+  decision: text('decision').$type<'LIKE'|'DISLIKE'>().notNull(),
+  origin: text('origin').$type<'swipe-planner'>().notNull(),
+  inputMethod: text('input_method').$type<'gesture'|'button'|'keyboard'>().notNull(),
+  confirmedAt: timestamp('confirmed_at',{withTimezone:true,mode:'date'}).notNull(),
+  providers: jsonb('providers').$type<('telegram'|'max'|'vk')[]>().notNull(),
+  scheduledAt: timestamp('scheduled_at',{withTimezone:true,mode:'date'}),
+  resultPostId: text('result_post_id'),
+}, table=>[primaryKey({columns:[table.userId,table.operationId]}),index('swipe_receipts_owner_source_idx').on(table.userId,table.sourceId)]);
+export const swipeCurrentFeedback = pgTable('swipe_current_feedback', {
+  userId: text('user_id').notNull().references(() => users.id,{onDelete:'cascade'}),
+  sourceId: text('source_id').notNull(),
+  operationId: uuid('operation_id').notNull(),
+},table=>[primaryKey({columns:[table.userId,table.sourceId]})]);

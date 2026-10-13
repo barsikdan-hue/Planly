@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { swipeReviewSchema } from './planner.ts';
 
 export const libraryItemStatusSchema = z.enum(['READY', 'USED', 'ARCHIVED']);
 export type LibraryItemStatus = z.infer<typeof libraryItemStatusSchema>;
@@ -33,12 +34,13 @@ export type UpdateLibraryItemInput = z.infer<typeof updateLibraryItemInputSchema
 export const archiveLibraryItemInputSchema = z.object({
   status: z.literal('ARCHIVED'),
   expectedUpdatedAt: z.string().datetime({ offset: true }),
+  swipeReview: swipeReviewSchema.optional(),
 }).strict();
 export const patchLibraryItemInputSchema = z.union([
   archiveLibraryItemInputSchema,
   // A conditional command cannot fall through to a full replacement that
   // strips the revision, even when stale content fields accompany it.
-  z.object({ expectedUpdatedAt: z.never().optional() }).passthrough().pipe(updateLibraryItemInputSchema),
+  z.object({ expectedUpdatedAt: z.never().optional(), swipeReview:z.never().optional() }).passthrough().pipe(updateLibraryItemInputSchema),
 ]);
 
 export type LibraryItemDto = {

@@ -236,3 +236,11 @@ test('touch implicit capture transferring from text to card does not cancel the 
  card(h).props.onLostPointerCapture({...e});
  await card(h).props.onPointerUp({...e,target:element,clientX:200});await h.settle();assert.equal(calls.approve.length,1);
 });
+
+test('terminal and stale outcomes never count or exit review card',async()=>{
+ for(const status of ['terminal','stale'])for(const action of ['В календарь','Не нравится']){
+  const {h}=await ui({onApprove:async()=>({status}),onReject:async()=>({status})});
+  await click(h,action);assert.equal(card(h).props['aria-label'],'Заготовка: a');assert.equal(card(h).props['data-motion'],'idle');
+  assert.ok(!text(h.tree).includes('Одобрено: 1'));assert.ok(!text(h.tree).includes('Отклонено: 1'));assert.equal(nodes(h.tree,n=>n.props?.className==='swipe-confirmation').length,0);
+ }
+});

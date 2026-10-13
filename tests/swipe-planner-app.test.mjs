@@ -55,7 +55,7 @@ for(const action of ['onApprove','onReject'])test(`stale ${action} refreshes car
   if(url==='/api/library-items')return Response.json([{...item,text:'Updated elsewhere',updatedAt:'2026-10-04T10:00:00Z'}]);
   return Response.json({error:'Source changed',code:'LIBRARY_SOURCE_STALE'},{status:409});
  });h.find('ContentLibrary').props.startReview();await h.settle();
- await assert.rejects(h.find('SwipePlanner').props[action](item,{mode:'next',providers:['telegram'],scheduledAt:'2099-01-01T07:00:00Z'}));await h.settle();
+ await assert.rejects(h.find('SwipePlanner').props[action](item,action==='onReject'?'button':{mode:'next',providers:['telegram'],scheduledAt:'2099-01-01T07:00:00Z'}));await h.settle();
  assert.equal(h.find('SwipePlanner').props.items[0].text,'Updated elsewhere');
 });
 
@@ -71,4 +71,13 @@ test('empty review Add opens existing Library editor without a write',async()=>{
  h.find('SwipePlanner').props.onAddItem(); await h.settle();
  assert.deepEqual(h.find('ContentLibrary').props.editorControl.editor,{title:'',text:'',mediaIds:[]});
  assert.equal(requests.filter(r=>r.init?.method==='POST').length,0);
+});
+
+test('durable DISLIKE reload hydrates blocked review with zero dispatch then terminal recovery clears notice',async()=>{
+ const {writePendingDislike,readPendingDislike}=await import('../lib/client/swipe-feedback.ts');const storage=cache();
+ writePendingDislike(storage,'owner',{version:1,key:crypto.randomUUID(),sourceId:item.id,expectedUpdatedAt:item.updatedAt,inputMethod:'gesture'});
+ const {h,requests}=await app(storage,(url)=>url.startsWith('/api/library-items/')?Response.json({code:'DECISION_RESULT_DELETED',error:'deleted'},{status:410}):Response.json([]));
+ h.find('ContentLibrary').props.startReview();await h.settle();assert.equal(requests.length,1);assert.equal(h.find('SwipePlanner').props.pending,true);
+ await nodes(h.tree,n=>n.props?.children==='Повторить решение')[0].props.onClick();await h.settle();
+ assert.equal(readPendingDislike(storage,'owner'),null);assert.equal(h.find('SwipePlanner').props.pending,false);assert.ok(JSON.stringify(h.tree).includes('Результат подтверждённого решения удалён'));
 });

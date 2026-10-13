@@ -101,8 +101,12 @@ export function loadPlannerSlot(query: SlotQuery): Promise<{ scheduledAt: string
   if(query.swipeReview !== undefined) params.set('swipeReview',String(query.swipeReview));
   return request(`/api/planner-slots?${params}`);
 }
-export function archiveLibraryItem(id: string, expectedUpdatedAt: string): Promise<LibraryItemDto> {
-  return request(`/api/library-items/${encodeURIComponent(id)}`,jsonRequest('PATCH',{status:'ARCHIVED',expectedUpdatedAt}));
+export async function archiveLibraryItem(id: string, expectedUpdatedAt: string, intent?: import('../contracts/swipe-feedback.ts').SwipeDislike): Promise<LibraryItemDto> {
+  const init=jsonRequest('PATCH',{status:'ARCHIVED',expectedUpdatedAt,...(intent?{swipeReview:{inputMethod:intent.inputMethod}}:{})});
+  if(intent) init.headers={...init.headers,'idempotency-key':intent.operationId};
+  const saved=await request<LibraryItemDto>(`/api/library-items/${encodeURIComponent(id)}`,init);
+  if(intent && (!saved || saved.id!==id || !['READY','ARCHIVED','USED'].includes(saved.status))) throw new PlanlyApiError('Сервер не подтвердил решение. Повтори сохранение.',502);
+  return saved;
 }
 
 export async function createLibraryItem(input: CreateLibraryItemInput, creationKey: string): Promise<LibraryItemDto> {

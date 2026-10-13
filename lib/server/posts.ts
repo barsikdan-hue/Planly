@@ -19,6 +19,7 @@ import { postEditBlockedReason, PostEditConflictError, samePostInput } from './p
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts, SwipeApprovalValidationError } from './planner-slots.ts';
 import { slotMinuteKey } from '../planner-slots.ts';
+import { captureSwipeSource, readSwipeReceipt, recordSwipeDecision, DecisionResultDeletedError, type SwipeTransaction } from './swipe-feedback.ts';
 
 const providerOrder = { telegram: 0, max: 1, vk: 2 } as const;
 
@@ -42,8 +43,7 @@ async function mirrorQueueBestEffort(
   }
 }
 
-async function readOwnedPost(userId: string, postId: string): Promise<PostDto> {
-  const db = getDb();
+async function readOwnedPost(userId: string, postId: string, db: ReturnType<typeof getDb> | SwipeTransaction = getDb()): Promise<PostDto> {
   const [post] = await db.select().from(posts)
     .where(and(eq(posts.id, postId), eq(posts.userId, userId)))
     .limit(1);
@@ -118,6 +118,18 @@ export async function createPost(
 
   const result = await db.transaction(async tx => {
     await lockOwnerSchedule(tx, userId);
+    let snapshot: Awaited<ReturnType<typeof captureSwipeSource>> | undefined;
+    const replay = async (id:string) => {
+      // Match deletion's source -> result order and hold the result through DTO materialization.
+      if (sourceLibraryItemId) await tx.select({id:libraryItems.id}).from(libraryItems).where(and(eq(libraryItems.id,sourceLibraryItemId),eq(libraryItems.userId,userId))).for('update');
+      const [owned]=await tx.select({id:posts.id}).from(posts).where(and(eq(posts.id,id),eq(posts.userId,userId))).limit(1).for('update');
+      if(!owned) throw new DecisionResultDeletedError();
+      return {postId:id,changes:[] as PublicationQueueChange[],created:false,dto:await readOwnedPost(userId,id,tx)};
+    };
+    if(swipeReview && creationKey) {
+      const receipt=await readSwipeReceipt(tx,userId,creationKey,inputHash!,'LIKE');
+      if(receipt) return replay(receipt.resultPostId!);
+    }
     const readExisting = async () => {
       const [existing] = await tx.select({ id: posts.id, inputHash: posts.creationInputHash }).from(posts)
         .where(and(eq(posts.userId, userId), eq(posts.creationKey, creationKey!))).limit(1);
@@ -126,7 +138,7 @@ export async function createPost(
     };
     if (creationKey) {
       const existing = await readExisting();
-      if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+      if (existing) return swipeReview ? replay(existing.id) : { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
     }
     if (sourceLibraryItemId) {
       const [source] = await tx.select().from(libraryItems)
@@ -134,7 +146,7 @@ export async function createPost(
       // The key may have been bound to another Post while this source lock waited.
       if (creationKey) {
         const existing = await readExisting();
-        if (existing) return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+        if (existing) return swipeReview ? replay(existing.id) : { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
       }
       if (!source) {
         if (sourceLibraryUpdatedAt !== undefined) throw new LibrarySourceStaleError();
@@ -151,6 +163,7 @@ export async function createPost(
       if (sourceLibraryUpdatedAt !== undefined && source.updatedAt.getTime() !== Date.parse(sourceLibraryUpdatedAt)) throw new LibrarySourceStaleError();
       if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
       if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
+      if(swipeReview) snapshot=await captureSwipeSource(tx,userId,source);
     }
     const schedules = input.targets.map(target => target.scheduledAt);
     if (requireFreeSlot && (input.status !== 'READY' || !schedules.length || schedules.some(value => value === null)
@@ -184,7 +197,7 @@ export async function createPost(
     if (!inserted.length) {
       const existing = await readExisting();
       if (!existing) throw new Error('Creation result unavailable');
-      return { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
+      return swipeReview ? replay(existing.id) : { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
     }
 
     if (input.targets.length) {
@@ -209,11 +222,12 @@ export async function createPost(
       await tx.update(libraryItems).set({ status: 'USED', updatedAt: now })
         .where(and(eq(libraryItems.id, sourceLibraryItemId), eq(libraryItems.userId, userId)));
     }
-    return { postId, changes, created: true };
+    if(swipeReview && snapshot) await recordSwipeDecision(tx,{...snapshot,userId,operationId:creationKey!,requestHash:inputHash!,decision:'LIKE',origin:'swipe-planner',inputMethod:swipeReview.inputMethod,confirmedAt:now,providers:input.targets.map(t=>t.provider),scheduledAt:new Date(schedules[0]!),resultPostId:postId});
+    return { postId, changes, created: true, dto:swipeReview ? await readOwnedPost(userId,postId,tx) : undefined };
   });
 
   if (result.created) await mirrorQueueBestEffort(result.changes, options);
-  return readOwnedPost(userId, result.postId);
+  return ('dto' in result && result.dto) || readOwnedPost(userId, result.postId);
 }
 
 export async function updatePost(
