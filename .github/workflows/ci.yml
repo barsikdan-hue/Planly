@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/swipe-planner-2-*']
   push:
     branches: [main, feat/foundation-content-core, feat/scheduler, feat/self-host-build, feat/telegram-max-ui-validation]
 
