@@ -117,6 +117,7 @@ export default function PlannerApp() {
     const [detailId, setDetailId] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<{ type: 'post' | 'media'; id: string; label: string } | null>(null);
     const saveLock = useRef(false);
+    const queueOperationOwner = useRef<OwnerLifetime | null>(null);
     const libraryRevision = useRef(0);
     const mediaRevision = useRef(0);
     const [saveBusy, setSaveBusy] = useState(false);
@@ -342,7 +343,7 @@ export default function PlannerApp() {
     const transitionOwner = useCallback((snapshot: Awaited<ReturnType<typeof loadPlanner>>): boolean => {
         if (ownerLifetime.current?.id === snapshot.profile.id) return false;
         ownerLifetime.current = null;
-        setReviewing(false); saveLock.current = false; setSaveBusy(false);
+        setReviewing(false); queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false);
         setScheduling(false);
         composerBatches.current.clear(); removedMediaIds.current.clear();
         const next = blankPost();
@@ -420,7 +421,7 @@ export default function PlannerApp() {
             const mediaVersion = mediaRevision.current;
             try {
                 const snapshot=await loadPlanner();
-                if (active) {
+                if (active && (!saveLock.current || isOwnerCurrent(queueOperationOwner.current))) {
                     const ownerChanged = !!snapshot.profile?.id && transitionOwner(snapshot);
                     if (!ownerChanged && !saveLock.current) setData(current=>({...current,posts:snapshot.posts.map(fromServerPost),socialAccounts:snapshot.socialAccounts,
                         ...(snapshot.media && (ownerChanged || mediaVersion === mediaRevision.current) ? { media: snapshot.media.map(toUiMedia) } : {}),
@@ -432,7 +433,7 @@ export default function PlannerApp() {
         };
         const timer=setInterval(()=>{void poll();},5000);
         return ()=>{active=false;clearInterval(timer);};
-    },[ready,hasScheduledPosts,data.posts,transitionOwner]);
+    },[ready,hasScheduledPosts,data.posts,transitionOwner,isOwnerCurrent]);
 
     const connectSocial = async(id:string,destinationId:string)=>{
         if (data.socialAccounts.find(account => account.id === id)?.provider === 'vk') {
@@ -662,7 +663,7 @@ export default function PlannerApp() {
         if (saveLock.current || creationPending) throw new Error('Сначала восстанови предыдущее сохранение.');
         const storage = sessionRecoveryStorage();
         if (!storage) throw new Error('Повторяемый запрос недоступен. Новый пост не отправлен.');
-        saveLock.current = true; setSaveBusy(true);
+        queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
         try { return await acknowledgeQueue(await submitSwipeApproval(storage, context!.id, item, approval), context!); }
         catch (error) {
             if (isOwnerCurrent(context)) {
@@ -671,21 +672,21 @@ export default function PlannerApp() {
                 await refreshQueueConflict(error, context!);
             }
             throw error;
-        } finally { if (isOwnerCurrent(context)) { saveLock.current = false; setSaveBusy(false); } }
+        } finally { if (isOwnerCurrent(context)) { queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
     };
 
     const rejectQueueItem = async (item: LibraryItemDto) => {
         const context = ownerContext;
         if (!isOwnerCurrent(context)) throw new Error('Владелец пространства изменился.');
         if (saveLock.current || creationPending) throw new Error('Сначала восстанови предыдущее сохранение.');
-        saveLock.current = true; setSaveBusy(true);
+        queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
         try {
             const archived = await archiveLibraryItemApi(item.id, item.updatedAt);
             if (!isOwnerCurrent(context)) return;
             libraryRevision.current += 1;
             setData(current => ({ ...current, libraryItems: current.libraryItems.map(value => value.id === archived.id ? archived : value) }));
         } catch (error) { await refreshQueueConflict(error, context!); throw error; }
-        finally { if (isOwnerCurrent(context)) { saveLock.current = false; setSaveBusy(false); } }
+        finally { if (isOwnerCurrent(context)) { queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
     };
 
     const reschedule = async (post: Post, date: string, time: string) => {
@@ -912,9 +913,9 @@ export default function PlannerApp() {
             if (!pending) return;
             if (pending.origin === 'swipe-planner') {
                 if (saveLock.current) return;
-                saveLock.current = true; setSaveBusy(true);
+                queueOperationOwner.current = context; saveLock.current = true; setSaveBusy(true);
                 try { await acknowledgeQueue(await retrySwipeApproval(storage, context!.id), context!); }
-                finally { if (isOwnerCurrent(context)) { setCreationPending(!!readPendingCreation(storage, context!.id)); saveLock.current = false; setSaveBusy(false); } }
+                finally { if (isOwnerCurrent(context)) { setCreationPending(!!readPendingCreation(storage, context!.id)); queueOperationOwner.current = null; saveLock.current = false; setSaveBusy(false); } }
                 return;
             }
             if (pending.intent === 'now') await publishNow(draftRef.current);
