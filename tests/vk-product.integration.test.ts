@@ -186,8 +186,6 @@ test('VK processor reads only owned ordered private PNG/JPEG bytes before photo 
     { id: 'vk-product-foreign', userId: otherOwner, storageKey: 'vk/foreign', originalName: 'foreign.png', mimeType: 'image/png', byteSize: 1, checksum: 'foreign' },
   ]);
   const post = await createPost(owner, scheduledInput(['vk'], ['vk-product-first', 'vk-product-second']), { mirrorQueue });
-  // An inconsistent legacy link must not let another owner's private object reach a provider.
-  await getDb().insert(postMedia).values({ postId: post.id, mediaId: 'vk-product-foreign', position: 2 });
   const [publication] = await publicationRows(post.id);
   const storageRequests: string[] = [];
   const server = createServer((request, response) => {
@@ -240,4 +238,27 @@ test('VK processor reads only owned ordered private PNG/JPEG bytes before photo 
     for (const key of envKeys) if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
     resetServerEnvForTests();
   }
+});
+
+test('VK foreign media link refuses the whole send before storage, credentials or provider calls', async () => {
+  await seedConnected();
+  await getDb().insert(mediaAssets).values({ id: 'vk-product-foreign', userId: otherOwner, storageKey: 'vk/foreign', originalName: 'foreign.png', mimeType: 'image/png', byteSize: 1, checksum: 'foreign' });
+  const post = await createPost(owner, scheduledInput(['vk']), { mirrorQueue });
+  await getDb().insert(postMedia).values({ postId: post.id, mediaId: 'vk-product-foreign', position: 0 });
+  const [publication] = await publicationRows(post.id);
+  const accounts: string[] = [];
+  let storageCalls = 0, providerCalls = 0, resolutions = 0;
+  const vk = await vkConnector(async () => { providerCalls++; throw new Error('Fixture forbids provider calls'); }, accounts);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { storageCalls++; throw new Error('Fixture forbids storage calls'); };
+  try {
+    assert.equal((await processPublication(publication.id, () => { resolutions++; return vk; })).status, 'FAILED');
+    const [stored] = await publicationRows(post.id);
+    assert.equal(stored.providerErrorCode, 'PUBLICATION_SCOPE_MISMATCH');
+    assert.equal(stored.normalizedErrorType, 'PERMANENT');
+    assert.equal(stored.providerRemoteId, null);
+    assert.equal(stored.attemptCount, 0);
+    assert.equal(storageCalls + providerCalls + resolutions, 0);
+    assert.deepEqual(accounts, []);
+  } finally { globalThis.fetch = originalFetch; }
 });

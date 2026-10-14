@@ -25,6 +25,18 @@ beforeEach(async()=>{
   await db.insert(users).values([{id:ownerA,email:'media-a@example.test',displayName:'A'},{id:ownerB,email:'media-b@example.test',displayName:'B'}]);
 });
 
+test('preview signer receives only the requesting users storage keys', async () => {
+  await getDb().insert(mediaAssets).values([
+    { id: 'preview-a', userId: ownerA, storageKey: 'users/a/private.png', originalName: 'a.png', mimeType: 'image/png', byteSize: 24, checksum: 'a' },
+    { id: 'preview-b', userId: ownerB, storageKey: 'users/b/private.png', originalName: 'b.png', mimeType: 'image/png', byteSize: 24, checksum: 'b' },
+  ]);
+  const signed: string[] = [];
+  const storage: ObjectStorage = { async put() {}, async delete() {}, async signedGetUrl(key) { signed.push(key); return `https://preview.test/${key}`; } };
+  const visible = await listMediaAssetsWithPreview(ownerB, storage);
+  assert.deepEqual(visible.map(asset => asset.id), ['preview-b']);
+  assert.deepEqual(signed, ['users/b/private.png']);
+});
+
 test('Library-only media reference prevents asset and object deletion until detached', async () => {
   const fake = fakeStorage();
   const created = await createMediaAsset(ownerA, new File([png()], 'library.png', { type: 'image/png' }), fake.storage);

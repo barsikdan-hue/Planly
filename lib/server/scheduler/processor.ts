@@ -12,8 +12,10 @@ export type ProcessPublicationResult = {
   retryAfterMs?: number;
 };
 
-async function readPublication(publicationId: string) {
-  const [row] = await getDb().select({
+type PublicationDb = ReturnType<typeof getDb> | Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+async function readPublication(publicationId: string, db: PublicationDb = getDb()) {
+  const [row] = await db.select({
     publication: publications,
     target: postTargets,
     account: socialAccounts,
@@ -26,6 +28,55 @@ async function readPublication(publicationId: string) {
     .limit(1);
   if (!row) throw new Error('Publication not found');
   return row;
+}
+
+async function readScopedMedia(row: Awaited<ReturnType<typeof readPublication>>, db: PublicationDb = getDb()) {
+  const { publication, post, target, account } = row;
+  if (publication.userId !== post.userId || publication.userId !== account.userId ||
+      target.postId !== post.id || publication.provider !== account.provider) return null;
+  // Do not filter foreign attachments away: the whole send must fail closed.
+  const attached = await db.select({ asset: mediaAssets }).from(postMedia)
+    .leftJoin(mediaAssets, eq(postMedia.mediaId, mediaAssets.id))
+    .where(eq(postMedia.postId, post.id)).orderBy(asc(postMedia.position));
+  if (attached.some(({ asset }) => !asset || asset.userId !== publication.userId)) return null;
+  return attached.map(({ asset }) => asset!);
+}
+
+async function markScopeFailure(
+  publicationId: string,
+  claimedAttempt?: number,
+): Promise<ProcessPublicationResult> {
+  if (claimedAttempt === undefined) {
+    return getDb().transaction(async tx => {
+      // Ordinary Post edits hold this row through attachment replacement.
+      // Re-read the graph under the lock, rather than diagnosing stale media.
+      await tx.select({ id: publications.id }).from(publications)
+        .where(eq(publications.id, publicationId)).for('update');
+      const current = await readPublication(publicationId, tx);
+      if (!['SCHEDULED', 'QUEUED'].includes(current.publication.status) || await readScopedMedia(current, tx) !== null) {
+        return { status: current.publication.status, skipped: true };
+      }
+      await tx.update(publications).set({
+        status: 'FAILED', normalizedErrorType: 'PERMANENT',
+        providerErrorCode: 'PUBLICATION_SCOPE_MISMATCH',
+        providerErrorMessage: 'Publication relationships do not belong to one workspace.',
+        nextRetryAt: null, updatedAt: new Date(),
+      }).where(eq(publications.id, publicationId));
+      return { status: 'FAILED', errorType: 'PERMANENT' };
+    });
+  }
+  // Only diagnose our freshly acquired claim. Preserve a competing outcome.
+  const [failed] = await getDb().update(publications).set({
+    status: 'FAILED', normalizedErrorType: 'PERMANENT',
+    providerErrorCode: 'PUBLICATION_SCOPE_MISMATCH',
+    providerErrorMessage: 'Publication relationships do not belong to one workspace.',
+    nextRetryAt: null, updatedAt: new Date(),
+  }).where(and(eq(publications.id, publicationId),
+    eq(publications.status, 'PUBLISHING'), eq(publications.attemptCount, claimedAttempt),
+  )).returning({ id: publications.id });
+  if (failed) return { status: 'FAILED', errorType: 'PERMANENT' };
+  const latest = await readPublication(publicationId);
+  return { status: latest.publication.status, skipped: true };
 }
 
 async function markFailure(
@@ -72,6 +123,8 @@ export async function processPublication(
     );
   }
 
+  if (await readScopedMedia(initial) === null) return markScopeFailure(publicationId);
+
   const now = new Date();
   const [claimed] = await getDb().update(publications).set({
     status: 'PUBLISHING',
@@ -84,7 +137,7 @@ export async function processPublication(
   }).where(and(
     eq(publications.id, publicationId),
     inArray(publications.status, ['SCHEDULED', 'QUEUED']),
-  )).returning({ id: publications.id });
+  )).returning({ id: publications.id, attemptCount: publications.attemptCount });
 
   if (!claimed) {
     const latest = await readPublication(publicationId);
@@ -111,6 +164,8 @@ export async function processPublication(
 
   let handedOff = false;
   try {
+    const scopedMedia = await readScopedMedia(row);
+    if (scopedMedia === null) return await markScopeFailure(publicationId, claimed.attemptCount);
     if (row.publication.provider === 'VK' && (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
       return markFailure(publicationId, 'AUTH', 'VK_DISCONNECTED', 'Reconnect and enable the VK community before publishing.');
     }
@@ -120,12 +175,8 @@ export async function processPublication(
     }
     // Only implemented providers prepare media; an unconfigured MAX remains an honest unsupported result.
     if (row.publication.provider === 'VK' || row.publication.provider === 'TELEGRAM' || (row.publication.provider === 'MAX' && (process.env.MAX_BOT_TOKEN || resolveConnector !== resolveRegisteredConnector))) {
-      const mediaRows = await getDb().select({asset:mediaAssets}).from(postMedia)
-        .innerJoin(mediaAssets,eq(postMedia.mediaId,mediaAssets.id))
-        .where(and(eq(postMedia.postId,row.post.id),eq(mediaAssets.userId,row.publication.userId)))
-        .orderBy(asc(postMedia.position));
       const media: NonNullable<PublishInput['media']> = [];
-      for (const {asset} of mediaRows) media.push({name:asset.originalName,mimeType:asset.mimeType,
+      for (const asset of scopedMedia) media.push({name:asset.originalName,mimeType:asset.mimeType,
         bytes:await readMediaObjectBytes(asset.storageKey,asset.byteSize),width:asset.width,height:asset.height});
       input.media = media;
     }
