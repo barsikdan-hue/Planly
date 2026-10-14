@@ -27,6 +27,12 @@ const ids = ['p02-admin', 'p02-a', 'p02-b'];
 const testDatabase=new URL(process.env.DATABASE_URL!);
 assert.ok(['127.0.0.1','localhost'].includes(testDatabase.hostname) && testDatabase.pathname==='/planly_test','Disposable native test database required');
 const passwords = ['ci-test-owner-password', 'fixture-A-password', 'fixture-B-password'];
+// Own all storage inputs as well as users. CI intentionally has no production
+// storage configuration; signing is local and never fetches an object/provider.
+const storageKeys=['S3_ENDPOINT','S3_PUBLIC_ENDPOINT','S3_REGION','S3_BUCKET','S3_ACCESS_KEY_ID','S3_SECRET_ACCESS_KEY'] as const;
+const originalStorage=Object.fromEntries(storageKeys.map(key=>[key,process.env[key]]));
+Object.assign(process.env,{S3_ENDPOINT:'http://127.0.0.1:1',S3_REGION:'test-region',S3_BUCKET:'multiuser-fixtures',S3_ACCESS_KEY_ID:'fixture',S3_SECRET_ACCESS_KEY:'fixture-secret'});
+delete process.env.S3_PUBLIC_ENDPOINT;
 let hashes: string[];
 const db = getDb();
 function req(path: string, token = '', method = 'GET', body?: unknown, extra: Record<string,string> = {}) {
@@ -51,7 +57,7 @@ beforeEach(async () => {
   await db.insert(libraryItems).values(ids.map(id=>({id:`${id}-library`,userId:id,bodyText:`Library ${id}`})));
   await db.insert(socialAccounts).values(ids.map(id=>({id:`${id}-account`,userId:id,provider:'MAX' as const,displayName:id,providerAccountId:`-${id}`,enabled:true,connectionStatus:'CONNECTED' as const})));
 });
-after(async()=>{await db.delete(users).where(inArray(users.id,ids));await closePublicationQueue();await closeRedisConnection();await closeDb();});
+after(async()=>{await db.delete(users).where(inArray(users.id,ids));await closePublicationQueue();await closeRedisConnection();await closeDb();for(const key of storageKeys){if(originalStorage[key]===undefined)delete process.env[key];else process.env[key]=originalStorage[key];}});
 
 test('real login creates independent ADMIN/A/B sessions and preserves legacy owner id/password/data', async()=>{
   const tokens=await Promise.all(ids.map((_,i)=>loginToken(i)));
@@ -110,6 +116,16 @@ test('blocked accounts deny sessions/login and owner initialization never unbloc
   await ensureOwner();
   for(const i of [0,1]){assert.equal(await getOwnerBySessionToken(tokens[i]),null);assert.equal(await authenticateOwner(i===0?'owner@example.test':'p02-1@example.test',passwords[i]),null);await assert.rejects(createOwnerSession(ids[i]));}
   assert.equal((await getOwnerBySessionToken(tokens[2]))?.id,ids[2]);
+});
+test('explicit block before the first legacy owner login persists intent instead of granting access',async()=>{
+  const {setUserAccessState}=await import('../lib/server/auth/access.ts');
+  await setUserAccessState(ids[0],'BLOCKED');
+  assert.equal(await authenticateOwner('owner@example.test',passwords[0]),null);
+  await assert.rejects(createOwnerSession(ids[0]));
+  const [blocked]=await db.select().from(users).where(eq(users.id,ids[0]));
+  assert.equal(blocked.authInitialized,true);assert.equal(blocked.role,'ADMIN');
+  await setUserAccessState(ids[0],'ACTIVE');
+  assert.equal((await authenticateOwner('owner@example.test',passwords[0]))?.id,ids[0]);
 });
 test('session version revocation rejects stored tokens and stale password verification snapshots',async()=>{
   const token=await loginToken(1);const candidate=await authenticateOwner('p02-1@example.test',passwords[1]);assert.ok(candidate);

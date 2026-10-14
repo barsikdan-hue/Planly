@@ -29,8 +29,11 @@ export async function revokeUserSessions(userId: string): Promise<void> {
 export async function setUserAccessState(userId: string, accessState: 'ACTIVE' | 'BLOCKED'): Promise<void> {
   await getDb().transaction(async tx => {
     const [user]=await tx.select().from(users).where(eq(users.id,userId)).for('update');
-    if(!user || user.accessState===accessState) return;
-    await tx.update(users).set({accessState,authInitialized:true,sessionVersion:sql`${users.sessionVersion}+1`,updatedAt:new Date()}).where(eq(users.id,userId));
+    if(!user || user.authInitialized && user.accessState===accessState) return;
+    // A migration-default BLOCKED row is not yet an explicit lifecycle decision.
+    // Record that decision before lazy owner initialization can grant access.
+    const role=!user.authInitialized && user.email===getOwnerEmail()?'ADMIN':user.role;
+    await tx.update(users).set({role,accessState,authInitialized:true,sessionVersion:sql`${users.sessionVersion}+1`,updatedAt:new Date()}).where(eq(users.id,userId));
     await tx.delete(sessions).where(eq(sessions.userId,userId));
   });
 }

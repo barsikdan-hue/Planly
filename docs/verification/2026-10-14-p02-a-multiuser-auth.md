@@ -28,4 +28,8 @@ Environment: disposable loopback PostgreSQL16.15/Redis7.2.16, Node24.21.0, froze
 
 ## Release gate
 
+CI-driven repair after candidate30d25a9: native CI38553268364 ran1125 tests,1122 passed; three failures depended on missing fixture S3 configuration. Removing local S3 env reproduced those exact three failures. The test now owns/restores synthetic loopback storage inputs, with unchanged strict isolation assertions. Self-host38553268373 passed, including the real compiled multiuser HTTP smoke, but must repeat at the repaired candidate HEAD.
+
+An additional native RED proved that explicitly blocking a migration-default BLOCKED/uninitialized owner returned early and allowed later lazy initialization to grant access. The lifecycle primitive now records that explicit intent under its existing row lock, preserves ADMIN/id/password, increments version and revokes sessions. Repair checks: CI-environment17/17; old auth + new auth/schema + UI response regressions32/32; typecheck/lint/build/real compiled HTTP exit0; independent Critic0/0/0. Fresh native full CI and Self-host are required on the pushed repair.
+
 Accept and merge P01-A #55 first. Then integrate current main and repeat native full CI, compiled multiuser HTTP and Self-host checks. Owner authorization remains required for merge/deploy, production migrations/DB, secrets/infrastructure and real provider sends. This PR creates no registration/invitation/admin dashboard, personal provider credentials, shared Library refactor or new scheduler.
