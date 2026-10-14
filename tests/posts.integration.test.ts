@@ -84,6 +84,14 @@ test('foreign-owner media is rejected and transaction leaves no post behind', as
   assert.equal((await listPlannerPosts(ownerA)).length, 0);
 });
 
+test('Post DTO hides inconsistent foreign media links and preserves owned attachment order', async () => {
+  const created = await createPost(ownerA, { baseText: 'private', status: 'DRAFT', targets: [], mediaIds: ['m-a-2', 'm-a-1'] });
+  await getDb().insert(postMedia).values({ postId: created.id, mediaId: 'm-b-1', position: 2 });
+  const [visible] = await listPlannerPosts(ownerA);
+  assert.deepEqual(visible.mediaIds, ['m-a-2', 'm-a-1']);
+  assert.deepEqual(await listPlannerPosts(ownerB), []);
+});
+
 test('updating a post preserves target identity for the same social account', async () => {
   const created = await createPost(ownerA, {
     baseText: 'one', status: 'READY', mediaIds: [],

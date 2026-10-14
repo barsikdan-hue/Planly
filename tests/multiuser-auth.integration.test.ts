@@ -4,7 +4,7 @@ import { randomUUID, createHmac } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { eq, inArray } from 'drizzle-orm';
 import { closeDb, getDb, getPool } from '../db/index.ts';
-import { users, sessions, posts, mediaAssets, libraryItems, socialAccounts, postTargets, publications } from '../db/schema.ts';
+import { users, sessions, posts, mediaAssets, libraryItems, socialAccounts, postTargets, publications, postMedia } from '../db/schema.ts';
 import { hashOwnerPassword } from '../lib/server/auth/password.ts';
 import { authenticateOwner, ensureOwner, requireApiOwner } from '../lib/server/auth/owner.ts';
 import { createOwnerSession, getOwnerBySessionToken } from '../lib/server/auth/session.ts';
@@ -229,6 +229,31 @@ for (const index of [1,0]) test(`PUBLISHING without provider access (${index===1
     assert.deepEqual(repeated,row);assert.equal(calls,0);
     assert.equal((await db.select().from(socialAccounts).where(eq(socialAccounts.id,accountId)))[0].connectionStatus,'CONNECTED');
   }finally{globalThis.fetch=originalFetch;if(originalMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=originalMax;}
+});
+
+for (const fixture of [
+  {status:'SCHEDULED' as const,corruption:'account'},
+  {status:'QUEUED' as const,corruption:'media'},
+  {status:'PUBLISHING' as const,corruption:'media'},
+]) test(`integrated real transport keeps ${fixture.status} diagnosis with foreign ${fixture.corruption} for USER`,async()=>{
+  await db.update(posts).set({status:'READY'}).where(eq(posts.id,'p02-a-post'));
+  await db.insert(postTargets).values({id:'p02-integrated-target',postId:'p02-a-post',socialAccountId:fixture.corruption==='account'?'p02-b-account':'p02-a-account'});
+  if(fixture.corruption==='media') await db.insert(postMedia).values({postId:'p02-a-post',mediaId:'p02-b-media',position:0});
+  await db.insert(publications).values({id:'p02-integrated-publication',postId:'p02-a-post',postTargetId:'p02-integrated-target',userId:ids[1],provider:'MAX',status:fixture.status,
+    attemptCount:fixture.status==='PUBLISHING'?1:0,providerRemoteId:'retained-receipt',idempotencyKey:randomUUID()});
+  const accountsBefore=await db.select().from(socialAccounts),mediaBefore=await db.select().from(mediaAssets);
+  const originalFetch=globalThis.fetch;let calls=0;
+  globalThis.fetch=async()=>{calls++;throw Error('integrated ownership refusal must not reach transport');};
+  try{
+    const result=await processPublication('p02-integrated-publication');
+    const [row]=await db.select().from(publications).where(eq(publications.id,'p02-integrated-publication'));
+    assert.equal(result.status,'FAILED');assert.equal(row.normalizedErrorType,'PERMANENT');
+    assert.equal(row.providerErrorCode,fixture.status==='PUBLISHING'?'AMBIGUOUS_DELIVERY':'PUBLICATION_SCOPE_MISMATCH');
+    assert.equal(row.attemptCount,fixture.status==='PUBLISHING'?1:0);assert.equal(row.providerRemoteId,'retained-receipt');
+    assert.deepEqual(await processPublication('p02-integrated-publication'),{status:'FAILED',skipped:true});
+    assert.deepEqual((await db.select().from(publications).where(eq(publications.id,'p02-integrated-publication')))[0],row);
+    assert.deepEqual(await db.select().from(socialAccounts),accountsBefore);assert.deepEqual(await db.select().from(mediaAssets),mediaBefore);assert.equal(calls,0);
+  }finally{globalThis.fetch=originalFetch;}
 });
 
 test('analytics and schedule selections cannot read foreign IDs under a valid A session',async()=>{
