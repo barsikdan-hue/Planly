@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { ZodError } from 'zod';
 import { getDb } from '../../db/index.ts';
-import { libraryItems, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { libraryItems, mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import {
   fromDbProvider,
   createPostSourceSchema,
@@ -60,7 +60,8 @@ async function readOwnedPost(userId: string, postId: string, db: ReturnType<type
 
   const mediaRows = await db.select({ mediaId: postMedia.mediaId, position: postMedia.position })
     .from(postMedia)
-    .where(eq(postMedia.postId, postId))
+    .innerJoin(mediaAssets, eq(postMedia.mediaId, mediaAssets.id))
+    .where(and(eq(postMedia.postId, postId), eq(mediaAssets.userId, userId)))
     .orderBy(asc(postMedia.position));
 
   const publicationRows = await db.select().from(publications)
