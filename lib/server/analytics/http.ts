@@ -1,4 +1,5 @@
 import {ZodError} from 'zod';
+import {ForbiddenError} from '../auth/access.ts';
 import {UnauthorizedError} from '../auth/owner.ts';
 import {analyticsQuerySchema,type AnalyticsQuery} from '../../contracts/analytics.ts';
 export const analyticsJson=(data:unknown,status=200)=>Response.json(data,{status,headers:{'cache-control':'no-store'}});
@@ -12,6 +13,7 @@ export function analyticsQuery(request:Request):AnalyticsQuery {
   return analyticsQuerySchema.parse({...raw,period:Number(raw.period??7),page:Number(raw.page??0),provider:raw.provider??'max'});
 }
 export function analyticsApiError(error:unknown):Response {
+  if(error instanceof ForbiddenError)return analyticsJson({error:'Forbidden'},403);
   if(error instanceof UnauthorizedError)return analyticsJson({error:'Unauthorized'},401);
   if(error instanceof AnalyticsCsrfError)return analyticsJson({error:'Forbidden'},403);
   if(error instanceof ZodError)return analyticsJson({error:'Invalid analytics selection'},422);

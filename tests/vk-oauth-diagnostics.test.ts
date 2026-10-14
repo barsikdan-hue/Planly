@@ -101,7 +101,8 @@ for (const [providerError, reason] of [['invalid_scope', 'INVALID_SCOPE'], ['acc
     resetServerEnvForTests();
     // Only the external session/DB boundary is replaced; route, owner check and logging are real.
     const chain = { from() { return this; }, innerJoin() { return this; }, where() { return this; }, async limit() { return [{ id: 'diagnostic-owner', email: 'diagnostic@example.test', displayName: 'Diagnostic' }]; } };
-    globals.__planlyDb = { select: () => chain };
+    const initialization={set(){return this;},async where(){}};
+    globals.__planlyDb = { select: () => chain, update:()=>initialization };
     let dbCalls = 0; let exchanges = 0;
     globals.__planlyPool = { async query() { dbCalls++; throw new Error('Unexpected DB access'); } };
     const fetchOriginal = globalThis.fetch; const logOriginal = console.warn; const logs: unknown[][] = [];

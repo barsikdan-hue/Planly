@@ -29,16 +29,16 @@ for(const action of ['onApprove','onReject','retry'])for(const failure of [false
  gateB.resolve(saved('saved-B')); await b; await value.settle();
 });
 
-test('busy ordinary Composer retains A identity until completion and a fresh B poll replaces its posts',async()=>{
+test('authoritative B poll replaces busy A Composer and late A save cannot enter B posts',async()=>{
  const saveGate=deferred(),pollGate=deferred();
  const value=fixture({scheduled:true,mutation:r=>r.url==='/api/posts'?saveGate.promise:Promise.reject(Error(`Unexpected ${r.url}`))});
  await value.settle();await value.navigate('create');value.app.composer().setDraft(p=>({...p,text:'Private A'}));await value.settle();
  const fetchOriginal=globalThis.fetch;globalThis.fetch=(url,init)=>url==='/api/bootstrap'?pollGate.promise:fetchOriginal(url,init);await value.poll();
  const composer=value.app.composer();const saving=composer.save(composer.draft,'draft');await value.settle();
  value.snapshot.profile={id:'B',displayName:'B'};pollGate.resolve(Response.json(value.snapshot));await value.settle();
- await value.navigate('dashboard');assert.equal(value.app.find('Dashboard').props.ownerContext.id,'owner','unguarded Composer must retain owner A while busy');
+ await value.navigate('dashboard');assert.equal(value.app.find('Dashboard').props.ownerContext.id,'B','verified B session replaces busy A');
  saveGate.resolve(saved('private-A-post'));await saving;await value.settle();await value.navigate('dashboard');
- assert.equal(value.app.find('Dashboard').props.ownerContext.id,'owner');assert.equal(value.app.find('Dashboard').props.posts.some(p=>p.id==='private-A-post'),true);
+ assert.equal(value.app.find('Dashboard').props.ownerContext.id,'B');assert.equal(value.app.find('Dashboard').props.posts.some(p=>p.id==='private-A-post'),false);
  globalThis.fetch=fetchOriginal;await value.poll();assert.equal(value.app.find('Dashboard').props.ownerContext.id,'B');assert.equal(value.app.find('Dashboard').props.posts.some(p=>p.id==='private-A-post'),false);
 });
 

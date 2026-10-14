@@ -47,7 +47,8 @@ export function fixture({ cache = storage(), items = [], owner = 'owner', media 
   globalThis.clearInterval = id => timers.delete(id);
   globalThis.fetch = async (url, init) => {
     if (url === '/api/bootstrap') return Response.json(snapshot);
-    if (url === '/api/media' && !init) return Response.json(snapshot.media);
+    if (url === '/api/profile' && !init?.method) return Response.json(snapshot.profile);
+    if (url === '/api/media' && (!init?.method || init.method === 'GET')) return Response.json(snapshot.media);
     const request = { url, method: init?.method, body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body, headers: new Headers(init?.headers) };
     requests.push(request);
     if (!mutation) throw Error('Unexpected mutation');

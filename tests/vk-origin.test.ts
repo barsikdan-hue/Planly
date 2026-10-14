@@ -32,7 +32,8 @@ for (const [label, origin, host, redirectUri, status] of [
     Object.assign(process.env, env); resetServerEnvForTests();
     // Only PostgreSQL/session transport is replaced; owner, config, adapter, guard and intent encryption are real.
     const chain = { from() { return this; }, innerJoin() { return this; }, where() { return this; }, async limit() { return [{ id: 'origin-owner', email: 'origin@example.test', displayName: 'Origin' }]; } };
-    globals.__planlyDb = { select: () => chain };
+    const initialization={set(){return this;},async where(){}};
+    globals.__planlyDb = { select: () => chain, update:()=>initialization };
     let intentWrites = 0; let connections = 0; let providerCalls = 0;
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
       if (sql.startsWith('SELECT id,user_id')) {

@@ -27,6 +27,7 @@ test('bootstrap reads the authenticated server snapshot without browser persiste
 test('savePost creates once for a new draft and PATCHes an existing post', async () => {
   const calls: Array<[string,string]> = [];
   mockFetch((url, init) => {
+    assert.equal(init?.cache,'no-store');
     calls.push([url, init?.method ?? 'GET']);
     return Response.json({ id:'p1', title:null, baseText:'text', status:'DRAFT', targets:[], mediaIds:[], createdAt:new Date(0).toISOString(), updatedAt:new Date(0).toISOString() }, { status: url === '/api/posts' ? 201 : 200 });
   });
@@ -70,7 +71,7 @@ test('Library CRUD uses collection GET/POST and encoded item PATCH/DELETE', asyn
     createdAt: '2030-01-01T00:00:00Z', updatedAt: '2030-01-01T00:00:00Z' };
   mockFetch((url, init) => {
     calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null });
-    return init?.method === 'DELETE' ? new Response(null, { status:204 }) : Response.json(init ? item : [item]);
+    return init?.method === 'DELETE' ? new Response(null, { status:204 }) : Response.json(init?.method ? item : [item]);
   });
   assert.deepEqual(await api.loadLibraryItems(), [item]);
   assert.deepEqual(await api.createLibraryItem({ title: null, text: 'Prepared', mediaIds: [] }, 'c0600000-0000-4000-8000-000000000001'), item);

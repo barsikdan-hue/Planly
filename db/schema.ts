@@ -43,10 +43,17 @@ export const publicationErrorTypeEnum = pgEnum('publication_error_type', [
   'PERMANENT',
 ]);
 
+export const userRoleEnum = pgEnum('user_role', ['ADMIN', 'USER']);
+export const userAccessStateEnum = pgEnum('user_access_state', ['ACTIVE', 'BLOCKED']);
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   displayName: text('display_name').notNull(),
+  role: userRoleEnum('role').notNull().default('USER'),
+  accessState: userAccessStateEnum('access_state').notNull().default('BLOCKED'),
+  passwordHash: text('password_hash'),
+  authInitialized: boolean('auth_initialized').notNull().default(false),
+  sessionVersion: integer('session_version').notNull().default(0),
   createdAt,
   updatedAt,
 });
@@ -63,6 +70,7 @@ export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull().unique(),
+  sessionVersion: integer('session_version').notNull().default(0),
   expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
   createdAt,
 }, (table) => [

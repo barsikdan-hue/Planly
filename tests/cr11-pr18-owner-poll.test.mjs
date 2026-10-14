@@ -14,7 +14,7 @@ async function race() {
   const beforeCache = value.cache.getItem('planly:editor:v1:owner');
   const currentFetch = globalThis.fetch; let lookups = 0;
   globalThis.fetch = (url, init) => {
-    if (url === '/api/media' && !init) { lookups += 1; return lookup.promise; }
+    if (url === '/api/media' && (!init?.method || init.method === 'GET')) { lookups += 1; return lookup.promise; }
     return currentFetch(url, init);
   };
   const uploading = value.app.composer().uploadControl.addFiles([new File(['x'], 'old-upload.png')]);

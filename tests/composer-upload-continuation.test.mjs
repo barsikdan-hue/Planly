@@ -65,7 +65,7 @@ async function fixture({ owner = 'owner', media = [], mediaLookup, posts = [], l
     socialAccounts: [{ id: 'tg', provider: 'telegram', enabled: true, connectionStatus: 'CONNECTED', providerAccountId: '-100123' }] };
   globalThis.fetch = async (url, init) => {
     if (url === '/api/bootstrap') return Response.json(snapshot);
-    if (url === '/api/media' && !init) return Response.json(mediaLookup ?? snapshot.media);
+    if (url === '/api/media' && (!init?.method || init.method === 'GET')) return Response.json(mediaLookup ?? snapshot.media);
     const request = { url, method: init?.method, body: init?.body, key: new Headers(init?.headers).get('idempotency-key') };
     requests.push(request);
     if (url !== '/api/media') {

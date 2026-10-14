@@ -280,7 +280,7 @@ test('in-flight bootstrap polling cannot overwrite acknowledged Library mutation
   globalThis.fetch = (url, init) => url === '/api/bootstrap' ? new Promise(resolve => { release = resolve; }) : fetchCurrent(url, init);
   poll(); await h.settle();
   await library(h).saveItem({ ...ready, status: 'READY', title: 'Acknowledged edit' }, 'ready'); await h.settle();
-  release(Response.json({ posts: [], socialAccounts: [], libraryItems: [ready, used, archived] })); await h.settle();
+  release(Response.json({ profile: { id: 'owner', displayName: 'Owner' }, posts: [], socialAccounts: [], libraryItems: [ready, used, archived] })); await h.settle();
   assert.equal(library(h).items.find(item => item.id === 'ready').title, 'Acknowledged edit');
   assert.equal(h.find('Content').props.posts.length, 0, 'Post status polling should still apply');
 });

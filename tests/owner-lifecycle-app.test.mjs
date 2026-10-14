@@ -103,7 +103,7 @@ test('old-owner generic media upload cannot apply its delayed successful lookup 
   const lookup = deferred(); const value = await openA({ mutation: () => Response.json(asset('old-upload')) });
   await value.navigate('media'); const previousFetch = globalThis.fetch; let lookups = 0;
   globalThis.fetch = (url, init) => {
-    if (url === '/api/media' && !init) { lookups += 1; return lookup.promise; }
+    if (url === '/api/media' && (!init?.method || init.method === 'GET')) { lookups += 1; return lookup.promise; }
     return previousFetch(url, init);
   };
   const operation = value.app.find('MediaLibrary').props.upload([new File(['x'], 'old-upload.png')]);
@@ -117,7 +117,7 @@ test('old-owner generic media upload emits no completion or error message to B',
   const value = await openA({ mutation: () => Response.json(asset('old-upload')) }); await value.navigate('media');
   const previousFetch = globalThis.fetch; let lookups = 0;
   globalThis.fetch = (url, init) => {
-    if (url === '/api/media' && !init) { lookups += 1; return lookup.promise; }
+    if (url === '/api/media' && (!init?.method || init.method === 'GET')) { lookups += 1; return lookup.promise; }
     return previousFetch(url, init);
   };
   const operation = value.app.find('MediaLibrary').props.upload([new File(['x'], 'old-upload.png')]);
@@ -244,7 +244,7 @@ test('late failed A upload is quiet in B and never dispatches a second A file', 
   for (const kind of Object.keys(originalToast)) toast[kind] = message => messages.push({ kind, message });
   const value = await openA({ mutation: () => Response.json(asset('upload')) }); await value.navigate('media');
   const previousFetch = globalThis.fetch; let lookups = 0;
-  globalThis.fetch = (url, init) => { if (url === '/api/media' && !init) { lookups += 1; return lookup.promise; } return previousFetch(url, init); };
+  globalThis.fetch = (url, init) => { if (url === '/api/media' && (!init?.method || init.method === 'GET')) { lookups += 1; return lookup.promise; } return previousFetch(url, init); };
   const operation = value.app.find('MediaLibrary').props.upload([new File(['x'], 'one.png'), new File(['x'], 'two.png')]);
   await value.settle(); assert.equal(lookups, 1); await switchTo(value); messages.length = 0;
   lookup.resolve(Response.json({ error: 'A lookup failed' }, { status: 500 })); await operation; await value.settle();
@@ -265,7 +265,7 @@ test('upload acknowledgement after App unmount emits no message or recovery writ
   for (const kind of Object.keys(originalToast)) toast[kind] = message => messages.push({ kind, message });
   const value = await openA({ mutation: () => Response.json(asset('upload')) }); await value.navigate('media');
   const previousFetch = globalThis.fetch; let lookups = 0;
-  globalThis.fetch = (url, init) => { if (url === '/api/media' && !init) { lookups += 1; return lookup.promise; } return previousFetch(url, init); };
+  globalThis.fetch = (url, init) => { if (url === '/api/media' && (!init?.method || init.method === 'GET')) { lookups += 1; return lookup.promise; } return previousFetch(url, init); };
   const before = [...value.cache.values], operation = value.app.find('MediaLibrary').props.upload([new File(['x'], 'upload.png')]);
   await value.settle(); assert.equal(lookups, 1); value.unmount(); messages.length = 0;
   lookup.resolve(Response.json([asset('upload')])); await operation;
