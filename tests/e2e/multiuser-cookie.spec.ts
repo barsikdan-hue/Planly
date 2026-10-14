@@ -53,6 +53,9 @@ test('delayed real A logout cannot remove the newer B browser session cookie',as
     await page.goto(`${base}/`);await page.reload();expect(new URL(page.url()).pathname).toBe('/');expect((await profile()).body.id).toBe(ids[1]);
   }finally{
     releaseLogout();await logout?.catch(()=>{});
+    // Drain real proxy handlers and retire the browser before its backend.
+    // The Dashboard can still issue background reads after the last assertion.
+    await context.unrouteAll({behavior:'wait'});await page.close();
     if(server&&server.exitCode===null){const exited=once(server,'exit');server.kill();await exited;}
     await db.delete(users).where(inArray(users.id,ids));await closeDb();
   }
