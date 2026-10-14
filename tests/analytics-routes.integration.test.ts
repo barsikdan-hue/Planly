@@ -15,7 +15,7 @@ test('analytics authentication runs before input parsing and external collection
   }finally{globalThis.fetch=original;}
 });
 test('analytics GET reads stored cohort only, with no publication or provider side effect',async()=>{
-  await analyticsPublication('x');const cookie=`${SESSION_COOKIE_NAME}=${await createOwnerSession('a')}`;
+  await analyticsPublication('x',{publishedAt:new Date()});const cookie=`${SESSION_COOKIE_NAME}=${await createOwnerSession('a')}`;
   const original=globalThis.fetch;globalThis.fetch=async()=>{throw Error('GET must not call providers');};
   try{const response=await GET(new Request('https://planly.test/api/analytics?provider=max&period=7&page=0',{headers:{cookie}}));assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const body=await response.json();assert.equal(body.eligibleCount,1);assert.equal(body.total,null);assert.equal((await getDb().select().from(publicationMetrics)).length,0);}finally{globalThis.fetch=original;}
 });
