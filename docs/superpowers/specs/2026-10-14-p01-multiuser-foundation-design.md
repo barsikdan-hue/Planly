@@ -32,7 +32,7 @@ P01 в Issue #54 — inspect/spec; основа отдельных пользо�
 
 - `scheduler/processor.ts`: до claim и до storage/connector handoff проверять совпадение владельцев publication/post/account, связь target.postId с post, соответствие provider и владельцев всех вложенных media. Некорректная связь не приводит к частичной отправке или чтению чужого объекта.
 - Обрабатывать такой отказ безопасно, без изменения чужого account. Не использовать AUTH failure, который сейчас меняет connectionStatus. Сохранять terminal receipts, PUBLISHING uncertainty и существующую защиту от blind retries; не очищать повреждённые production данные.
-- PUBLISHED/CANCELLED/FAILED/REQUIRES_RECONNECT остаются неизменными даже при повреждённом графе; PUBLISHING сохраняет существующую обработку AMBIGUOUS_DELIVERY. Новый integrity failure применяется только к SCHEDULED/QUEUED. Отдельные regression cases совмещают повреждённый граф с terminal/PUBLISHING.
+- PUBLISHED/CANCELLED/FAILED/REQUIRES_RECONNECT остаются неизменными даже при повреждённом графе; существующий на входе PUBLISHING сохраняет обработку AMBIGUOUS_DELIVERY. Новый integrity failure применяется к SCHEDULED/QUEUED на входе либо к собственной свежей claim при второй проверке. Отдельные regression cases совмещают повреждённый граф с terminal/PUBLISHING.
 - `posts.ts::readOwnedPost`: не возвращать foreign media IDs даже при некорректной сохранённой связи. Сохранить порядок корректных медиа и текущие DTO.
 - Тесты: A/B-графы с каждым несовпадением owner/post/target/provider/media; spies storage/connector = 0; чужие данные неизменны; корректная публикация работает; A/B signing и scheduler user filter; duplicate/concurrent/AMBIGUOUS_DELIVERY regressions сохраняются.
 
