@@ -16,6 +16,10 @@ assert.ok(local || docker, 'Disposable database required');
 assert.ok(process.env.OWNER_EMAIL?.endsWith('@example.test'), 'Synthetic owner required');
 const base = process.env.PLANLY_MULTIUSER_BASE_URL || 'http://127.0.0.1:4320';
 assert.ok(['localhost', '127.0.0.1'].includes(new URL(base).hostname), 'Loopback HTTP required');
+// Each standalone smoke process must supply its own disposable storage config.
+process.env.S3_ENDPOINT ||= 'http://127.0.0.1:1';
+process.env.S3_REGION ||= 'test-region'; process.env.S3_BUCKET ||= 'invitation-fixtures';
+process.env.S3_ACCESS_KEY_ID ||= 'fixture'; process.env.S3_SECRET_ACCESS_KEY ||= 'fixture-secret';
 const db = getDb(), suffix = randomUUID();
 const emails = ['a', 'b', 'revoked', 'expired'].map(name => `invite-http-${name}-${suffix}@example.test`);
 const password = 'invite-fixture-password';
