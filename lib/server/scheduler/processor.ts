@@ -64,14 +64,6 @@ export async function processPublication(
   if (initial.publication.status === 'CANCELLED' || initial.publication.status === 'FAILED' || initial.publication.status === 'REQUIRES_RECONNECT') {
     return { status: initial.publication.status, skipped: true };
   }
-  // P02 has no personal credential enrollment yet. Gate the real transport
-  // before claim/media/connector resolution; injected test transports stay pure.
-  if(resolveConnector===resolveRegisteredConnector && !await hasOwnerProviderAccess(initial.publication.userId)) {
-    await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
-      .where(and(eq(publications.id,publicationId),inArray(publications.status,['SCHEDULED','QUEUED'])));
-    const latest=await readPublication(publicationId);
-    return {status:latest.publication.status,skipped:true};
-  }
   if (initial.publication.status === 'PUBLISHING') {
     return markFailure(
       publicationId,
@@ -80,7 +72,14 @@ export async function processPublication(
       'Previous delivery outcome is unknown; refusing a blind retry.',
     );
   }
-
+  // P02 has no personal credential enrollment yet. Gate the real transport
+  // before claim/media/connector resolution; injected test transports stay pure.
+  if(resolveConnector===resolveRegisteredConnector && !await hasOwnerProviderAccess(initial.publication.userId)) {
+    await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
+      .where(and(eq(publications.id,publicationId),inArray(publications.status,['SCHEDULED','QUEUED'])));
+    const latest=await readPublication(publicationId);
+    return {status:latest.publication.status,skipped:true};
+  }
   const now = new Date();
   const [claimed] = await getDb().update(publications).set({
     status: 'PUBLISHING',

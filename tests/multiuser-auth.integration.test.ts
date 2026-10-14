@@ -205,6 +205,32 @@ test('new USER cannot use owner connect/OAuth/analytics credentials and real wor
     assert.equal((await processPublication('p02-tg-publication')).status,'REQUIRES_RECONNECT');assert.equal(calls,0);
   }finally{globalThis.fetch=original;if(previousTelegram===undefined)delete process.env.TELEGRAM_BOT_TOKEN;else process.env.TELEGRAM_BOT_TOKEN=previousTelegram;if(previousMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=previousMax;}
 });
+for (const index of [1,0]) test(`PUBLISHING without provider access (${index===1?'USER':'blocked owner'}) keeps ambiguous receipt and never resends`,async()=>{
+  if(index===0) await db.update(users).set({role:'ADMIN',authInitialized:true,accessState:'BLOCKED'}).where(eq(users.id,ids[0]));
+  const postId=`${ids[index]}-post`,accountId=`${ids[index]}-account`;
+  await db.update(posts).set({status:'READY'}).where(eq(posts.id,postId));
+  await db.insert(postTargets).values({id:'p02-ambiguous-target',postId,socialAccountId:accountId});
+  await db.insert(publications).values({id:'p02-ambiguous-publication',postId,postTargetId:'p02-ambiguous-target',userId:ids[index],provider:'MAX',status:'PUBLISHING',attemptCount:1,
+    lastAttemptAt:new Date('2026-10-14T09:00:00Z'),publishedAt:new Date('2026-10-14T09:00:01Z'),providerRemoteId:'existing-uncertain-receipt',providerUrl:'https://example.test/receipt',analyticsDestinationId:'-100123',
+    nextRetryAt:new Date('2026-10-14T09:05:00Z'),idempotencyKey:randomUUID()});
+  const originalFetch=globalThis.fetch,originalMax=process.env.MAX_BOT_TOKEN;let calls=0;
+  process.env.MAX_BOT_TOKEN='fixture-owner-max-token';
+  globalThis.fetch=async()=>{calls++;throw Error('ambiguous delivery must not reach any transport');};
+  try{
+    const result=await processPublication('p02-ambiguous-publication');
+    const [row]=await db.select().from(publications).where(eq(publications.id,'p02-ambiguous-publication'));
+    // Existing uncertainty handling takes precedence over new transport access.
+    assert.equal(row.providerErrorCode,'AMBIGUOUS_DELIVERY');assert.equal(result.status,'FAILED');
+    assert.equal(row.status,'FAILED');assert.equal(row.normalizedErrorType,'PERMANENT');assert.equal(row.nextRetryAt,null);
+    assert.equal(row.providerRemoteId,'existing-uncertain-receipt');assert.equal(row.providerUrl,'https://example.test/receipt');assert.equal(row.analyticsDestinationId,'-100123');
+    assert.equal(row.publishedAt?.toISOString(),'2026-10-14T09:00:01.000Z');assert.equal(row.lastAttemptAt?.toISOString(),'2026-10-14T09:00:00.000Z');assert.equal(row.attemptCount,1);
+    assert.deepEqual(await processPublication('p02-ambiguous-publication'),{status:'FAILED',skipped:true});
+    const [repeated]=await db.select().from(publications).where(eq(publications.id,'p02-ambiguous-publication'));
+    assert.deepEqual(repeated,row);assert.equal(calls,0);
+    assert.equal((await db.select().from(socialAccounts).where(eq(socialAccounts.id,accountId)))[0].connectionStatus,'CONNECTED');
+  }finally{globalThis.fetch=originalFetch;if(originalMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=originalMax;}
+});
+
 test('analytics and schedule selections cannot read foreign IDs under a valid A session',async()=>{
   const a=await loginToken(1);
   assert.equal((await analytics(req('/api/analytics?provider=max&period=7&accountId=p02-b-account',a))).status,422);
