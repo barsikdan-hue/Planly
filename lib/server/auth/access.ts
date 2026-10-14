@@ -46,6 +46,18 @@ export async function hasOwnerProviderAccess(userId: string): Promise<boolean> {
   const [user]=await getDb().select({id:users.id}).from(users).where(and(eq(users.id,userId),eq(users.email,getOwnerEmail()),eq(users.authInitialized,true),eq(users.accessState,'ACTIVE'))).limit(1);
   return !!user;
 }
+
+// Serialize the start of a handoff with the existing user lifecycle lock.
+// Return its handled promise inside an object: the lock ends after admission,
+// while an already-started delivery may finish after a subsequent block.
+export async function beginOwnerProviderHandoff<T>(userId:string,start:()=>Promise<T>) {
+  return getDb().transaction(async tx=>{
+    const [user]=await tx.select().from(users).where(eq(users.id,userId)).for('update');
+    if(!user || user.email!==getOwnerEmail() || !user.authInitialized || user.accessState!=='ACTIVE') return null;
+    const outcome=start().then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
+    return {outcome};
+  });
+}
 export function requireSameOriginMutation(request: Request): void {
   const site=request.headers.get('sec-fetch-site'), origin=request.headers.get('origin');
   // Metadata handles a reverse proxy's internal listen URL. Without metadata,

@@ -2,7 +2,7 @@ import test, { beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID, createHmac } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { closeDb, getDb, getPool } from '../db/index.ts';
 import { users, sessions, posts, mediaAssets, libraryItems, socialAccounts, postTargets, publications, postMedia } from '../db/schema.ts';
 import { hashOwnerPassword } from '../lib/server/auth/password.ts';
@@ -229,6 +229,71 @@ for (const index of [1,0]) test(`PUBLISHING without provider access (${index===1
     assert.deepEqual(repeated,row);assert.equal(calls,0);
     assert.equal((await db.select().from(socialAccounts).where(eq(socialAccounts.id,accountId)))[0].connectionStatus,'CONNECTED');
   }finally{globalThis.fetch=originalFetch;if(originalMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=originalMax;}
+});
+
+test('owner blocked by a native claim-time commit cannot start a new real provider handoff',async()=>{
+  await loginToken(0);
+  await db.update(posts).set({status:'READY'}).where(eq(posts.id,'p02-admin-post'));
+  await db.update(socialAccounts).set({providerAccountId:'-100123'}).where(eq(socialAccounts.id,'p02-admin-account'));
+  await db.insert(postTargets).values({id:'p02-block-target',postId:'p02-admin-post',socialAccountId:'p02-admin-account'});
+  await db.insert(publications).values({id:'p02-block-publication',postId:'p02-admin-post',postTargetId:'p02-block-target',userId:ids[0],provider:'MAX',status:'QUEUED',idempotencyKey:randomUUID()});
+  const originalFetch=globalThis.fetch,originalMax=process.env.MAX_BOT_TOKEN;let calls=0;
+  process.env.MAX_BOT_TOKEN='fixture-owner-max-token';
+  globalThis.fetch=async()=>{calls++;return Response.json({message:{recipient:{chat_id:-100123,chat_type:'channel'},body:{mid:'mid.fixture.block-race'}}});};
+  try{
+    await db.execute(sql`CREATE FUNCTION p02_block_after_claim() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.id = 'p02-block-publication' AND NEW.status = 'PUBLISHING' THEN
+        UPDATE users SET access_state='BLOCKED',session_version=session_version+1 WHERE id='p02-admin';
+      END IF; RETURN NEW; END $$`);
+    await db.execute(sql`CREATE TRIGGER p02_block_claim AFTER UPDATE ON publications FOR EACH ROW EXECUTE FUNCTION p02_block_after_claim()`);
+    const result=await processPublication('p02-block-publication');
+    assert.equal(calls,0,'a committed block must prevent the future handoff');assert.equal(result.status,'REQUIRES_RECONNECT');
+    const [row]=await db.select().from(publications).where(eq(publications.id,'p02-block-publication'));
+    assert.equal(row.providerRemoteId,null);assert.equal(row.providerErrorCode,'PERSONAL_PROVIDER_SETUP_REQUIRED');assert.equal(row.attemptCount,1);
+    assert.equal((await db.select().from(socialAccounts).where(eq(socialAccounts.id,'p02-admin-account')))[0].connectionStatus,'CONNECTED');
+  }finally{
+    await db.execute(sql`DROP TRIGGER IF EXISTS p02_block_claim ON publications`);await db.execute(sql`DROP FUNCTION IF EXISTS p02_block_after_claim()`);
+    globalThis.fetch=originalFetch;if(originalMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=originalMax;
+  }
+});
+
+test('handoff admission waits on the native user lifecycle lock and sees the committed block',async()=>{
+  await loginToken(0);
+  const {beginOwnerProviderHandoff}=await import('../lib/server/auth/access.ts');
+  const client=await getPool().connect();let calls=0,pending:ReturnType<typeof beginOwnerProviderHandoff>|undefined;
+  try{
+    await client.query('BEGIN');await client.query("UPDATE users SET access_state='BLOCKED',session_version=session_version+1 WHERE id=$1",[ids[0]]);
+    const {rows:[{pid}]}=await client.query<{pid:number}>('SELECT pg_backend_pid() AS pid');
+    pending=beginOwnerProviderHandoff(ids[0],async()=>{calls++;return 'must not start';});
+    const deadline=Date.now()+5000;let blocked=false;
+    while(Date.now()<deadline){const result=await getPool().query<{blocked:boolean}>('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))) AS blocked',[pid]);blocked=result.rows[0].blocked;if(blocked)break;await delay(20);}
+    assert.equal(blocked,true,'handoff and access lifecycle must share the user row lock');
+    await client.query('COMMIT');assert.equal(await pending,null);assert.equal(calls,0);
+  }finally{await client.query('ROLLBACK');client.release();await pending;}
+});
+
+for(const confirmed of [true,false]) test(`block after real handoff preserves ${confirmed?'receipt':'AMBIGUOUS_DELIVERY'} without a resend`,async()=>{
+  await loginToken(0);
+  await db.update(posts).set({status:'READY'}).where(eq(posts.id,'p02-admin-post'));
+  await db.update(socialAccounts).set({providerAccountId:'-100123'}).where(eq(socialAccounts.id,'p02-admin-account'));
+  await db.insert(postTargets).values({id:'p02-started-target',postId:'p02-admin-post',socialAccountId:'p02-admin-account'});
+  await db.insert(publications).values({id:'p02-started-publication',postId:'p02-admin-post',postTargetId:'p02-started-target',userId:ids[0],provider:'MAX',status:'QUEUED',idempotencyKey:randomUUID()});
+  let notify:()=>void=()=>{},release:()=>void=()=>{},calls=0;
+  const entered=new Promise<void>(resolve=>{notify=resolve;}),finish=new Promise<void>(resolve=>{release=resolve;});
+  const originalFetch=globalThis.fetch,originalMax=process.env.MAX_BOT_TOKEN;let pending:ReturnType<typeof processPublication>|undefined;
+  process.env.MAX_BOT_TOKEN='fixture-owner-max-token';
+  globalThis.fetch=async()=>{calls++;notify();await finish;if(!confirmed)throw Error('fixture uncertain response');return Response.json({message:{recipient:{chat_id:-100123,chat_type:'channel'},body:{mid:'mid.fixture.started'}}});};
+  let deadline:ReturnType<typeof setTimeout>|undefined;
+  try{
+    pending=processPublication('p02-started-publication');
+    await Promise.race([entered,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('handoff not reached')),5000);})]);clearTimeout(deadline);
+    const {setUserAccessState}=await import('../lib/server/auth/access.ts');
+    await Promise.race([setUserAccessState(ids[0],'BLOCKED'),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('admission lock held through network response')),5000);})]);clearTimeout(deadline);
+    release();assert.equal((await pending).status,confirmed?'PUBLISHED':'FAILED');
+    const [row]=await db.select().from(publications).where(eq(publications.id,'p02-started-publication'));
+    assert.equal(row.providerRemoteId,confirmed?'mid.fixture.started':null);assert.equal(row.providerErrorCode,confirmed?null:'AMBIGUOUS_DELIVERY');assert.equal(row.attemptCount,1);
+    assert.deepEqual(await processPublication('p02-started-publication'),{status:confirmed?'PUBLISHED':'FAILED',skipped:true});assert.equal(calls,1);
+  }finally{clearTimeout(deadline);release();await pending;globalThis.fetch=originalFetch;if(originalMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=originalMax;}
 });
 
 for (const fixture of [

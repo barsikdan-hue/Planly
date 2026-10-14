@@ -3,8 +3,8 @@ import { getDb } from '../../../db/index.ts';
 import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../../db/schema.ts';
 import { resolveConnector as resolveRegisteredConnector } from '../connectors/registry.ts';
 import { readMediaObjectBytes } from '../storage.ts';
-import { hasOwnerProviderAccess } from '../auth/access.ts';
-import type { ConnectorResolver, PublicationErrorType, PublishInput } from '../connectors/types.ts';
+import { beginOwnerProviderHandoff, hasOwnerProviderAccess } from '../auth/access.ts';
+import type { ConnectorResolver, PublicationErrorType, PublishInput, PublishResult } from '../connectors/types.ts';
 
 export type ProcessPublicationResult = {
   status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_RECONNECT';
@@ -195,8 +195,25 @@ export async function processPublication(
       return markFailure(publicationId, 'PERMANENT', 'CONNECTOR_PROVIDER_MISMATCH', 'Connector provider mismatch.');
     }
 
-    handedOff = true;
-    const result = await connector.publish(input);
+    let result:PublishResult;
+    if(resolveConnector===resolveRegisteredConnector) {
+      const started=await beginOwnerProviderHandoff(row.publication.userId,()=>{
+        handedOff=true;
+        return connector.publish(input);
+      });
+      if(!started) {
+        await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
+          .where(and(eq(publications.id,publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount)));
+        const latest=await readPublication(publicationId);
+        return {status:latest.publication.status,skipped:true};
+      }
+      const outcome=await started.outcome;
+      if(!outcome.ok) throw outcome.error;
+      result=outcome.value;
+    } else {
+      handedOff=true;
+      result=await connector.publish(input);
+    }
     if (!result.ok) {
       return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs);
     }
