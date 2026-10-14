@@ -1,0 +1,15 @@
+.invitations-shell { min-height: 100vh; background: #f3f7fc; padding: 32px 16px; color: #28324a; }
+.invitations-card { max-width: 760px; margin: auto; padding: 28px; background: white; border: 1px solid #e4eaf3; border-radius: 18px; }
+.invitations-card h1 { font-size: 28px; margin: 20px 0 12px; font-weight: 700; }
+.invitations-card h2 { font-size: 20px; margin: 28px 0 12px; font-weight: 650; }
+.invitations-card p { margin: 12px 0; line-height: 1.6; }
+.invitations-card form, .invitation-link { display: grid; gap: 10px; margin: 24px 0; }
+.invitations-card input { width: 100%; min-width: 0; border: 1px solid #dfe6f0; border-radius: 10px; padding: 12px; }
+.invitations-card button { border-radius: 10px; padding: 12px 18px; background: #3867f4; color: white; cursor: pointer; }
+.invitations-card button:disabled { opacity: .6; cursor: default; }
+.invitations-card ul { list-style: none; padding: 0; }
+.invitations-card li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid #e4eaf3; }
+.invitations-card li div { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.invitations-card [role=alert] { color: #b4233f; }
+.invitations-card [role=status] { color: #166534; }
+@media(max-width: 520px) { .invitations-card { padding: 20px; } .invitations-card li { align-items: flex-start; flex-direction: column; } }

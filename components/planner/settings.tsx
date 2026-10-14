@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
+import { InvitationsEntry } from './invitations';
 import { CheckCircle2, ShieldCheck, Clock, User, Info } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Card, SocialIcon, Action } from './common';
@@ -45,7 +46,7 @@ export function SocialAccounts({ accounts, toggle, connect, disconnect, embedded
         })}</div>
         <Card title={<><ShieldCheck size={19}/> Безопасное подключение</>} className="connection-info"><p>Planly не запрашивает пароль VK. Разрешения подтверждаются на странице VK ID. Отключение VK удаляет его подключение из Planly.</p></Card></>;
 }
-export function Settings({ name, saveName, accounts, toggle, connect, disconnect, logout, signingOut }: {
+function SettingsContent({ name, saveName, accounts, toggle, connect, disconnect, logout, signingOut }: {
     name: string;
     saveName: (name: string) => void;
     accounts: SocialAccountDto[];
@@ -58,3 +59,5 @@ export function Settings({ name, saveName, accounts, toggle, connect, disconnect
     toast.error('Укажи имя.');
     return;
 } saveName(value.trim()); }}>Сохранить</Action>{logout && <Action secondary disabled={signingOut} onClick={() => { void logout(); }}>{signingOut ? 'Выходим…' : 'Выйти'}</Action>}</Card><Card title={<><Clock size={18}/> Публикации</>}><div className="setting-row"><span>Часовой пояс</span><b>Москва · UTC+3</b></div><div className="setting-row"><span>Язык интерфейса</span><b>Русский</b></div><div className="setting-row"><span>Формат времени</span><b>24 часа</b></div></Card><Card title={<><Info size={18}/> О Planly</>} className="settings-about"><p>Personal SMM Planner · Content Core</p><p>Посты, расписание, профиль, медиа и публикации в Telegram, MAX и VK работают через серверную очередь.</p><div className="roadmap-inline"><span>01 · Интерфейс</span><span>02 · Контент</span><span>03 · Планировщик</span><span className="current">04 · Telegram и MAX</span></div></Card></div><section className="settings-socials" aria-label="Социальные сети"><SocialAccounts embedded accounts={accounts} toggle={toggle} connect={connect} disconnect={disconnect}/></section></>; }
+
+export function Settings(props: ComponentProps<typeof SettingsContent>) { return <><SettingsContent {...props}/><InvitationsEntry /></>; }
