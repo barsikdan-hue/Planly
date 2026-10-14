@@ -36,9 +36,14 @@ export class PlanlyApiError extends Error {
 function redirectUnauthorized(): void {
   if (typeof window !== 'undefined') window.location.assign('/login');
 }
+// UI lifetime only. This never supplies identity to the server; cookies remain
+// its sole authority. A departed request must not navigate a newer workspace.
+let clientSessionLifetime = {};
+export function invalidateClientSessionRequests(): void { clientSessionLifetime = {}; }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const lifetime=clientSessionLifetime;
+  const response = await fetch(url, {...init,cache:'no-store'});
   if (response.status === 204) return undefined as T;
 
   const text = await response.text();
@@ -46,7 +51,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   try { body = text ? JSON.parse(text) : undefined; } catch { body = text; }
 
   if (!response.ok) {
-    if (response.status === 401) redirectUnauthorized();
+    if (response.status === 401 && lifetime===clientSessionLifetime) redirectUnauthorized();
     const message = body && typeof body === 'object' && 'error' in body && typeof (body as {error?:unknown}).error === 'string'
       ? (body as {error:string}).error
       : `Request failed with status ${response.status}`;
@@ -66,6 +71,8 @@ function jsonRequest(method: string, body: unknown): RequestInit {
 export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
 }
+export function loadProfile(): Promise<ProfileDto> { return request('/api/profile'); }
+export function logoutSession(): Promise<void> { return request('/api/auth/logout',{method:'POST'}); }
 export function loadSchedulingDrafts():Promise<PostDto[]> {return request('/api/posts');}
 
 export function previewSchedulingPlanRequest(input:SchedulingPlanPreviewInput):Promise<SchedulingPlanPreview> {

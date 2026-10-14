@@ -38,7 +38,7 @@ export default function LoginPage() {
       <section className="login-card">
         <div className="login-brand">planly.</div>
         <h1>Личное пространство</h1>
-        <p>Вход только для владельца.</p>
+        <p>Вход в личный кабинет.</p>
         <form onSubmit={submit}>
           <label htmlFor="login-email">Email</label>
           <input id="login-email" type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} />

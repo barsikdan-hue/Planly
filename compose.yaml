@@ -116,6 +116,7 @@ services:
     <<: *app
     environment:
       <<: *runtime-env
+      OWNER_EMAIL: ${OWNER_EMAIL:?Initialize .env.self-host first}
       S3_ENDPOINT: http://storage:9000
       S3_REGION: us-east-1
       S3_BUCKET: ${S3_BUCKET:-planly-media}

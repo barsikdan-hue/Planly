@@ -5,6 +5,7 @@ import { users } from '../../../db/schema.ts';
 import { ensureOwnerSocialAccounts } from '../social-accounts.ts';
 import { getOwnerAuthEnv } from '../env.ts';
 import { verifyOwnerPassword } from './password.ts';
+import { initializeLegacyOwner, rejectIdentitySelectors, requireSameOriginMutation } from './access.ts';
 import {
   getOwnerBySessionToken,
   SESSION_COOKIE_NAME,
@@ -34,6 +35,7 @@ export async function ensureOwner(): Promise<Owner> {
       id: randomUUID(),
       email: OWNER_EMAIL,
       displayName: OWNER_EMAIL.split('@')[0] || 'Owner',
+      role: 'ADMIN', accessState: 'ACTIVE', authInitialized: true,
     }).onConflictDoNothing({ target: users.email });
 
     [owner] = await getDb()
@@ -43,18 +45,25 @@ export async function ensureOwner(): Promise<Owner> {
       .limit(1);
   }
   if (!owner) throw new Error('Owner bootstrap failed.');
+  await initializeLegacyOwner();
   await ensureOwnerSocialAccounts(owner.id);
   return owner;
 }
 
 export async function authenticateOwner(email: string, password: string): Promise<Owner | null> {
   const env = getOwnerAuthEnv();
-  const passwordMatches = await verifyOwnerPassword(password, env.OWNER_PASSWORD_HASH);
-  if (!passwordMatches || normalizeEmail(email) !== env.OWNER_EMAIL) return null;
-  return ensureOwner();
+  const normalized=normalizeEmail(email);
+  if(normalized===env.OWNER_EMAIL) {
+    if(!await verifyOwnerPassword(password,env.OWNER_PASSWORD_HASH))return null;
+    await ensureOwner();
+  }
+  const [user]=await getDb().select().from(users).where(eq(users.email,normalized)).limit(1);
+  if(normalized!==env.OWNER_EMAIL && !await verifyOwnerPassword(password,user?.passwordHash??env.OWNER_PASSWORD_HASH))return null;
+  if(!user?.authInitialized || user.accessState!=='ACTIVE' || normalized!==env.OWNER_EMAIL && !user.passwordHash)return null;
+  return {id:user.id,email:user.email,displayName:user.displayName,sessionVersion:user.sessionVersion};
 }
 
-function requestCookie(request: Request, name: string): string | undefined {
+export function requestCookie(request: Request, name: string): string | undefined {
   const raw = request.headers.get('cookie');
   if (!raw) return undefined;
   for (const pair of raw.split(';')) {
@@ -74,5 +83,10 @@ function requestCookie(request: Request, name: string): string | undefined {
 export async function requireApiOwner(request: Request): Promise<Owner> {
   const owner = await getOwnerBySessionToken(requestCookie(request, SESSION_COOKIE_NAME) ?? '');
   if (!owner) throw new UnauthorizedError();
+  rejectIdentitySelectors(request);
+  // These existing OAuth handlers validate the configured public VK origin,
+  // rather than Next's internal reverse-proxy listen URL.
+  const vkMutation=['/api/social-accounts/vk/start','/api/social-accounts/vk/disconnect'].includes(new URL(request.url).pathname);
+  if(!['GET','HEAD','OPTIONS'].includes(request.method) && !vkMutation)requireSameOriginMutation(request);
   return owner;
 }

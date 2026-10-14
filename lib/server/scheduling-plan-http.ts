@@ -1,4 +1,5 @@
 import {ZodError} from 'zod';
+import {ForbiddenError} from './auth/access.ts';
 import {UnauthorizedError} from './auth/owner.ts';
 import {PublicationContentError} from '../publication-content.ts';
 import {SchedulingPlanConflictError} from './scheduling-plan-commit.ts';
@@ -11,6 +12,7 @@ export function requireSchedulingPlanRequest(request:Request):void {
   if(request.headers.get('X-Planly-Scheduling')!=='1'||request.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json'||(site&&site!=='same-origin'))throw new SchedulingPlanCsrfError();
 }
 export function schedulingPlanApiError(error:unknown):Response {
+  if(error instanceof ForbiddenError)return schedulingPlanJson({error:'Forbidden'},403);
   if(error instanceof UnauthorizedError)return schedulingPlanJson({error:'Unauthorized'},401);
   if(error instanceof SchedulingPlanCsrfError)return schedulingPlanJson({error:'Forbidden'},403);
   if(error instanceof SyntaxError)return schedulingPlanJson({error:'Malformed JSON',code:'PLAN_BAD_JSON',commitApplied:false},400);

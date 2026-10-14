@@ -70,7 +70,7 @@ export async function submitPendingCreation(storage: RecoveryStorage, ownerId: s
   try { if ((!options.isCurrent || options.isCurrent()) && readPendingCreation(storage,ownerId)?.key === pending.key) writePendingCreation(storage, ownerId, pending); } catch { /* Original durable request remains. */ }
   const belongsToEditor = pending.editorToken === editorToken;
   let updateError: unknown;
-  if (belongsToEditor && pending.origin !== 'swipe-planner') {
+  if (belongsToEditor && pending.origin !== 'swipe-planner' && (!options.isCurrent || options.isCurrent())) {
     const currentFields = editorFields(editor);
     if (currentFields.id === pending.acknowledgedId) {
       currentFields.id = pending.editor.id;

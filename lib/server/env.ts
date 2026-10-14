@@ -61,6 +61,9 @@ export function getOwnerAuthEnv(): OwnerAuthEnv {
   });
   return cachedOwnerAuthEnv;
 }
+export function getOwnerEmail(): string {
+  return ownerAuthEnvSchema.shape.OWNER_EMAIL.parse(process.env.OWNER_EMAIL);
+}
 
 export function getStorageEnv(): StorageEnv {
   cachedStorageEnv ??= storageEnvSchema.parse({

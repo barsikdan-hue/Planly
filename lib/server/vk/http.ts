@@ -1,9 +1,11 @@
 import { ZodError } from 'zod';
+import { ForbiddenError } from '../auth/access.ts';
 import { UnauthorizedError } from '../auth/owner.ts';
 import { json } from '../http.ts';
 import { VkOAuthError } from './config.ts';
 
 export function vkApiError(error: unknown): Response {
+  if(error instanceof ForbiddenError)return json({error:'Forbidden'},403);
   if (error instanceof UnauthorizedError) return json({ error: 'Unauthorized' }, 401);
   if (error instanceof SyntaxError) return json({ error: 'Malformed JSON' }, 400);
   if (error instanceof ZodError) return json({ error: 'Validation failed' }, 422);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requireOwnerProviderAccess } from '../../../../lib/server/auth/access.ts';
 import { requireApiOwner } from '../../../../lib/server/auth/owner.ts';
 import { apiError, json, readJson } from '../../../../lib/server/http.ts';
 import { connectSocialAccount, setSocialAccountEnabled } from '../../../../lib/server/social-accounts.ts';
@@ -9,6 +10,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, context: Context): Promise<Response> {
   try {
     const owner = await requireApiOwner(request);
+    requireOwnerProviderAccess(owner);
     const { id } = await context.params;
     const input = inputSchema.parse(await readJson(request));
     if ('destinationId' in input) {

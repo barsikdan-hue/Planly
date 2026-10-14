@@ -85,9 +85,12 @@ test('result deletion waiting on Post lock resolves replay as typed410, never ge
  const gate=new Client({connectionString:process.env.DATABASE_URL});await gate.connect();await gate.query('BEGIN');
  try{
   await gate.query('DELETE FROM posts WHERE id=$1',[post.id]);
+  // Prime the activity snapshot before replay starts, exercising a previously
+  // timing-dependent stale observer rather than relying on a lucky first poll.
+  await gate.query('SELECT query FROM pg_stat_activity');
   const replay=createPost(owner,input,opts);const rejected=assert.rejects(replay,{name:'DecisionResultDeletedError'});
   const deadline=Date.now()+5000;let waiting=false;
-  while(Date.now()<deadline){const r=await gate.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%from \"posts\"%' AND pid<>pg_backend_pid()");if(r.rows.length){waiting=true;break;}await new Promise(r=>setTimeout(r,15));}
+  while(Date.now()<deadline){await gate.query('SELECT pg_stat_clear_snapshot()');const r=await gate.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%from \"posts\"%' AND pid<>pg_backend_pid()");if(r.rows.length){waiting=true;break;}await new Promise(r=>setTimeout(r,15));}
   assert.equal(waiting,true,'replay must wait on actual Post row');await gate.query('COMMIT');await rejected;assert.equal((await summary()).receipts.length,1);
  }finally{await gate.query('ROLLBACK');await gate.end();}
 });
@@ -98,7 +101,7 @@ test('export lifecycle and current aggregate share one repeatable-read snapshot 
  try{
   await gate.query('LOCK TABLE swipe_decision_receipts IN ACCESS EXCLUSIVE MODE');
   const pending=summary();const deadline=Date.now()+5000;let waiting=false;
-  while(Date.now()<deadline){const r=await gate.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%from \"swipe_decision_receipts\"%' AND pid<>pg_backend_pid()");if(r.rows.length){waiting=true;break;}await new Promise(r=>setTimeout(r,15));}
+  while(Date.now()<deadline){await gate.query('SELECT pg_stat_clear_snapshot()');const r=await gate.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%from \"swipe_decision_receipts\"%' AND pid<>pg_backend_pid()");if(r.rows.length){waiting=true;break;}await new Promise(r=>setTimeout(r,15));}
   assert.equal(waiting,true,'snapshot receipts query waits after current-row read');
   await deleteLibraryItem(owner,item.id);await gate.query('COMMIT');const snapshot=await pending;
   assert.equal(snapshot.current[0].sourceDeleted,false);assert.equal(snapshot.receipts[0].sourceDeleted,false);assert.equal(snapshot.aggregate.total,1);

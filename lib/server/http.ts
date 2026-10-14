@@ -1,4 +1,5 @@
 import { ZodError } from 'zod';
+import { ForbiddenError, rejectIdentityPayload } from './auth/access.ts';
 import { DecisionResultDeletedError } from './swipe-feedback.ts';
 import { UnauthorizedError } from './auth/owner.ts';
 import { PublicationContentError } from '../publication-content.ts';
@@ -9,10 +10,11 @@ import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, PlannerAccountUnavailableError, PlannerSlotConflictError, SwipeApprovalValidationError } from './planner-slots.ts';
 
 export function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status });
+  return Response.json(data, { status, headers:{'cache-control':'private, no-store'} });
 }
 
 export function apiError(error: unknown): Response {
+  if(error instanceof ForbiddenError)return json({error:'Forbidden'},403);
   if(error instanceof DecisionResultDeletedError) return json({error:error.message,code:'DECISION_RESULT_DELETED'},410);
   if (error instanceof UnauthorizedError) return json({ error: 'Unauthorized' }, 401);
   if (error instanceof SyntaxError) return json({ error: 'Malformed JSON' }, 400);
@@ -33,5 +35,7 @@ export function apiError(error: unknown): Response {
 }
 
 export async function readJson(request: Request): Promise<unknown> {
-  return request.json();
+  const body: unknown=await request.json();
+  rejectIdentityPayload(body);
+  return body;
 }

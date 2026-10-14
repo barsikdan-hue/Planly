@@ -2,7 +2,8 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { sessions, users } from '../../../db/schema.ts';
-import { getOwnerAuthEnv, getServerEnv, getSessionEnv } from '../env.ts';
+import { getServerEnv, getSessionEnv } from '../env.ts';
+import { initializeLegacyOwner, SessionAccessError } from './access.ts';
 
 export const SESSION_COOKIE_NAME = 'planly_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -11,6 +12,7 @@ export type Owner = {
   id: string;
   email: string;
   displayName: string;
+  sessionVersion?: number;
 };
 
 function sessionTokenHash(token: string): string {
@@ -27,26 +29,20 @@ export function sessionCookieOptions() {
   };
 }
 
-export async function createOwnerSession(userId: string): Promise<string> {
-  const [{ exists } = { exists: false }] = await getDb()
-    .select({ exists: users.id })
-    .from(users)
-    .where(and(eq(users.id, userId), eq(users.email, getOwnerAuthEnv().OWNER_EMAIL)))
-    .limit(1);
-  if (!exists) throw new Error('Owner session requested for a non-owner user.');
-
-  const rawToken = randomBytes(32).toString('base64url');
-  await getDb().insert(sessions).values({
-    id: randomUUID(),
-    userId,
-    tokenHash: sessionTokenHash(rawToken),
-    expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+export async function createOwnerSession(userId: string, expectedVersion?: number): Promise<string> {
+  await initializeLegacyOwner();
+  return getDb().transaction(async tx => {
+    const [user]=await tx.select().from(users).where(eq(users.id,userId)).for('update');
+    if(!user || !user.authInitialized || user.accessState!=='ACTIVE' || expectedVersion!==undefined && expectedVersion!==user.sessionVersion) throw new SessionAccessError();
+    const rawToken=randomBytes(32).toString('base64url');
+    await tx.insert(sessions).values({id:randomUUID(),userId,tokenHash:sessionTokenHash(rawToken),sessionVersion:user.sessionVersion,expiresAt:new Date(Date.now()+SESSION_TTL_MS)});
+    return rawToken;
   });
-  return rawToken;
 }
 
 export async function getOwnerBySessionToken(rawToken: string): Promise<Owner | null> {
   if (!rawToken) return null;
+  await initializeLegacyOwner();
   const rows = await getDb()
     .select({ id: users.id, email: users.email, displayName: users.displayName })
     .from(sessions)
@@ -54,7 +50,9 @@ export async function getOwnerBySessionToken(rawToken: string): Promise<Owner | 
     .where(and(
       eq(sessions.tokenHash, sessionTokenHash(rawToken)),
       gt(sessions.expiresAt, new Date()),
-      eq(users.email, getOwnerAuthEnv().OWNER_EMAIL),
+      eq(users.authInitialized, true),
+      eq(users.accessState, 'ACTIVE'),
+      eq(sessions.sessionVersion, users.sessionVersion),
     ))
     .limit(1);
   return rows[0] ?? null;
