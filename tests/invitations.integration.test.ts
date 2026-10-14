@@ -1,6 +1,6 @@
 import test, { beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { eq } from 'drizzle-orm';
@@ -10,7 +10,7 @@ import { createOwnerSession, getOwnerBySessionToken } from '../lib/server/auth/s
 import { POST as login } from '../app/api/auth/login/route.ts';
 import { POST as logout } from '../app/api/auth/logout/route.ts';
 import { GET as getPosts } from '../app/api/posts/route.ts';
-import { revokeUserSessions, setUserAccessState } from '../lib/server/auth/access.ts';
+import { hasOwnerProviderAccess, revokeUserSessions, setUserAccessState } from '../lib/server/auth/access.ts';
 
 const db = getDb();
 const database = new URL(process.env.DATABASE_URL!);
@@ -111,6 +111,26 @@ test('duplicate existing or pending email cannot alter owner, blocked users, or 
   for(const email of ['owner@example.test','INVITE-B@EXAMPLE.TEST']) assert.equal((await admin.POST(request('/api/admin/invitations',adminToken,'POST',{email}))).status,409);
   const email = 'parallel@example.test'; const results = await Promise.all(Array.from({length:5},()=>admin.POST(request('/api/admin/invitations',adminToken,'POST',{email}))));
   assert.equal(results.filter(x=>x.status===201).length,1); assert.equal(results.filter(x=>x.status===409).length,4);
+});
+
+test('configured owner email remains reserved when its database row is absent', async () => {
+  await db.update(schema.users).set({email:'secondary-admin@example.test'}).where(eq(schema.users.id,ids[0]));
+  assert.equal((await getOwnerBySessionToken(adminToken))?.id,ids[0]);
+  const response=await admin.POST(request('/api/admin/invitations',adminToken,'POST',{email:' OWNER@EXAMPLE.TEST '}));
+  assert.equal(response.status,409);
+  assert.equal((await getPool().query('select count(*)::int count from user_invitations where email=$1',['owner@example.test'])).rows[0].count,0);
+});
+
+test('a pre-existing invitation for the reserved owner email cannot grant shared provider access', async () => {
+  await db.update(schema.users).set({email:'secondary-admin@example.test'}).where(eq(schema.users.id,ids[0]));
+  const token=randomBytes(32).toString('base64url');
+  await db.insert(schema.userInvitations).values({id:randomUUID(),email:'owner@example.test',createdBy:ids[0],tokenHash:createHash('sha256').update(token).digest('hex'),expiresAt:new Date(Date.now()+60_000)});
+  const response=await activate(token);
+  const [reservedUser]=await db.select({id:schema.users.id,role:schema.users.role}).from(schema.users).where(eq(schema.users.email,'owner@example.test'));
+  const granted=Boolean(reservedUser?.role==='USER' && await hasOwnerProviderAccess(reservedUser.id));
+  assert.equal(granted,false,'An invited USER must never inherit the configured owner provider capability');
+  assert.equal(response.status,410);
+  assert.ok(!reservedUser,'Reserved owner email invitation must not create an account');
 });
 
 test('expiry replacement and delayed activation use the same lock order and recheck expiry after admission', async () => {

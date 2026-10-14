@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import Link from 'next/link';
+import Link from 'next/link.js';
 
 type Invitation = { id: string; email: string; status: string; expiresAt: string; createdAt: string };
 const states: Record<string, string> = { PENDING: 'Ожидает активации', ACCEPTED: 'Активировано', REVOKED: 'Отозвано', EXPIRED: 'Истекло' };

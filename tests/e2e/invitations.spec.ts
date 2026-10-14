@@ -159,6 +159,10 @@ test('replacement invitation pasted into the mounted acceptance page replaces in
     await page.getByRole('button', { name: 'Активировать аккаунт', exact: true }).click();
     await expect(page).toHaveURL(`${base}/`);
     expect(await page.evaluate(async expected => (await (await fetch('/api/profile')).json()).email === expected, email)).toBe(true);
+    // Retire the private document before preparing a guest actor. Wiping its
+    // cookies while Dashboard requests mount can produce a late 401 redirect
+    // that cancels the recipient's public invitation navigation.
+    await page.goto(`${base}/login`);
     await context.clearCookies();
     for (const invalidToken of [token, revoked.token]) {
       const inspected = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/invitations/inspect' && response.request().method() === 'POST');

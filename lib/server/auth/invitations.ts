@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
+import { getOwnerEmail } from '../env.ts';
 import { loginRateLimits, sessions, userInvitations, users } from '../../../db/schema.ts';
 import { ForbiddenError, rejectIdentityPayload, rejectIdentitySelectors, requireSameOriginMutation } from './access.ts';
 import { requireApiOwner, requestCookie, UnauthorizedError } from './owner.ts';
@@ -40,7 +41,7 @@ export async function createInvitation(request:Request) {
     const body:unknown=await request.json();
     rejectIdentityPayload(body);const {email}=invitationCreateSchema.parse(body);
     await emailLock(tx,email);
-    if(await existingEmail(tx,email))throw new InvitationError(409);
+    if(email===getOwnerEmail() || await existingEmail(tx,email))throw new InvitationError(409);
     const now=new Date();
     await tx.update(userInvitations).set({status:'EXPIRED'}).where(and(eq(userInvitations.email,email),eq(userInvitations.status,'PENDING'),lte(userInvitations.expiresAt,now)));
     const [pending]=await tx.select({id:userInvitations.id}).from(userInvitations).where(and(eq(userInvitations.email,email),eq(userInvitations.status,'PENDING'))).limit(1);
@@ -79,7 +80,7 @@ export async function acceptInvitation(token:string,password:string) {
     await emailLock(tx,inspected.email);
     const [invitation]=await tx.select().from(userInvitations).where(eq(userInvitations.tokenHash,tokenHash(token))).for('update');
     if(!invitation || invitation.status!=='PENDING' || invitation.expiresAt.getTime()<=Date.now())throw new InvitationError(410);
-    if(await existingEmail(tx,invitation.email))throw new InvitationError(410);
+    if(invitation.email.trim().toLowerCase()===getOwnerEmail() || await existingEmail(tx,invitation.email))throw new InvitationError(410);
     const id=randomUUID();
     await tx.insert(users).values({id,email:invitation.email,displayName:invitation.email.split('@')[0],role:'USER',accessState:'ACTIVE',authInitialized:true,passwordHash});
     await tx.update(userInvitations).set({status:'ACCEPTED',acceptedAt:new Date()}).where(eq(userInvitations.id,invitation.id));
