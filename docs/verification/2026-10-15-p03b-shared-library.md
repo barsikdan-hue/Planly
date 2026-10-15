@@ -30,6 +30,7 @@ Ignored logs live under `.sites-runtime/p03b/`; no credentials/session values/si
 | Real compiled HTTP |PASS: ADMIN/A/B, signed private WebM/PNG bytes/order, copied ownership, replay/concurrency, unshare and no Post/Queue/provider send|
 | Desktop/mobile real-backend E2E |2/2 PASS at1366×768 and390×844, including actual committed copy with lost response, reload and same-key recovery; decoded image/video and no horizontal overflow|
 | E2E locator correction |Initial alert assertion also matched Next route announcer. Scoped it to the Shared Library region; assertion preserved, desktop/mobile GREEN. Product code unchanged.|
+| Full native CI fixture correction |At74b96a6 Linux ran1212 tests:1208 PASS/4 FAIL. `tests/library-editor-recovery.test.mjs::fixture.fetch` counted the new read-only ADMIN permission GET as a forbidden mutation. The same4 failures reproduced locally. Explicitly serve that permission GET as403, preserving every original no-mutation/recovery assertion. Product code unchanged.|
 
 Sandbox subprocess EPERM and PostgreSQL restricted-token startup were environment limitations after interruption. The existing disposable loopback database was restarted under approved local process execution; automatic recovery completed. No production database was accessed.
 
