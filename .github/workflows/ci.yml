@@ -81,6 +81,9 @@ jobs:
       - name: Real compiled invite-only enrollment and isolation HTTP smoke
         run: node --experimental-strip-types tests/invitations-http-smoke.mjs
 
+      - name: Real compiled ADMIN user lifecycle and isolation HTTP smoke
+        run: node --experimental-strip-types tests/user-management-http-smoke.mjs
+
       - name: Install isolated browser test Chromium
         run: pnpm exec playwright install --with-deps chromium
 

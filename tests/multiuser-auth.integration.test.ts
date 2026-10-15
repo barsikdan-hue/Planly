@@ -49,6 +49,9 @@ async function loginToken(index: number) {
 beforeEach(async () => {
   hashes ??= await Promise.all(passwords.map(hashOwnerPassword));
   // This file owns the disposable database fixtures; never used against production.
+  // Corrupt ownership fixtures can link A's post to B's account. Remove posts
+  // before user cascades so account deletion never precedes that target.
+  await db.delete(posts).where(inArray(posts.userId,ids));
   await db.delete(users);
   await db.insert(users).values(ids.map((id,i)=>({id,email:i===0?'owner@example.test':`p02-${i}@example.test`,displayName:id,
     ...(i===0?{}:{role:'USER' as const, accessState:'ACTIVE' as const,authInitialized:true,passwordHash:hashes[i]})})));
@@ -57,7 +60,7 @@ beforeEach(async () => {
   await db.insert(libraryItems).values(ids.map(id=>({id:`${id}-library`,userId:id,bodyText:`Library ${id}`})));
   await db.insert(socialAccounts).values(ids.map(id=>({id:`${id}-account`,userId:id,provider:'MAX' as const,displayName:id,providerAccountId:`-${id}`,enabled:true,connectionStatus:'CONNECTED' as const})));
 });
-after(async()=>{await db.delete(users).where(inArray(users.id,ids));await closePublicationQueue();await closeRedisConnection();await closeDb();for(const key of storageKeys){if(originalStorage[key]===undefined)delete process.env[key];else process.env[key]=originalStorage[key];}});
+after(async()=>{await db.delete(posts).where(inArray(posts.userId,ids));await db.delete(users).where(inArray(users.id,ids));await closePublicationQueue();await closeRedisConnection();await closeDb();for(const key of storageKeys){if(originalStorage[key]===undefined)delete process.env[key];else process.env[key]=originalStorage[key];}});
 
 test('real login creates independent ADMIN/A/B sessions and preserves legacy owner id/password/data', async()=>{
   const tokens=await Promise.all(ids.map((_,i)=>loginToken(i)));

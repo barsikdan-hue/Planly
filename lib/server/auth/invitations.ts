@@ -2,11 +2,11 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { getOwnerEmail } from '../env.ts';
-import { loginRateLimits, sessions, userInvitations, users } from '../../../db/schema.ts';
-import { ForbiddenError, rejectIdentityPayload, rejectIdentitySelectors, requireSameOriginMutation } from './access.ts';
-import { requireApiOwner, requestCookie, UnauthorizedError } from './owner.ts';
+import { loginRateLimits, userInvitations, users } from '../../../db/schema.ts';
+import { rejectIdentityPayload, rejectIdentitySelectors, requireSameOriginMutation } from './access.ts';
+import { withAdmin } from './admin.ts';
 import { hashOwnerPassword } from './password.ts';
-import { createSessionInTransaction, SESSION_COOKIE_NAME, sessionTokenHash } from './session.ts';
+import { createSessionInTransaction } from './session.ts';
 import { z } from 'zod';
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
@@ -24,17 +24,6 @@ function tokenHash(token:string) { return createHash('sha256').update(token).dig
 async function emailLock(tx:Transaction,email:string) { await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${email}, 1))`); }
 async function existingEmail(tx:Transaction,email:string) {
   return (await tx.select({id:users.id}).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1)).length>0;
-}
-async function withAdmin<T>(request:Request,work:(tx:Transaction,userId:string)=>Promise<T>):Promise<T> {
-  const identity=await requireApiOwner(request);
-  return getDb().transaction(async tx=>{
-    const [user]=await tx.select().from(users).where(eq(users.id,identity.id)).for('update');
-    if(!user?.authInitialized || user.accessState!=='ACTIVE') throw new UnauthorizedError();
-    const [session]=await tx.select({id:sessions.id}).from(sessions).where(and(eq(sessions.userId,user.id),eq(sessions.tokenHash,sessionTokenHash(requestCookie(request,SESSION_COOKIE_NAME)??'')),eq(sessions.sessionVersion,user.sessionVersion),gt(sessions.expiresAt,new Date()))).limit(1);
-    if(!session)throw new UnauthorizedError();
-    if(user.role!=='ADMIN')throw new ForbiddenError();
-    return work(tx,user.id);
-  });
 }
 export async function createInvitation(request:Request) {
   return withAdmin(request,async(tx,userId)=>{
