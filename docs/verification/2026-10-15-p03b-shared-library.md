@@ -26,6 +26,10 @@ Ignored logs live under `.sites-runtime/p03b/`; no credentials/session values/si
 | Storage deadline RED/GREEN |16 PASS/2 intended FAIL before signal support;18/18 GREEN after actual stalled-response cancellation, socket closure, rollback/cleanup and subsequent progress|
 | Independent Critic UI finding |Refresh404 after successful copy incorrectly cleared intent; RED reproduced missing replay action, GREEN retains identical key/body|
 | Final UI selection/recovery |7/7 PASS, including reload, separate owner, unreadable intent, double click and delayed response|
+| Local final typecheck/lint/build |PASS; full lint0 errors/23 warnings, compiled Next and analytics CSS contract PASS|
+| Real compiled HTTP |PASS: ADMIN/A/B, signed private WebM/PNG bytes/order, copied ownership, replay/concurrency, unshare and no Post/Queue/provider send|
+| Desktop/mobile real-backend E2E |2/2 PASS at1366×768 and390×844, including actual committed copy with lost response, reload and same-key recovery; decoded image/video and no horizontal overflow|
+| E2E locator correction |Initial alert assertion also matched Next route announcer. Scoped it to the Shared Library region; assertion preserved, desktop/mobile GREEN. Product code unchanged.|
 
 Sandbox subprocess EPERM and PostgreSQL restricted-token startup were environment limitations after interruption. The existing disposable loopback database was restarted under approved local process execution; automatic recovery completed. No production database was accessed.
 

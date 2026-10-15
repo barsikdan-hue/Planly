@@ -76,7 +76,7 @@ test('ADMIN publishes explicitly; USER copies selected ordered media into indepe
     }, { times: 1 });
     await page.getByRole('button', { name: /Добавить выбранные/ }).click();
     await expect(page.getByRole('button', { name: 'Проверить результат копирования', exact: true })).toBeEnabled();
-    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Общая библиотека', exact: true }).getByRole('alert')).toBeVisible();
     expect((await db.select().from(libraryItems).where(eq(libraryItems.userId, ids[1]))).length).toBe(3);
     await page.reload();
     await page.getByRole('button', { name: 'Общие', exact: true }).click();
