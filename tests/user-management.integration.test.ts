@@ -19,6 +19,12 @@ import { GET as analytics } from '../app/api/analytics/route.ts';
 
 const isolated = new URL(process.env.DATABASE_URL!);
 assert.ok(['127.0.0.1', 'localhost'].includes(isolated.hostname) && isolated.pathname === '/planly_test', 'Disposable native database required');
+// Own storage inputs as well as database fixtures. CI has no production S3
+// configuration; foreign-resource denial must reach its ownership check.
+const storageKeys = ['S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
+const originalStorage = Object.fromEntries(storageKeys.map(key => [key, process.env[key]]));
+Object.assign(process.env, { S3_ENDPOINT: 'http://127.0.0.1:1', S3_REGION: 'test-region', S3_BUCKET: 'user-management-fixtures', S3_ACCESS_KEY_ID: 'fixture', S3_SECRET_ACCESS_KEY: 'fixture-secret' });
+delete process.env.S3_PUBLIC_ENDPOINT;
 const db = getDb();
 const ids = ['manage-owner', 'manage-admin', 'manage-a', 'manage-b', 'manage-uninitialized'];
 const password = 'User-management-fixture-password';
@@ -57,7 +63,15 @@ beforeEach(async () => {
     await db.insert(socialAccounts).values({ id: `${id}-account`, userId: id, provider: 'MAX', displayName: id, providerAccountId: `-${id}`, enabled: true, connectionStatus: 'CONNECTED' });
   }
 });
-after(async () => { await db.delete(users); await closeDb(); });
+after(async () => {
+  try { await db.delete(users); await closeDb(); }
+  finally {
+    for (const key of storageKeys) {
+      if (originalStorage[key] === undefined) delete process.env[key];
+      else process.env[key] = originalStorage[key];
+    }
+  }
+});
 
 test('ADMIN sees only registered USER identity and access DTO without private content or credentials', async () => {
   const response = await routes.GET(request('/api/admin/users', tokens[1]));
