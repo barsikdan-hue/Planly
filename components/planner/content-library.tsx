@@ -8,6 +8,7 @@ import { orderedPostMedia } from '@/lib/post-media';
 import type { Media, Post } from '@/lib/planner';
 import type { CreateLibraryItemInput, LibraryItemDto } from '@/lib/contracts/library';
 import type { LibraryEditorFields } from '@/lib/client/library-editor-recovery';
+import { SharedLibrary, useLibrarySharing } from './shared-library';
 
 type EditableContent = CreateLibraryItemInput & { status?: 'READY' | 'ARCHIVED' };
 type Editor = { id?: string; title: string; text: string; mediaIds: string[]; status: 'READY' | 'ARCHIVED' };
@@ -27,7 +28,9 @@ function MediaPreview({ item }: { item: Media }) {
     return item.type.startsWith('video/') ? <video src={item.url} controls aria-label={item.name}/> : <img src={item.url} alt={item.name}/>;
 }
 
-export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, startReview, editorControl, children }: {
+export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, startReview, editorControl, children, ownerId, onSharedCopied }: {
+    ownerId?: string;
+    onSharedCopied?: (items: LibraryItemDto[]) => Promise<void>;
     items: LibraryItemDto[];
     media: Media[];
     posts: Pick<Post, 'id'>[];
@@ -43,6 +46,8 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
     children: ReactNode;
 }) {
     const [localTab, setLocalTab] = useState<'prepared' | 'publications'>('prepared');
+    const [scope, setScope] = useState<'mine' | 'shared'>('mine');
+    const sharing = useLibrarySharing();
     const tab = activeTab ?? localTab;
     const setTab = onTabChange ?? setLocalTab;
     const [filter, setFilter] = useState('all');
@@ -112,11 +117,13 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
             <Button role="tab" id="publications-tab" aria-controls="publications-panel" aria-selected={tab === 'publications'} variant={tab === 'publications' ? 'default' : 'outline'} disabled={busy} onClick={() => setTab('publications')}>Публикации</Button>
         </div>
         {tab === 'publications' ? <section role="tabpanel" id="publications-panel" aria-labelledby="publications-tab">{children}</section> : <section role="tabpanel" id="prepared-panel" aria-labelledby="prepared-tab">
-            <div className="page-heading library-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>Библиотека</h1><p>Подготовь текст и медиа для будущих публикаций.</p></div>{!editor && <Button className="action" disabled={busy} onClick={() => edit()}><Plus size={17}/>Новая заготовка</Button>}</div>
+            <div className="page-heading library-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>Библиотека</h1><p>Подготовь текст и медиа для будущих публикаций.</p></div>{scope === 'mine' && !editor && <Button className="action" disabled={busy} onClick={() => edit()}><Plus size={17}/>Новая заготовка</Button>}</div>
+            {!editor && <div className="library-tabs" role="group" aria-label="Источник заготовок"><Button aria-pressed={scope === 'mine'} variant={scope === 'mine' ? 'default' : 'outline'} disabled={busy} onClick={() => setScope('mine')}>Мои</Button><Button aria-pressed={scope === 'shared'} variant={scope === 'shared' ? 'default' : 'outline'} disabled={busy} onClick={() => setScope('shared')}>Общие</Button></div>}
             {error && <p className="notice error" role="alert">{error}</p>}
             {editorControl?.notice && <p className="notice" role="status">{editorControl.notice}</p>}
             {editorControl?.blockedReason && <p className="notice error" role="alert">{editorControl.blockedReason}</p>}
-            {editor ? <Card className="library-editor" title={editor.id ? 'Редактировать заготовку' : 'Новая заготовка'}>
+            {sharing.error && sharing.admin && <p className="notice error" role="alert">{sharing.error}</p>}
+            {scope === 'shared' && !editor ? <SharedLibrary ownerId={ownerId} onCopied={onSharedCopied ?? (async () => {})}/> : editor ? <Card className="library-editor" title={editor.id ? 'Редактировать заготовку' : 'Новая заготовка'}>
                 <label htmlFor="library-title">Название <span className="muted">(необязательно)</span></label>
                 <input id="library-title" aria-label="Название заготовки" className="form-input" value={editor.title} maxLength={200} disabled={busy} onChange={event => setEditor(current => current && ({ ...current, title: event.target.value }))}/>
                 <label htmlFor="library-text">Текст заготовки</label>
@@ -133,6 +140,7 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
                     {item.mediaIds.length > 0 && <div className="library-media-preview">{orderedPostMedia(item.mediaIds, media).map(asset => <MediaPreview key={asset.id} item={asset}/>)}</div>}
                     <div className="content-card-body"><span className={`pill library-status-${item.status.toLowerCase()}`}>{statuses[item.status]}</span><h2>{item.title || item.text.split('\n')[0] || 'Без названия'}</h2><p className="library-text-preview">{item.text || 'Заготовка с медиа'}</p><time dateTime={item.updatedAt}>Обновлено {new Date(item.updatedAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</time>
                     <div className="library-card-actions">
+                        {sharing.admin && (item.status === 'READY' || sharing.sourceIds.includes(item.id)) && <Button variant="outline" disabled={busy || sharing.busy} onClick={() => sharing.toggle(item.id)}>{sharing.sourceIds.includes(item.id) ? 'Убрать из общей библиотеки' : 'Добавить в общую библиотеку'}</Button>}
                         {item.status === 'READY' && <Button disabled={busy} onClick={() => createPublication(item)}>Создать публикацию</Button>}
                         {item.status === 'USED' && item.sourcePostId && posts.some(post => post.id === item.sourcePostId) && <Button disabled={busy} onClick={() => openPublication(item.sourcePostId!)}>Открыть публикацию</Button>}
                         <Button variant="outline" disabled={busy} onClick={() => edit(item)}>Редактировать</Button>

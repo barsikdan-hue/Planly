@@ -2,8 +2,8 @@ import { createHash, createHmac } from 'node:crypto';
 import { getStorageEnv, type StorageEnv } from './env.ts';
 
 export type ObjectStorage = {
-  put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
-  delete(key: string): Promise<void>;
+  put(key: string, bytes: Uint8Array, contentType: string, signal?: AbortSignal): Promise<void>;
+  delete(key: string, signal?: AbortSignal): Promise<void>;
   signedGetUrl(key: string, expiresSeconds?: number): Promise<string>;
 };
 
@@ -63,6 +63,7 @@ async function signedMutation(
   key: string,
   bytes: Uint8Array = new Uint8Array(),
   contentType?: string,
+  signal?: AbortSignal,
 ) {
   const url = objectUrl(config, key);
   const payloadHash = sha256(bytes);
@@ -76,6 +77,7 @@ async function signedMutation(
   const response = await fetch(url, {
     method,
     headers,
+    signal,
     body: method === 'PUT' ? toArrayBuffer(bytes) : undefined,
   });
   if (!response.ok) throw new Error(`Object storage ${method} failed with status ${response.status}`);
@@ -106,8 +108,8 @@ function presignedGet(config: StorageEnv, key: string, expiresSeconds: number): 
 
 export function createS3Storage(config: StorageEnv = getStorageEnv()): ObjectStorage {
   return {
-    async put(key, bytes, contentType) { await signedMutation(config, 'PUT', key, bytes, contentType); },
-    async delete(key) { await signedMutation(config, 'DELETE', key); },
+    async put(key, bytes, contentType, signal) { await signedMutation(config, 'PUT', key, bytes, contentType, signal); },
+    async delete(key, signal) { await signedMutation(config, 'DELETE', key, undefined, undefined, signal); },
     async signedGetUrl(key, expiresSeconds = 300) { return presignedGet(config, key, expiresSeconds); },
   };
 }
