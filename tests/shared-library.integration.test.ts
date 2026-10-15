@@ -19,7 +19,8 @@ const database = new URL(process.env.DATABASE_URL!);
 assert.ok(['127.0.0.1','localhost'].includes(database.hostname) && database.pathname === '/planly_test');
 const db = getDb(), owners = ['shared-admin','shared-a','shared-b'];
 const objectBytes = new Map<string, Buffer>();
-let failPut = 0, failDelete = false, puts: string[] = [], deletes: string[] = [];
+let failPut = 0, failDelete = false, puts: string[] = [], deletes: string[] = [], gets: string[] = [];
+let storageStep: ((method: 'GET'|'PUT', res: ServerResponse)=>boolean) | undefined;
 let getEntered: (()=>void) | undefined, finishGet: Promise<void> | undefined;
 let stallMutation:'PUT'|'DELETE'|undefined,mutationEntered:(()=>void)|undefined,mutationClosed:(()=>void)|undefined;
 const stalledResponses=new Set<ServerResponse>();
@@ -32,11 +33,13 @@ const server = createServer(async (req, res) => {
   if (req.method === 'PUT') {
     const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk));
     objectBytes.set(key, Buffer.concat(chunks)); puts.push(key);
+    if(storageStep?.('PUT',res))return;
     if(stallResponse('PUT',res))return;
     if (failPut && puts.length === failPut) { req.socket.destroy(); return; }
     res.end(); return;
   }
   if (req.method === 'DELETE') { deletes.push(key); if(stallResponse('DELETE',res))return; if(failDelete) {res.writeHead(503);res.end();return;} objectBytes.delete(key);res.end();return; }
+  gets.push(key);if(storageStep?.('GET',res))return;
   getEntered?.(); if(finishGet) await finishGet;
   const bytes = objectBytes.get(key); if(!bytes) {res.writeHead(404);res.end();return;} res.end(bytes);
 });
@@ -77,7 +80,7 @@ beforeEach(async()=>{
   await db.insert(users).values(owners.map((id,i)=>({id,email:i?`${id}@example.test`:'owner@example.test',displayName:id,role:i?'USER' as const:'ADMIN' as const,accessState:'ACTIVE' as const,authInitialized:true})));
   tokens=await Promise.all(owners.map(id=>createOwnerSession(id)));
   await db.insert(libraryItems).values([{id:'source-one',userId:owners[0],title:'Shared title',bodyText:'Shared body'},{id:'source-two',userId:owners[0],bodyText:'Second body'},{id:'a-private',userId:owners[1],bodyText:'Private A'},{id:'b-private',userId:owners[2],bodyText:'Private B'}]);
-  objectBytes.clear();puts=[];deletes=[];failPut=0;failDelete=false;getEntered=undefined;finishGet=undefined;
+  objectBytes.clear();puts=[];deletes=[];gets=[];storageStep=undefined;failPut=0;failDelete=false;getEntered=undefined;finishGet=undefined;
   stallMutation=undefined;mutationEntered=undefined;mutationClosed=undefined;
 });
 after(async()=>{await db.delete(posts);await db.delete(users);await closeDb();await new Promise<void>(resolve=>server.close(()=>resolve()));resetServerEnvForTests();});
@@ -197,19 +200,109 @@ test('atomic batch rollback compensates even an uncertain successful PUT and ret
   puts=[];deletes=[];failPut=1;failDelete=true;const response=await copy([id]);assert.equal(response.status,502);const failure=await response.json();assert.equal(failure.code,'SHARED_COPY_CLEANUP_FAILED');assert.doesNotMatch(JSON.stringify(failure),/fixture-secret|private\/|users\//);
 });
 
+test('aggregate boundary accepts twenty files and exactly 100 MiB across multiple selected materials',async()=>{
+  // Reuse one real 5 MiB payload, but each attachment is copied independently.
+  const bytes=Buffer.alloc(5*1024*1024,7),checksum=createHash('sha256').update(bytes).digest('hex');
+  for(const source of ['source-one','source-two']){
+    await fixtureMedia(source,owners[0],10);
+    for(let i=0;i<10;i++){
+      const asset=`${source}-asset-${i}`;objectBytes.set(`private/${asset}`,bytes);
+      await db.update(mediaAssets).set({byteSize:bytes.length,checksum}).where(eq(mediaAssets.id,asset));
+    }
+    assert.equal((await share(source)).status,200);
+  }
+  const ids=(await catalog()).map((item:{id:string})=>item.id);
+  const response=await copy(ids);assert.equal(response.status,201);
+  const {items}=await response.json();assert.equal(items.length,2);
+  assert.equal(items.flatMap((item:{mediaIds:string[]})=>item.mediaIds).length,20);
+  assert.equal(gets.length,20);assert.equal(puts.length,20);
+  assert.equal(puts.reduce((sum,key)=>sum+objectBytes.get(key)!.length,0),104857600);
+  for(const table of [posts,postTargets,publications])assert.equal((await db.select().from(table)).length,0);
+});
+
+for(const excess of ['files','bytes'] as const)test(`aggregate ${excess} limit rejects the entire batch with 422 before the first storage I/O`,async()=>{
+  await fixtureMedia('source-one',owners[0],excess==='files'?12:5);
+  await fixtureMedia('source-two',owners[0],excess==='files'?9:1);
+  if(excess==='bytes'){
+    await db.update(mediaAssets).set({byteSize:20*1024*1024}).where(eq(mediaAssets.userId,owners[0]));
+    await db.update(mediaAssets).set({byteSize:1}).where(eq(mediaAssets.id,'source-two-asset-0'));
+  }
+  await share();await share('source-two');const ids=(await catalog()).map((item:{id:string})=>item.id);
+  const response=await copy(ids);assert.equal(response.status,422);
+  const failure=await response.json();assert.equal(failure.code,'SHARED_COPY_LIMIT_EXCEEDED');
+  assert.doesNotMatch(JSON.stringify(failure),/private\/|users\/|fixture-secret/);
+  assert.deepEqual(gets,[]);assert.deepEqual(puts,[]);assert.deepEqual(deletes,[]);
+  assert.deepEqual((await listLibraryItems(owners[1])).map(item=>item.id),['a-private']);
+  assert.equal((await getPool().query('SELECT count(*)::int AS n FROM shared_library_copy_receipts')).rows[0].n,0);
+});
+
+for(const stalled of ['GET headers','GET body','PUT'] as const)test(`one cumulative 60s storage deadline cancels stalled ${stalled}, rolls back and compensates`,async()=>{
+  await fixtureMedia();const id=await published(),key=randomUUID();
+  let elapsed=0,enter!:()=>void,closed!:()=>void,bodyRead!:()=>void,held:ServerResponse|undefined;
+  const entered=new Promise<void>(resolve=>{enter=resolve;}),cancelled=new Promise<void>(resolve=>{closed=resolve;});
+  const readingBody=new Promise<void>(resolve=>{bodyRead=resolve;});
+  const timers:{at:number;controller:AbortController}[]=[];
+  const timeout=test.mock.method(AbortSignal,'timeout',(ms:number)=>{
+    assert.ok(ms===30_000 || ms===60_000);const controller=new AbortController();timers.push({at:elapsed+ms,controller});return controller.signal;
+  });
+  const tick=(ms:number)=>{elapsed+=ms;for(const timer of timers)if(timer.at<=elapsed)timer.controller.abort(new DOMException('Fixture deadline reached','TimeoutError'));};
+  let step=0;
+  const read=ReadableStreamDefaultReader.prototype.read;
+  const readerObserver=test.mock.method(ReadableStreamDefaultReader.prototype,'read',function(this:ReadableStreamDefaultReader,...args:[]){
+    const result=Reflect.apply(read,this,args);
+    if(stalled==='GET body' && step===3)bodyRead();
+    return result;
+  });
+  storageStep=(method,res)=>{
+    step++;
+    // Each completed GET/PUT consumes 20s, below its individual 30s limit.
+    // Stall the second GET (40s consumed), or second PUT (60s consumed).
+    const target=stalled==='PUT'?4:3;
+    if(step<target){tick(stalled==='PUT'?15_000:20_000);return false;}
+    held=res;res.on('close',closed);
+    if(stalled==='GET body'){res.writeHead(200);res.write(Buffer.from('p'));}
+    enter();return true;
+  };
+  const pending=copy([id],tokens[1],key);
+  try{
+    // A broken implementation also reaches the fixture; avoid an unbounded test hang.
+    await Promise.race([entered,delay(5000).then(()=>assert.fail('storage stall was not reached'))]);
+    if(stalled==='GET body')await Promise.race([readingBody,delay(5000).then(()=>assert.fail('the real response body reader was not entered'))]);
+    tick(60_000-elapsed);
+    // Bound only the diagnostic wait, never the production timeout.
+    const result=await Promise.race([pending,delay(1000).then(()=>null)]);
+    assert.ok(result,'cumulative budget must abort the in-flight I/O without a fresh per-file budget');
+    assert.equal(result.status,504);assert.equal((await result.json()).code,'SHARED_COPY_TIMEOUT');
+    await cancelled;
+    assert.equal(puts.length,stalled==='PUT'?2:1);assert.deepEqual(deletes.sort(),[...puts].sort());
+    assert.ok(puts.every(object=>!objectBytes.has(object)));
+    assert.deepEqual((await listLibraryItems(owners[1])).map(item=>item.id),['a-private']);
+    assert.equal((await db.select().from(mediaAssets).where(eq(mediaAssets.userId,owners[1]))).length,0);
+    assert.equal((await getPool().query('SELECT count(*)::int AS n FROM shared_library_copy_receipts')).rows[0].n,0);
+    for(const table of [posts,postTargets,publications])assert.equal((await db.select().from(table)).length,0);
+  }finally{
+    held?.destroy();for(const timer of timers)timer.controller.abort();await pending;timeout.mock.restore();readerObserver.mock.restore();storageStep=undefined;
+  }
+  assert.equal((await catalog()).length,1);
+  assert.equal((await copy([id],tokens[1],key)).status,201,'same key safely retries a confirmed rollback');
+});
+
 for(const method of ['PUT','DELETE'] as const)test(`stalled shared-copy ${method} is actually aborted at its scoped deadline and releases source locks`,async()=>{
   await fixtureMedia();const id=await published();stallMutation=method;if(method==='DELETE')failPut=1;
   let enter!:()=>void,closed!:()=>void;
   const entered=new Promise<void>(resolve=>{enter=resolve;}),cancelled=new Promise<void>(resolve=>{closed=resolve;});
   mutationEntered=enter;mutationClosed=closed;
   const deadlines=new Map<AbortSignal,AbortController>();
+  let latestIndividual:AbortController|undefined,putDeadline:AbortController|undefined;
   const timeout=test.mock.method(AbortSignal,'timeout',(milliseconds:number)=>{
-    assert.equal(milliseconds,30_000);const controller=new AbortController();deadlines.set(controller.signal,controller);return controller.signal;
+    assert.ok(milliseconds===30_000 || milliseconds===60_000);const controller=new AbortController();
+    if(milliseconds===30_000)latestIndividual=controller;
+    deadlines.set(controller.signal,controller);return controller.signal;
   });
   const storage=getObjectStorage(),put=storage.put,remove=storage.delete;
   let putSignal:AbortSignal|undefined,deleteSignal:AbortSignal|undefined;
   const putSpy=test.mock.method(storage,'put',async(key:string,bytes:Uint8Array,type:string,signal?:AbortSignal)=>{
-    putSignal=signal;return Reflect.apply(put,storage,[key,bytes,type,signal]);
+    putSignal=signal;putDeadline=latestIndividual;return Reflect.apply(put,storage,[key,bytes,type,signal]);
   });
   const deleteSpy=test.mock.method(storage,'delete',async(key:string,signal?:AbortSignal)=>{
     deleteSignal=signal;return Reflect.apply(remove,storage,[key,signal]);
@@ -219,8 +312,10 @@ for(const method of ['PUT','DELETE'] as const)test(`stalled shared-copy ${method
     await entered;
     const signal=method==='PUT'?putSignal:deleteSignal;
     assert.ok(signal instanceof AbortSignal,`${method} must carry its cancellation signal`);
-    assert.ok(deadlines.has(signal),'copy mutation must use its 30 second deadline');
-    deadlines.get(signal)!.abort(new DOMException('Fixture deadline reached','TimeoutError'));
+    const individual=method==='PUT'?putDeadline:deadlines.get(signal);
+    assert.ok(individual,'copy mutation must retain its individual 30 second deadline');
+    individual.abort(new DOMException('Fixture deadline reached','TimeoutError'));
+    assert.equal(signal.aborted,true,'the real transport signal must cancel with the individual deadline');
     await cancelled;response=await pending;
     assert.equal(response.status,502);
     assert.equal((await response.json()).code,method==='PUT'?'SHARED_COPY_FAILED':'SHARED_COPY_CLEANUP_FAILED');

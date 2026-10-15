@@ -19,7 +19,13 @@ function recoverCopy(storageKey: string | null): { intent: CopyIntent | null; er
 }
 
 async function readResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) throw Object.assign(new Error(response.status === 401 ? 'Сессия истекла. Войди снова.' : response.status === 403 ? 'Доступ запрещён.' : response.status === 404 ? 'Материал больше недоступен.' : response.status === 409 ? 'Материал изменился. Обнови библиотеку.' : response.status === 410 ? 'Личная копия уже удалена.' : 'Не удалось выполнить действие. Проверь результат перед новым копированием.'), { status: response.status });
+    if (!response.ok) {
+        const code = await response.json().then(value => value?.code).catch(() => undefined);
+        const message = response.status === 422 && code === 'SHARED_COPY_LIMIT_EXCEEDED' ? 'За один раз можно скопировать не более 20 медиафайлов общим размером до 100 MiB. Уменьши выбор. Если лимит превышает один материал, попроси администратора разделить его.'
+            : response.status === 504 && code === 'SHARED_COPY_TIMEOUT' ? 'Копирование медиа превысило 60 секунд. Повтори проверку результата с прежним запросом.'
+            : response.status === 401 ? 'Сессия истекла. Войди снова.' : response.status === 403 ? 'Доступ запрещён.' : response.status === 404 ? 'Материал больше недоступен.' : response.status === 409 ? 'Материал изменился. Обнови библиотеку.' : response.status === 410 ? 'Личная копия уже удалена.' : 'Не удалось выполнить действие. Проверь результат перед новым копированием.';
+        throw Object.assign(new Error(message), { status: response.status });
+    }
     return response.json() as Promise<T>;
 }
 

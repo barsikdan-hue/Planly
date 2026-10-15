@@ -56,3 +56,14 @@
 - [ ] Independent read-only Critic; fix proven defects and rerun affected checks.
 - [ ] Push separate branch, create/attach Draft PR, verify exact source-HEAD CI and Docker Self-host; record synthetic merge mapping when applicable.
 - [ ] Report limits and stop at owner review gate.
+
+### PR59 reliability correction — Owner approved 2026-10-15
+
+Continue the existing branch from da80d5e; no new milestone or PR. The proven gap is aggregate work admitted inside the locked copy transaction, with fresh per-file timeouts.
+
+1. RED: real-session API tests for 21 attachment occurrences and >100 MiB admission; deterministic transport fault tests for a cumulative 60s deadline across sequential GET/PUT, including stalled GET headers/body and PUT; UI limits and unchanged-key recovery.
+2. Minimal fix: after locked ownership/media validation, before destination INSERT or storage I/O, admit at most 20 files and 100 MiB; retain the existing 20-item selection bound. One shared AbortSignal deadline, combined with existing individual 30s timeouts; optional signal on the existing storage read helper. No Scheduler, authorization, schema or worker changes.
+3. Preserve atomic rollback, independent bounded cleanup, durable receipt reconciliation after uncertain COMMIT, and the original key for ambiguous retries. Sanitized UI messages; no partial/text-only fallback.
+4. GREEN, full native regression, typecheck/lint/build, compiled HTTP, desktop/mobile E2E, independent read-only Critic, push existing Draft59, exact-source-HEAD CI and Docker Self-host.
+
+The 60s budget applies to forward storage operations, not pool/SQL waits, cleanup, reconciliation or entire HTTP duration. No production migration0012, merge, deploy, secrets/infra changes or real provider sends.

@@ -98,6 +98,7 @@ export async function copySharedLibrary(request: Request, raw: unknown, operatio
   const inputHash=createHash('sha256').update(JSON.stringify(input.ids)).digest('hex');
   const destinations:string[]=[];
   let preparedItems:LibraryItemDto[]|undefined;
+  let storageDeadline:AbortSignal|undefined;
   try{
     return await withActor(request,async(tx,userId)=>{
       const [receipt]=await tx.select().from(sharedLibraryCopyReceipts).where(and(eq(sharedLibraryCopyReceipts.userId,userId),eq(sharedLibraryCopyReceipts.operationId,key)));
@@ -109,23 +110,33 @@ export async function copySharedLibrary(request: Request, raw: unknown, operatio
       if(shares.length!==input.ids.length || sources.length!==input.ids.length || sources.some(s=>s.status!=='READY'))unavailable();
       const sourceById=new Map(sources.map(s=>[s.id,s])),shareById=new Map(shares.map(s=>[s.id,s]));
       const media=await loadMedia(tx,sources),items:LibraryItemDto[]=[];
+      // Count attachment occurrences, including assets reused by several sources.
+      // Receipt replay stays first; admission is atomic and precedes any storage I/O.
+      const attachments=[...media.values()].flat();
+      if(attachments.length>20 || attachments.reduce((sum,asset)=>sum+asset.byteSize,0)>100*1024*1024)
+        throw new SharedLibraryError(422,'SHARED_COPY_LIMIT_EXCEEDED','Copy at most 20 media files and 100 MiB per operation');
+      storageDeadline=AbortSignal.timeout(60_000);
       for(const selectedId of input.ids){
         const source=sourceById.get(shareById.get(selectedId)!.sourceId)!;
         const id=randomUUID(),now=new Date(),mediaIds:string[]=[];
         await tx.insert(libraryItems).values({id,userId,title:source.title,bodyText:source.bodyText,status:'READY',createdAt:now,updatedAt:now});
         for(const asset of media.get(source.id)!){
-          const bytes=await readMediaObjectBytes(asset.storageKey,asset.byteSize);
+          storageDeadline.throwIfAborted();
+          const bytes=await readMediaObjectBytes(asset.storageKey,asset.byteSize,storageDeadline);
           if(createHash('sha256').update(bytes).digest('hex')!==asset.checksum)throw new Error('Media checksum mismatch');
           const mediaId=randomUUID(),ownerPrefix=createHash('sha256').update(userId).digest('hex').slice(0,16);
           const storageKey=`users/${ownerPrefix}/${randomUUID()}`;
           // Register BEFORE PUT: an interrupted response can follow a successful write.
+          storageDeadline.throwIfAborted();
           destinations.push(storageKey);
-          await getObjectStorage().put(storageKey,bytes,asset.mimeType,AbortSignal.timeout(30_000));
+          await getObjectStorage().put(storageKey,bytes,asset.mimeType,AbortSignal.any([storageDeadline,AbortSignal.timeout(30_000)]));
+          storageDeadline.throwIfAborted();
           await tx.insert(mediaAssets).values({...asset,id:mediaId,userId,storageKey,createdAt:now,updatedAt:now});
           await tx.insert(libraryItemMedia).values({libraryItemId:id,mediaId,position:mediaIds.length});mediaIds.push(mediaId);
         }
         items.push({id,title:source.title,text:source.bodyText,status:'READY',mediaIds,sourcePostId:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
       }
+      storageDeadline.throwIfAborted();
       await tx.insert(sharedLibraryCopyReceipts).values({userId,operationId:key,inputHash,items});
       preparedItems=items;
       return items;
@@ -158,6 +169,7 @@ export async function copySharedLibrary(request: Request, raw: unknown, operatio
     // upstream error messages enter the response or console.
     const {ForbiddenError}=await import('./auth/access.ts');
     if(error instanceof ForbiddenError)throw error;
+    if(storageDeadline?.aborted)throw new SharedLibraryError(504,'SHARED_COPY_TIMEOUT','Storage copy exceeded 60 seconds; retry with the same key');
     throw new SharedLibraryError(502,'SHARED_COPY_FAILED','The selected materials could not be copied');
   }
 }

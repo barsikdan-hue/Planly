@@ -122,11 +122,12 @@ export function getObjectStorage(): ObjectStorage {
 
 
 // Worker reads the internal endpoint; browser/public preview URLs are never followed.
-export async function readMediaObjectBytes(key: string, expectedSize: number): Promise<Uint8Array> {
+export async function readMediaObjectBytes(key: string, expectedSize: number, signal?: AbortSignal): Promise<Uint8Array> {
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 1 || expectedSize > 20 * 1024 * 1024) throw new Error('Invalid stored media size');
   const config = getStorageEnv();
   const url = presignedGet({...config, S3_PUBLIC_ENDPOINT: undefined}, key, 60);
-  const response = await fetch(url, {redirect:'error', signal:AbortSignal.timeout(30_000)});
+  const timeout = AbortSignal.timeout(30_000);
+  const response = await fetch(url, {redirect:'error', signal:signal ? AbortSignal.any([signal,timeout]) : timeout});
   if (!response.ok || !response.body) throw new Error('Private media is unavailable');
   const reader = response.body.getReader();
   const result = new Uint8Array(expectedSize);

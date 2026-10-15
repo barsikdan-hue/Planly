@@ -107,3 +107,27 @@ test('unreadable pending intent fails closed and never sends a replacement copy'
   assert.equal(button(h, 'Добавить себе').props.disabled, true); await button(h, 'Добавить себе').props.onClick();
   assert.equal(writes, 0); assert.match(text(h.tree), /Не удалось восстановить/);
 });
+
+test('aggregate rejection explains both limits and permits a smaller explicit selection', async () => {
+  const writes=[];
+  globalThis.fetch=async (_url,init)=>{
+    if(!init?.method)return Response.json({items:[shared('one')]});
+    writes.push(init);return Response.json({code:'SHARED_COPY_LIMIT_EXCEEDED',error:'private/internal/storage-key'},{status:422});
+  };
+  const h=await mount();await button(h,'Добавить себе').props.onClick();await h.settle();
+  assert.match(text(h.tree),/20.*100 MiB/);assert.doesNotMatch(text(h.tree),/private\/internal/);
+  assert.equal(nodes(h.tree,n=>n.type==='input' && n.props.type==='checkbox')[0].props.disabled,false);
+  assert.equal(writes.length,1);
+});
+
+test('storage timeout explains safe same-key retry without starting another copy', async () => {
+  const writes=[];
+  globalThis.fetch=async (_url,init)=>{
+    if(!init?.method)return Response.json({items:[shared('one')]});
+    writes.push(init);return Response.json({code:'SHARED_COPY_TIMEOUT',error:'internal failure'},{status:504});
+  };
+  const h=await mount();await button(h,'Добавить себе').props.onClick();await h.settle();
+  assert.match(text(h.tree),/60 секунд/);assert.doesNotMatch(text(h.tree),/internal failure/);
+  await button(h,'Проверить результат копирования').props.onClick();await h.settle();
+  assert.equal(writes[0].headers['idempotency-key'],writes[1].headers['idempotency-key']);
+});
