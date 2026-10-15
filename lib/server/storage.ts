@@ -108,7 +108,14 @@ function presignedGet(config: StorageEnv, key: string, expiresSeconds: number): 
 
 export function createS3Storage(config: StorageEnv = getStorageEnv()): ObjectStorage {
   return {
-    async put(key, bytes, contentType, signal) { await signedMutation(config, 'PUT', key, bytes, contentType, signal); },
+    async put(key, bytes, contentType, signal) {
+      if(!signal){await signedMutation(config,'PUT',key,bytes,contentType);return;}
+      const timeout=AbortSignal.timeout(30_000),transportSignal=AbortSignal.any([signal,timeout]);
+      await signedMutation(config,'PUT',key,bytes,contentType,transportSignal);
+      // Node22 any() retains its sources weakly. Keep both signals live until
+      // the actual mutation finishes, including after a forced collection.
+      timeout.throwIfAborted();transportSignal.throwIfAborted();
+    },
     async delete(key, signal) { await signedMutation(config, 'DELETE', key, undefined, undefined, signal); },
     async signedGetUrl(key, expiresSeconds = 300) { return presignedGet(config, key, expiresSeconds); },
   };
@@ -127,19 +134,28 @@ export async function readMediaObjectBytes(key: string, expectedSize: number, si
   const config = getStorageEnv();
   const url = presignedGet({...config, S3_PUBLIC_ENDPOINT: undefined}, key, 60);
   const timeout = AbortSignal.timeout(30_000);
-  const response = await fetch(url, {redirect:'error', signal:signal ? AbortSignal.any([signal,timeout]) : timeout});
+  const transportSignal = signal ? AbortSignal.any([signal,timeout]) : timeout;
+  const response = await fetch(url, {redirect:'error', signal:transportSignal});
   if (!response.ok || !response.body) throw new Error('Private media is unavailable');
   const reader = response.body.getReader();
+  // Node22 may collect fetch's abort follower after headers. Cancel the actual
+  // body reader too, so a pending read drains even in that lifecycle.
+  const cancelRead=()=>{void reader.cancel(transportSignal.reason).catch(()=>{});};
+  transportSignal.addEventListener('abort',cancelRead,{once:true});
   const result = new Uint8Array(expectedSize);
   let offset = 0;
   try {
+    transportSignal.throwIfAborted();
     while (true) {
       const {done,value} = await reader.read();
+      // Retain both the timeout source and composed signal through body reads;
+      // keeping only the external parent cannot protect Node22's weak sources.
+      timeout.throwIfAborted();transportSignal.throwIfAborted();
       if (done) break;
       if (offset + value.length > expectedSize) throw new Error('Stored media size mismatch');
       result.set(value,offset); offset += value.length;
     }
     if (offset !== expectedSize) throw new Error('Stored media size mismatch');
     return result;
-  } finally {await reader.cancel().catch(()=>{}); reader.releaseLock();}
+  } finally {transportSignal.removeEventListener('abort',cancelRead);await reader.cancel().catch(()=>{}); reader.releaseLock();}
 }

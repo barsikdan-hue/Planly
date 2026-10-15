@@ -299,10 +299,11 @@ for(const method of ['PUT','DELETE'] as const)test(`stalled shared-copy ${method
     if(milliseconds===30_000)latestIndividual=controller;
     deadlines.set(controller.signal,controller);return controller.signal;
   });
-  const storage=getObjectStorage(),put=storage.put,remove=storage.delete;
+  const storage=getObjectStorage(),fetch=globalThis.fetch,remove=storage.delete;
   let putSignal:AbortSignal|undefined,deleteSignal:AbortSignal|undefined;
-  const putSpy=test.mock.method(storage,'put',async(key:string,bytes:Uint8Array,type:string,signal?:AbortSignal)=>{
-    putSignal=signal;putDeadline=latestIndividual;return Reflect.apply(put,storage,[key,bytes,type,signal]);
+  const putSpy=test.mock.method(globalThis,'fetch',async(input:Parameters<typeof fetch>[0],init?:Parameters<typeof fetch>[1])=>{
+    if(init?.method==='PUT'){putSignal=init.signal??undefined;putDeadline=latestIndividual;}
+    return fetch(input,init);
   });
   const deleteSpy=test.mock.method(storage,'delete',async(key:string,signal?:AbortSignal)=>{
     deleteSignal=signal;return Reflect.apply(remove,storage,[key,signal]);

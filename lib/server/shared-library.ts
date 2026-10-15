@@ -129,7 +129,7 @@ export async function copySharedLibrary(request: Request, raw: unknown, operatio
           // Register BEFORE PUT: an interrupted response can follow a successful write.
           storageDeadline.throwIfAborted();
           destinations.push(storageKey);
-          await getObjectStorage().put(storageKey,bytes,asset.mimeType,AbortSignal.any([storageDeadline,AbortSignal.timeout(30_000)]));
+          await getObjectStorage().put(storageKey,bytes,asset.mimeType,storageDeadline);
           storageDeadline.throwIfAborted();
           await tx.insert(mediaAssets).values({...asset,id:mediaId,userId,storageKey,createdAt:now,updatedAt:now});
           await tx.insert(libraryItemMedia).values({libraryItemId:id,mediaId,position:mediaIds.length});mediaIds.push(mediaId);
