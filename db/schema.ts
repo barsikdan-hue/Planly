@@ -85,6 +85,21 @@ export const loginRateLimits = pgTable('login_rate_limits', {
   updatedAt,
 });
 
+export const userInvitations = pgTable('user_invitations', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').$type<'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED'>().notNull().default('PENDING'),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true, mode: 'date' }),
+  createdAt,
+}, table => [
+  uniqueIndex('user_invitations_pending_email_uidx').on(table.email).where(sql`${table.status} = 'PENDING'`),
+  check('user_invitations_status_check', sql`${table.status} IN ('PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED')`),
+  check('user_invitations_hash_format', sql`${table.tokenHash} ~ '^[a-f0-9]{64}$'`),
+]);
+
 export const socialAccounts = pgTable('social_accounts', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

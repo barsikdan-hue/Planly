@@ -15,7 +15,7 @@ export type Owner = {
   sessionVersion?: number;
 };
 
-function sessionTokenHash(token: string): string {
+export function sessionTokenHash(token: string): string {
   return createHmac('sha256', getSessionEnv().SESSION_SECRET).update(token).digest('hex');
 }
 
@@ -31,13 +31,18 @@ export function sessionCookieOptions() {
 
 export async function createOwnerSession(userId: string, expectedVersion?: number): Promise<string> {
   await initializeLegacyOwner();
-  return getDb().transaction(async tx => {
+  return getDb().transaction(tx => createSessionInTransaction(tx,userId,expectedVersion));
+}
+
+type SessionTransaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+// Invite consumption and the first authenticated session commit together.
+export async function createSessionInTransaction(tx: SessionTransaction,userId: string,expectedVersion?: number): Promise<string> {
     const [user]=await tx.select().from(users).where(eq(users.id,userId)).for('update');
     if(!user || !user.authInitialized || user.accessState!=='ACTIVE' || expectedVersion!==undefined && expectedVersion!==user.sessionVersion) throw new SessionAccessError();
     const rawToken=randomBytes(32).toString('base64url');
     await tx.insert(sessions).values({id:randomUUID(),userId,tokenHash:sessionTokenHash(rawToken),sessionVersion:user.sessionVersion,expiresAt:new Date(Date.now()+SESSION_TTL_MS)});
     return rawToken;
-  });
 }
 
 export async function getOwnerBySessionToken(rawToken: string): Promise<Owner | null> {

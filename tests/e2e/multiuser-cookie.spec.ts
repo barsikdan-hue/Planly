@@ -8,11 +8,15 @@ import { getDb, closeDb } from '../../db/index.ts';
 import { users } from '../../db/schema.ts';
 import { hashOwnerPassword } from '../../lib/server/auth/password.ts';
 
+// Do not retain fixture passwords or session headers in failure artifacts.
+test.use({trace:'off',screenshot:'off',video:'off'});
+process.env.PLAYWRIGHT_NO_COPY_PROMPT='1';
+
 test('delayed real A logout cannot remove the newer B browser session cookie',async({page,context},info)=>{
   const database=new URL(process.env.DATABASE_URL??'');
   expect(['localhost','127.0.0.1'].includes(database.hostname)&&database.pathname==='/planly_test').toBe(true);
   const suffix=randomUUID(),ids=[`browser-a-${suffix}`,`browser-b-${suffix}`],password='browser-fixture-password';
-  const db=getDb(),backend=`http://127.0.0.1:${4321+info.workerIndex}`,base=`https://localhost:${4321+info.workerIndex}`;
+  const db=getDb(),backend=`http://127.0.0.1:${4321+info.workerIndex}`,base=`http://localhost:${4321+info.workerIndex}`;
   let server:ReturnType<typeof spawn>|undefined,releaseLogout:()=>void=()=>{},logout:Promise<unknown>|undefined;
   const delivered=new Promise<void>(resolve=>{releaseLogout=resolve;});
   let captured:()=>void=()=>{};const backendLogoutDone=new Promise<void>(resolve=>{captured=resolve;});
@@ -23,16 +27,12 @@ test('delayed real A logout cannot remove the newer B browser session cookie',as
     const deadline=Date.now()+10000;let ready=false;
     while(Date.now()<deadline){try{ready=(await fetch(`${backend}/api/health`,{signal:AbortSignal.timeout(1000)})).ok;}catch{/* bounded startup probe */}if(ready)break;await delay(100);}
     expect(ready).toBe(true);
-    // Isolated HTTPS browser origin proxies the actual compiled backend.
-    // Preserve Secure/HttpOnly and real Set-Cookie; only delay A's response.
-    await context.route(`${base}/**`,async route=>{
-      const path=new URL(route.request().url());
-      const headers=await route.request().allHeaders();
-      // The fixture proxy's API transport supplies metadata for the captured
-      // origin; cross-origin requests retain their rejection classification.
-      if(headers.origin)headers['sec-fetch-site']=new URL(headers.origin).origin===path.origin?'same-origin':'cross-site';
-      const response=await route.fetch({url:`${backend}${path.pathname}${path.search}`,headers});
-      if(path.pathname==='/api/auth/logout'){captured();await delivered;}
+    // Chromium's localhost exception accepts the real production Secure cookie.
+    // Documents, assets, redirects and private APIs use the real HTTP listener;
+    // intercept only the one logout response needed by this overlap regression.
+    await context.route(`${base}/api/auth/logout`,async route=>{
+      const response=await route.fetch({maxRedirects:0}).catch(()=>{throw new Error('Real logout response transport failed');});
+      captured();await delivered;
       await route.fulfill({response});
     });
     await page.goto(`${base}/login`);

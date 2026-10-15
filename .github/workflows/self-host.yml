@@ -35,6 +35,8 @@ jobs:
         run: node tests/self-host-smoke.mjs
       - name: Verify ADMIN and USER isolation in the real self-host web
         run: sed "s|from '../|from './|g" tests/multiuser-http-smoke.mjs | docker compose --env-file .env.self-host exec -T -e PLANLY_MULTIUSER_HTTP_TEST=isolated-ci -e PLANLY_MULTIUSER_BASE_URL=http://localhost:3000 -e PLANLY_OWNER_PASSWORD="$PLANLY_OWNER_PASSWORD" web node --experimental-strip-types --input-type=module
+      - name: Verify invite-only enrollment in the real self-host web
+        run: sed "s|from '../|from './|g" tests/invitations-http-smoke.mjs | docker compose --env-file .env.self-host exec -T -e PLANLY_MULTIUSER_HTTP_TEST=isolated-ci -e PLANLY_MULTIUSER_BASE_URL=http://localhost:3000 -e PLANLY_OWNER_PASSWORD="$PLANLY_OWNER_PASSWORD" web node --experimental-strip-types --input-type=module
       - name: Package verified Next.js build with source
         run: |
           mkdir -p artifacts/release
