@@ -46,6 +46,7 @@ export function fixture({ cache = storage(), items = [], owner = 'owner', media 
   globalThis.setInterval = callback => { const id = ++timerId; timers.set(id, callback); return id; };
   globalThis.clearInterval = id => timers.delete(id);
   globalThis.fetch = async (url, init) => {
+    if (url === '/api/admin/shared-library' && !init?.method) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if (url === '/api/bootstrap') return Response.json(snapshot);
     if (url === '/api/profile' && !init?.method) return Response.json(snapshot.profile);
     if (url === '/api/media' && (!init?.method || init.method === 'GET')) return Response.json(snapshot.media);

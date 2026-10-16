@@ -42,6 +42,9 @@ export const test = base.extend<{ swipeFixture: FixtureControl }>({
         if (request.method() === 'GET') return route.continue();
       } else {
         const reply = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+        // This content-workflow fixture grants empty ADMIN sharing metadata;
+        // real ADMIN/USER permissions are covered by native and compiled E2E sessions.
+        if (request.method() === 'GET' && url.pathname === '/api/admin/shared-library') return reply({ sourceIds: [] });
         if (request.method() === 'GET' && url.pathname === '/api/bootstrap') { await control.beforeBootstrap?.(); if(control.withMedia) items[0].mediaIds=['photo','video']; return reply({
           profile: { id: control.owner, email: 'swipe@example.invalid', displayName: 'Swipe fixture' },
           posts: [{ ...post, ...(control.scheduled ? { status: 'READY', targets: [{ id: 'target', socialAccountId: 'tg', provider: 'telegram', textOverride: null, scheduledAt: '2099-01-01T09:00:00Z', publication: null }] } : {}) }], media: control.withMedia ? [{id:'photo',originalName:'Fixture photo',mimeType:'image/png',byteSize:100,previewUrl:'/fixture-photo.png'},{id:'video',originalName:'Fixture video',mimeType:'video/webm',byteSize:100,previewUrl:'/fixture-video.webm'}] : [], socialAccounts: [{id:'tg',provider:'telegram',providerAccountId:null,displayName:'Telegram',enabled:true,connectionStatus:control.telegramConnected?'CONNECTED':'DISCONNECTED'},{id:'max',provider:'max',providerAccountId:null,displayName:'MAX',enabled:true,connectionStatus:control.maxConnected?'CONNECTED':'DISCONNECTED'}], libraryItems: currentItems(),

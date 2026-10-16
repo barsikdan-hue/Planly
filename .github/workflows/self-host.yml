@@ -39,6 +39,8 @@ jobs:
         run: sed "s|from '../|from './|g" tests/invitations-http-smoke.mjs | docker compose --env-file .env.self-host exec -T -e PLANLY_MULTIUSER_HTTP_TEST=isolated-ci -e PLANLY_MULTIUSER_BASE_URL=http://localhost:3000 -e PLANLY_OWNER_PASSWORD="$PLANLY_OWNER_PASSWORD" web node --experimental-strip-types --input-type=module
       - name: Verify ADMIN user lifecycle and isolation in the real self-host web
         run: sed "s|from '../|from './|g" tests/user-management-http-smoke.mjs | docker compose --env-file .env.self-host exec -T -e PLANLY_MULTIUSER_HTTP_TEST=isolated-ci -e PLANLY_MULTIUSER_BASE_URL=http://localhost:3000 -e PLANLY_OWNER_PASSWORD="$PLANLY_OWNER_PASSWORD" web node --experimental-strip-types --input-type=module
+      - name: Verify shared library and independent private media in the real self-host web
+        run: sed "s|from '../|from './|g" tests/shared-library-http-smoke.mjs | docker compose --env-file .env.self-host exec -T -e PLANLY_SHARED_LIBRARY_HTTP_TEST=isolated-ci -e PLANLY_MULTIUSER_BASE_URL=http://localhost:3000 web node --experimental-strip-types --input-type=module
       - name: Package verified Next.js build with source
         run: |
           mkdir -p artifacts/release

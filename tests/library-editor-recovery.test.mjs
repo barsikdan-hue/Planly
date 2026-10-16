@@ -32,6 +32,7 @@ function fixture({ cache = storage(), items = [] } = {}) {
     addEventListener(name, callback) { handlers.set(name, callback); }, removeEventListener(name) { handlers.delete(name); } };
   globalThis.document = { hidden: false };
   globalThis.fetch = async (url, init) => {
+    if (url === '/api/admin/shared-library' && !init?.method) return Response.json({ error: 'Forbidden' }, { status: 403 });
     if (url === '/api/bootstrap') return Response.json({ profile: { id: 'owner', displayName: 'Owner' }, posts: [], libraryItems: items,
       media: ['A', 'B'].map(id => ({ id, originalName: `${id}.png`, mimeType: 'image/png', byteSize: 1, previewUrl: `/${id}` })), socialAccounts: [] });
     requests.push({ url, method: init?.method }); throw Error('Editor navigation/reload must not mutate server data');

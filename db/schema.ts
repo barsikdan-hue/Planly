@@ -16,6 +16,7 @@ import {
 import { sql } from 'drizzle-orm';
 import type { AnalyticsError, AnalyticsMetric, MetricObservation } from '../lib/contracts/analytics.ts';
 import type { SchedulingPlanReceipt } from '../lib/contracts/scheduling-plan.ts';
+import type { LibraryItemDto } from '../lib/contracts/library.ts';
 
 const createdAt = timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
@@ -151,6 +152,23 @@ export const libraryItems = pgTable('library_items', {
 }, (table) => [
   index('library_items_user_id_idx').on(table.userId),
 ]);
+
+// A publication pointer has its own public identity; private item IDs stay private.
+export const sharedLibraryItems = pgTable('shared_library_items', {
+  id: uuid('id').primaryKey(),
+  sourceId: text('source_id').notNull().references(() => libraryItems.id, { onDelete: 'cascade' }),
+  createdAt,
+}, table => [uniqueIndex('shared_library_items_source_uidx').on(table.sourceId)]);
+
+// Result snapshots survive source/result deletion and never reference another owner.
+export const sharedLibraryCopyReceipts = pgTable('shared_library_copy_receipts', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  operationId: uuid('operation_id').notNull(),
+  inputHash: text('input_hash').notNull(),
+  items: jsonb('items').$type<LibraryItemDto[]>().notNull(),
+  createdAt,
+}, table => [primaryKey({ columns: [table.userId, table.operationId] }),
+  check('shared_library_copy_hash_format', sql`${table.inputHash} ~ '^[a-f0-9]{64}$'`)]);
 
 export const libraryCreationAttempts = pgTable('library_creation_attempts', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
