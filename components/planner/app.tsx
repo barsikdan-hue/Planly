@@ -417,28 +417,29 @@ export default function PlannerApp() {
         window.scrollTo({ top: 0, behavior: 'instant' });
     }, []);
 
-    const refreshSharedCopies = async (copied: LibraryItemDto[]) => {
+    const refreshSharedCopies = async () => {
         const context = ownerLifetime.current;
         if (!isOwnerCurrent(context)) return;
-        const revision = libraryRevision.current, mediaVersion = mediaRevision.current;
-        const [profile, libraryItems, media] = await Promise.all([loadProfile(), loadLibraryItems(), loadMedia()]);
-        if (!isOwnerCurrent(context)) return;
-        const confirmed = await loadProfile();
-        if (!isOwnerCurrent(context)) return;
-        if (profile.id !== context!.id || confirmed.id !== context!.id) {
-            invalidateClientSessionRequests(); window.location.assign('/');
-            throw new Error('Кабинет изменился. Обнови страницу.');
+        let revision = libraryRevision.current, mediaVersion = mediaRevision.current;
+        let [profile, libraryItems, media] = await Promise.all([loadProfile(), loadLibraryItems(), loadMedia()]);
+        while (isOwnerCurrent(context)) {
+            const confirmed = await loadProfile();
+            if (!isOwnerCurrent(context)) return;
+            if (profile.id !== context!.id || confirmed.id !== context!.id) {
+                invalidateClientSessionRequests(); window.location.assign('/');
+                throw new Error('Кабинет изменился. Обнови страницу.');
+            }
+            if (revision === libraryRevision.current && mediaVersion === mediaRevision.current) {
+                // Refresh only personal library/media, without bootstrap's scheduler.
+                setData(current => ({ ...current, libraryItems, media: media.map(toUiMedia) }));
+                libraryRevision.current++; mediaRevision.current++;
+                return;
+            }
+            // A newer acknowledgement invalidates this snapshot, including the
+            // copied IDs. Read current authority instead of restoring stale copies.
+            revision = libraryRevision.current; mediaVersion = mediaRevision.current;
+            [profile, libraryItems, media] = await Promise.all([loadProfile(), loadLibraryItems(), loadMedia()]);
         }
-        // Refresh only the personal library/media; this action never invokes
-        // bootstrap's scheduler or creates a publication.
-        const copiedIds = new Set(copied.map(item => item.id));
-        const copiedMedia = new Set(copied.flatMap(item => item.mediaIds));
-        const replaceItems = revision === libraryRevision.current, replaceMedia = mediaVersion === mediaRevision.current;
-        setData(current => ({ ...current,
-            libraryItems: replaceItems ? libraryItems : [...current.libraryItems.filter(item => !copiedIds.has(item.id)), ...libraryItems.filter(item => copiedIds.has(item.id))],
-            media: replaceMedia ? media.map(toUiMedia) : [...current.media.filter(item => !copiedMedia.has(item.id)), ...media.filter(item => copiedMedia.has(item.id)).map(toUiMedia)],
-        }));
-        libraryRevision.current++; mediaRevision.current++;
     };
 
     const hasScheduledPosts = hasPendingPublications(data.posts);
