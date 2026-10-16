@@ -1,13 +1,46 @@
 # Personal SMM Planner / Planly
 
-CURRENT STATE: Phases 0–6 DONE for MVP. Customer-Ready MVP CLOSED by Owner on 2026-10-06; its acceptance scope remains in the [closure evidence](docs/verification/2026-10-06-customer-ready-closure.md). PR34/PR35 are merged/deployed. Main and Render LIVE were verified on 2026-10-09 at `fba293376e3ef502e52a6f8567dc813ed119a532`; health HTTP 200. Phase 9 production acceptance PASS with two owner-authorized disposable drafts, one atomic receipt, reload and safe cleanup; provider sends 0 within this acceptance scope. This does not establish VK authorization or Telegram analytics delivery.
-CURRENT MILESTONE: Phase 9 Scheduling automation — DONE / PRODUCTION ACCEPTED on 2026-10-09. The approved [spec](docs/superpowers/specs/2026-10-09-batch-draft-scheduling-design.md) and [plan](docs/superpowers/plans/2026-10-09-batch-draft-scheduling.md) delivered individually reviewed Telegram/MAX drafts → free slots → atomic scheduling receipt/recovery. PR34 release verification is complete. PR35 CSS incident is closed with historical cause NOT PROVEN / NOT REPRODUCED, current build/runtime healthy and release guardrail active; no speculative cache/compiler/runtime fix. [Production acceptance and historical development evidence](docs/verification/2026-10-09-phase9-batch-scheduling.md). Phase 8 stays PARTIALLY ACCEPTED: MAX collection/styling passed; Telegram analytics remains HOLD. [Deferred work](docs/verification/2026-10-09-phase8-partial-acceptance-phase9-transition.md).
-DEFERRED: Phase 7A VK — HOLD by Owner on 2026-10-08. Implementation and diagnostic PRs are merged, but the latest real attempt failed at TOKEN_EXCHANGE / INVALID_GRANT; the root cause and publication readiness remain unproven. Stop VK investigation, OAuth attempts, support requests and changes until Owner explicitly resumes VK. Existing code and credentials are retained; HOLD is not production acceptance. [Original approved contract](docs/superpowers/specs/2026-10-07-vk-oauth-design.md).
-NEXT STEP: Review the documentation-only Phase 9 closure PR; merge/deploy remain separately gated. Choose the next milestone explicitly before starting it. Candidate directions: resume unfinished Phase 8 Telegram analytics (recommended); a separately scoped CR07/CR08 reliability milestone; resume Phase 7A VK root-cause verification. No new phase is started. Telegram analytics, VK and Instagram remain HOLD; CR07 / CR08 / GAP01 remain not started. Preserve the existing planner and free scheduler; Phase 10 requires proven hosting need and Owner approval.
+## CURRENT PRODUCT TRACK — 16.10.2026 (owner decision)
 
-PERMANENT WORKFLOW (2026-10-04): Harness 0–8 — identity → inspect → contract → root cause → plan → minimal implementation → fresh verification → push/CI/PR and owner merge/deploy gates → short report. Remote-first is not remote-only: local tests and browsers support development; final user-facing acceptance uses the existing Render deployment in a browser. Edge is preferred, not mandatory. Full autonomy and human gates: [AGENTS.md](AGENTS.md).
+**Source of product truth:** [Issue #54](https://github.com/barsikdan-hue/Planly/issues/54), confirmed 14.10.2026; the independent reliability queue is [Issue #49](https://github.com/barsikdan-hue/Planly/issues/49). This P00–P07 sequence supersedes the *next-step instructions* of the older Phase 0–10 roadmap below, not their historical acceptance evidence. The former roadmap uses **Phase**, the new owner-approved product milestones use **P**. Do not confuse P03 with the old Phase 3 scheduler. This document is a status ledger, **not** permission to implement, merge, deploy, migrate, or perform real provider sends.
 
-## Approved phases
+**CURRENT PHASE:** P03-B shared ADMIN library; approved isolated staging and P02/P03-A baseline exist. **CURRENT GOAL:** shared prepared content copied into independent USER-owned items, then user-controlled network selection and bounded consent-based auto-publishing. **NEXT MILESTONE:** review [Draft PR #59](https://github.com/barsikdan-hue/Planly/pull/59) on an exact freshly green HEAD, explicit owner merge and separate staging deploy/acceptance. Until then shared library is **NOT MERGED / NOT DEPLOYED**.
+
+### Verified boundary / evidence
+
+- GitHub `main` at documentation preparation: `cc3cfae7d81b00c07ffc09418854cd310539a25a` (PR #61 password eye button merged); owner checked password reveal on NEWVPS staging. Source/main and deployed runtime SHAs must be rechecked at execution time.
+- NEWVPS isolated staging: `https://stage.lentaro.ru`, `https://media-stage.lentaro.ru`; Ubuntu, Docker Compose, PostgreSQL, Redis, MinIO, HTTPS. Initial staging evidence is in [Issue #60](https://github.com/barsikdan-hue/Planly/issues/60). Following PR #61, Codex reported staging running `cc3cfae7` with restored state; the owner manually accepted eye/eye-off. Local VPS report and running-image provenance are **reported by Codex**, not an independently available VPS login in this document.
+- Render production remains the separate, earlier single-owner deployment `2f13a5acc8a8010bfdc989cc99deb4655b584747`; auto-deploy is OFF. `main` and staging acceptance must never be described as a Render production rollout. Render free PostgreSQL expiry metadata: `2026-10-31T06:53:34Z`; preserve data before this deadline. No production export/restore/cutover acceptance has been established.
+- Historical Telegram/MAX publishing and Phase 9 scheduling have bounded live acceptance on previous production SHAs. This does **not** verify every colleague's independently owned channels, four-provider OAuth, opt-in publication, or current NEWVPS real-provider sends.
+
+### Current owner-approved queue
+
+| Task | Status 16.10.2026 | Remaining acceptance / restriction |
+|---|---|---|
+| P00 Reliability and unresolved gates | **PARTIAL / HOLD** | [#49](https://github.com/barsikdan-hue/Planly/issues/49): PR #47, #50–#53 and separate CR07/CR08/GAP01 and historical provider questions are not equivalent to released fixes. Merge/deploy require specific owner gates; do not combine with P03-B. |
+| P01 Multiuser inspection and decisions | **BASELINE IMPLEMENTED; DOCUMENT ACCEPTANCE NOT FULLY AUDITED** | Invitation-only lifecycle, least-privilege ADMIN/USER, migration/rollback, admin visibility and exact product spec remain the [#54](https://github.com/barsikdan-hue/Planly/issues/54) authority. No public signup is approved. |
+| P02 Separate user accounts / isolation | **CODE ON MAIN; STAGING BASIC ACCEPTANCE** | Auth, invitations, ADMIN/USER, private resource guards and isolated CI/HTTP smokes exist. Real 2–5-user independent networks and production migration/acceptance are NOT complete. |
+| P03-A Minimal administrator | **CODE ON MAIN; STAGING BASELINE** | User list and invitation lifecycle are implemented; any wider data access/technical admin status beyond proven code needs separate acceptance. |
+| P03-B Shared ADMIN library | **DRAFT PR #59, NOT MERGED** | Admin explicitly shares READY items; colleagues copy private editable items/media; no automatic publication. Recheck fresh PR HEAD, CI/Self-host/Critic, migration `0012`, owner gate, staging and browser acceptance. |
+| P04 Networks + consent-based autopublish | **NOT COMPLETE** | Telegram/MAX historical connectors exist but colleague self-service onboarding/ownership and real end-to-end on NEWVPS remain unaccepted; VK OAuth/token exchange/scopes are HOLD; Instagram official Meta connector NOT STARTED. Explicit selection → personal Post/Target/Job → once-only bounded consent, cancellation and idempotency NOT YET IMPLEMENTED for multiuser. |
+| P05 First-run onboarding | **NOT IMPLEMENTED** | Short guide: connect own channels → select shared content → choose time/networks → grant consent → inspect independent outcomes. Desktop/mobile acceptance required. |
+| P06 Multiuser end-to-end / real providers | **NOT ACCEPTED** | 2–5 users with distinct channels, authorization isolation, job recovery/retries/cancellation, no duplicates, provider-specific statuses, authorized real sends with exact consent/count. |
+| P07 Production preservation and cutover | **STAGING INFRA PASS; PRODUCTION CUTOVER HOLD** | Real production source snapshot, privately durable **off-VPS** backup, verified isolated restore/reconciliation, sender/webhook freeze, secret/media mapping, rollback and separate infrastructure/deploy/DNS gates still required. No paid DB without owner decision. |
+
+### STOP / OWNER GATES
+
+- **DO NOT silently resume:** Telegram analytics receipt/legacy identity/webhook (old Phase 8 HOLD), VK live OAuth/support/provider trials (old Phase 7A HOLD), unverified Instagram capabilities; technical discovery may be scoped under the *new* approved product direction, but external operations and release require explicit gates. Do not infer that product inclusion cancels provider-specific safety holds.
+- **DO NOT merge/deploy** open PR #59 or #47/#50–#53 without the matching owner authorization. Never combine an unrelated bugfix, refactor, documentation synchronization and feature in one implementation PR.
+- **DO NOT cut over production**, migrate the production DB, rotate/copy secrets, change Render, DNS, webhook/senders or enable paid resources based on staging tests alone. Production backups are NOT verified; existing backups on the same VPS do not establish offsite disaster recovery.
+- **DO NOT send real social posts**, reactions or OAuth operations without exact external-provider owner consent and evidence. **DO NOT** put credentials in logs, committed docs or frontend.
+- **DO NOT revive AI:** it is outside Planly core roadmap and requires its own separate product approval.
+- **Mobile UX:** main planner has an owner-observed small/clipped-phone-layout concern, not closed by the login form's 320/390 px acceptance. Triage separately with reproducible viewport evidence.
+
+### Historical Phase 0–10 (scope at earlier acceptance)
+
+The phase statuses and evidence below describe the historical single-owner MVP and may retain 09.10-era statements. They are **not** the current execution order and must not override the new P00–P07 owner decision. For every task distinguish source main SHA, branch/PR verification, NEWVPS staging running SHA, Render production SHA and real provider receipts.
+
+## Historical approved phases
 
 | Phase | Scope | Status / boundary |
 |---|---|---|
