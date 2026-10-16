@@ -76,7 +76,42 @@
   box-shadow: 0 0 0 3px rgba(56, 103, 244, 0.12);
 }
 
-.login-card button {
+.login-password-field {
+  position: relative;
+}
+
+.login-password-field input {
+  display: block;
+  padding-right: 48px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #59657a;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.login-password-toggle:hover {
+  color: #2856e8;
+}
+
+.login-password-toggle:focus-visible {
+  outline: 2px solid #3867f4;
+  outline-offset: -4px;
+}
+
+.login-card button[type="submit"] {
   height: 44px;
   margin-top: 11px;
   border: 0;
@@ -87,11 +122,11 @@
   box-shadow: 0 6px 16px rgba(56, 103, 244, 0.18);
 }
 
-.login-card button:hover:not(:disabled) {
+.login-card button[type="submit"]:hover:not(:disabled) {
   background: #2856e8;
 }
 
-.login-card button:disabled {
+.login-card button[type="submit"]:disabled {
   opacity: 0.65;
 }
 
