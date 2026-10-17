@@ -109,6 +109,10 @@ export const socialAccounts = pgTable('social_accounts', {
   displayName: text('display_name').notNull(),
   enabled: boolean('enabled').notNull().default(false),
   connectionStatus: socialConnectionStatusEnum('connection_status').notNull().default('DISCONNECTED'),
+  connectionGeneration: integer('connection_generation').notNull().default(0),
+  bindingRevision: integer('binding_revision').notNull().default(0),
+  connectionAttemptCount: integer('connection_attempt_count').notNull().default(0),
+  connectionAttemptWindow: timestamp('connection_attempt_window', { withTimezone: true, mode: 'date' }),
   createdAt,
   updatedAt,
 }, (table) => [
@@ -126,6 +130,80 @@ export const vkCredentials = pgTable('vk_credentials', {
   expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
   refreshState: vkRefreshStateEnum('refresh_state').notNull().default('READY'),
   updatedAt,
+});
+
+export type SocialConnectionReceipt = {
+  operationId: string; accountId: string; provider: 'TELEGRAM' | 'MAX';
+  destinationId: string; bindingRevision: number; state: 'VERIFIED_DISABLED';
+};
+
+// A verified grant survives logout; session epoch is evidence, not a session FK.
+export const socialBindings = pgTable('social_bindings', {
+  accountId: text('account_id').primaryKey().references(() => socialAccounts.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: socialProviderEnum('provider').notNull(),
+  destinationId: text('destination_id').notNull(),
+  humanId: text('human_id').notNull(),
+  botId: text('bot_id').notNull(),
+  configRevision: text('config_revision').notNull(),
+  sessionVersion: integer('session_version').notNull(),
+  revision: integer('revision').notNull(),
+  checkedAt: timestamp('checked_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt, updatedAt,
+}, table => [uniqueIndex('social_bindings_provider_destination_uidx').on(table.provider, table.destinationId),
+  check('social_bindings_provider_check', sql`${table.provider} IN ('TELEGRAM','MAX')`)]);
+
+export const socialConnectionIntents = pgTable('social_connection_intents', {
+  id: uuid('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => socialAccounts.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  sessionVersion: integer('session_version').notNull(),
+  provider: socialProviderEnum('provider').notNull(),
+  destinationId: text('destination_id').notNull(),
+  destinationName: text('destination_name').notNull(),
+  generation: integer('generation').notNull(),
+  bindingRevision: integer('binding_revision').notNull(),
+  configRevision: text('config_revision').notNull(),
+  nonceHash: text('nonce_hash').notNull(),
+  ticketHash: text('ticket_hash'),
+  replayDigest: text('replay_digest'),
+  humanId: text('human_id'),
+  humanName: text('human_name'),
+  authDate: timestamp('auth_date', { withTimezone: true, mode: 'date' }),
+  ticketExpiresAt: timestamp('ticket_expires_at', { withTimezone: true, mode: 'date' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  state: text('state').$type<'PENDING'|'CANDIDATE'|'VERIFYING'|'COMPLETED'|'CANCELLED'|'FAILED'>().notNull().default('PENDING'),
+  attempts: integer('attempts').notNull().default(0),
+  createdAt,
+}, table => [
+  uniqueIndex('social_connection_nonce_uidx').on(table.nonceHash),
+  uniqueIndex('social_connection_ticket_uidx').on(table.ticketHash),
+  uniqueIndex('social_connection_replay_uidx').on(table.replayDigest),
+  uniqueIndex('social_connection_current_uidx').on(table.accountId).where(sql`${table.state} IN ('PENDING','CANDIDATE','VERIFYING')`),
+  index('social_connection_account_created_idx').on(table.accountId,table.createdAt),
+  check('social_connection_state_check',sql`${table.state} IN ('PENDING','CANDIDATE','VERIFYING','COMPLETED','CANCELLED','FAILED')`),
+  check('social_connection_provider_check',sql`${table.provider} IN ('TELEGRAM','MAX')`),
+]);
+
+export const socialConnectionReceipts = pgTable('social_connection_receipts', {
+  operationId: uuid('operation_id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().references(() => socialAccounts.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull(),
+  sessionVersion: integer('session_version').notNull(),
+  generation: integer('generation').notNull(),
+  configRevision: text('config_revision').notNull(),
+  ticketHash: text('ticket_hash').notNull(),
+  receipt: jsonb('receipt').$type<SocialConnectionReceipt>().notNull(),
+  createdAt,
+}, table => [uniqueIndex('social_connection_receipt_ticket_uidx').on(table.ticketHash)]);
+
+// Two bounded ingress buckets, independent of login rate limits.
+export const socialProofRateLimits = pgTable('social_proof_rate_limits', {
+  provider: socialProviderEnum('provider').primaryKey(),
+  count: integer('count').notNull(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true, mode: 'date' }).notNull(),
 });
 
 export const vkOAuthIntents = pgTable('vk_oauth_intents', {
@@ -263,6 +341,8 @@ export const publications = pgTable('publications', {
   publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
   providerRemoteId: text('provider_remote_id'),
   analyticsDestinationId: text('analytics_destination_id'),
+  socialBindingRevision: integer('social_binding_revision'),
+  socialBindingDestinationId: text('social_binding_destination_id'),
   providerUrl: text('provider_url'),
   attemptCount: integer('attempt_count').notNull().default(0),
   lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true, mode: 'date' }),
