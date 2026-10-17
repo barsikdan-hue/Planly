@@ -4,6 +4,7 @@ import { mediaAssets, postMedia, posts, postTargets, publications, socialAccount
 import { resolveConnector as resolveRegisteredConnector } from '../connectors/registry.ts';
 import { readMediaObjectBytes } from '../storage.ts';
 import { beginOwnerProviderHandoff, hasOwnerProviderAccess } from '../auth/access.ts';
+import { observePublicationAuthorization, beginVerifiedProviderHandoff, markObservedConnectionError, type PublicationAuthorization } from '../social-connections/publication-authorization.ts';
 import type { ConnectorResolver, PublicationErrorType, PublishInput, PublishResult } from '../connectors/types.ts';
 
 export type ProcessPublicationResult = {
@@ -86,6 +87,7 @@ async function markFailure(
   code: string | null,
   message: string,
   retryAfterMs?: number,
+  observed?: PublicationAuthorization,
 ): Promise<ProcessPublicationResult> {
   const status = errorType === 'AUTH' ? 'REQUIRES_RECONNECT' : 'FAILED';
   await getDb().update(publications).set({
@@ -96,7 +98,9 @@ async function markFailure(
     nextRetryAt: null,
     updatedAt: new Date(),
   }).where(eq(publications.id, publicationId));
-  if (errorType === 'AUTH') {
+  if (errorType === 'AUTH' && observed) {
+    await markObservedConnectionError(observed);
+  } else if (errorType === 'AUTH') {
     const row = await readPublication(publicationId);
     await getDb().update(socialAccounts).set({connectionStatus:'ERROR',updatedAt:new Date()}).where(eq(socialAccounts.id,row.account.id));
   }
@@ -126,9 +130,13 @@ export async function processPublication(
 
   if (await readScopedMedia(initial) === null) return markScopeFailure(publicationId);
 
-  // P02 has no personal credential enrollment yet. Gate the real transport
-  // before claim/media/connector resolution; injected test transports stay pure.
-  if(resolveConnector===resolveRegisteredConnector && !await hasOwnerProviderAccess(initial.publication.userId)) {
+  // Registered USER transport needs its own immutable proof pointer before claim.
+  // Existing configured OWNER and injected transport semantics remain separate.
+  let observed:PublicationAuthorization|undefined;
+  const registered=resolveConnector===resolveRegisteredConnector;
+  const ownerAccess=registered && await hasOwnerProviderAccess(initial.publication.userId);
+  if(registered && !ownerAccess)observed=(await observePublicationAuthorization(initial.publication.userId,initial.account.id,initial.publication))??undefined;
+  if(registered && !ownerAccess && !observed) {
     await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
       .where(and(eq(publications.id,publicationId),inArray(publications.status,['SCHEDULED','QUEUED'])));
     const latest=await readPublication(publicationId);
@@ -181,7 +189,7 @@ export async function processPublication(
     }
     if (resolveConnector === resolveRegisteredConnector && ((row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN) || (row.publication.provider === 'MAX' && process.env.MAX_BOT_TOKEN)) &&
       (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
-      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.');
+      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.',undefined,observed);
     }
     // Only implemented providers prepare media; an unconfigured MAX remains an honest unsupported result.
     if (row.publication.provider === 'VK' || row.publication.provider === 'TELEGRAM' || (row.publication.provider === 'MAX' && (process.env.MAX_BOT_TOKEN || resolveConnector !== resolveRegisteredConnector))) {
@@ -197,10 +205,8 @@ export async function processPublication(
 
     let result:PublishResult;
     if(resolveConnector===resolveRegisteredConnector) {
-      const started=await beginOwnerProviderHandoff(row.publication.userId,()=>{
-        handedOff=true;
-        return connector.publish(input);
-      });
+      const start=()=>{handedOff=true;return connector.publish(input);};
+      const started=observed?await beginVerifiedProviderHandoff(observed,input,start):await beginOwnerProviderHandoff(row.publication.userId,start);
       if(!started) {
         await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
           .where(and(eq(publications.id,publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount)));
@@ -215,7 +221,7 @@ export async function processPublication(
       result=await connector.publish(input);
     }
     if (!result.ok) {
-      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs);
+      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs, observed);
     }
 
     if (!result.remoteId.trim()) {
