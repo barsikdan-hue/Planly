@@ -1,0 +1,377 @@
+{
+  "currentRecoveryStatus": {
+    "candidateImageBuilt": false,
+    "freshDurableRestoreProof": false,
+    "independentOffVmRecoveryVerified": false,
+    "practicalImageRollbackTested": false,
+    "releaseAuthorized": false,
+    "retainedCurrentLedger13BackupCreated": false
+  },
+  "freshReadOnly": [
+    {
+      "check": "RUNTIME",
+      "rows": [
+        {
+          "health": "healthy",
+          "id": "d33d374644e7e8559c894dde7f495a9c29bd1dd42fcb61800b901147c8715977",
+          "image": "sha256:79c1878d12e3fe9cff1dbc68558bbb8c3f15a41d724fb3977ee3a50021194aef",
+          "mounts": [],
+          "restartCount": 0,
+          "running": true,
+          "service": "web",
+          "source": "83a0350203d1d37ad0cbbb2e6d61934485b877e1",
+          "startedAt": "2026-10-16T11:36:30.140821403Z"
+        },
+        {
+          "health": "not-configured",
+          "id": "f7c9b15f7275a41276c8e94db1e2c2f65cb685277d1acff4275e390e392cc2ac",
+          "image": "sha256:79c1878d12e3fe9cff1dbc68558bbb8c3f15a41d724fb3977ee3a50021194aef",
+          "mounts": [],
+          "restartCount": 0,
+          "running": true,
+          "service": "worker",
+          "source": "83a0350203d1d37ad0cbbb2e6d61934485b877e1",
+          "startedAt": "2026-10-16T11:36:30.127973239Z"
+        },
+        {
+          "health": "healthy",
+          "id": "6033f04100f73165691803355da00a05f2f779c8ac2175dc0c0c66206c689f6c",
+          "image": "sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24",
+          "mounts": [
+            {
+              "destination": "/var/lib/postgresql/data",
+              "name": "planly-stage_postgres-data",
+              "type": "volume"
+            }
+          ],
+          "restartCount": 0,
+          "running": true,
+          "service": "postgres",
+          "source": null,
+          "startedAt": "2026-10-16T11:36:30.145551538Z"
+        },
+        {
+          "health": "healthy",
+          "id": "145782d93332a9350a43e6044c4d10b976b2f82441399becf7b5f7747432970c",
+          "image": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+          "mounts": [
+            {
+              "destination": "/data",
+              "name": "planly-stage_redis-data",
+              "type": "volume"
+            }
+          ],
+          "restartCount": 0,
+          "running": true,
+          "service": "redis",
+          "source": null,
+          "startedAt": "2026-10-16T11:36:30.137378051Z"
+        },
+        {
+          "health": "healthy",
+          "id": "754f4ad212f830de2b42c24e5268795c949a65da8556d4925cbb2fb6cf6e4867",
+          "image": "sha256:f94fdfbcd6aabd114432e1d89db81625340d9fb422187e266d749f02ffff7c1d",
+          "mounts": [
+            {
+              "destination": "/data",
+              "name": "planly-stage_media-data",
+              "type": "volume"
+            }
+          ],
+          "restartCount": 0,
+          "running": true,
+          "service": "storage",
+          "source": null,
+          "startedAt": "2026-10-16T11:36:30.130837211Z"
+        }
+      ],
+      "sourceSha": "83a0350203d1d37ad0cbbb2e6d61934485b877e1"
+    },
+    {
+      "check": "CONFIG_READONLY",
+      "credentialContinuity": true,
+      "providerConfigPresence": [
+        {
+          "MAX_BOT_TOKEN": false,
+          "MAX_MINI_APP_URL": false,
+          "TELEGRAM_BOT_TOKEN": false,
+          "TELEGRAM_MINI_APP_URL": false,
+          "VK_ACCESS_TOKEN": false,
+          "VK_CLIENT_SECRET": false
+        },
+        {
+          "MAX_BOT_TOKEN": false,
+          "MAX_MINI_APP_URL": false,
+          "TELEGRAM_BOT_TOKEN": false,
+          "TELEGRAM_MINI_APP_URL": false,
+          "VK_ACCESS_TOKEN": false,
+          "VK_CLIENT_SECRET": false
+        }
+      ],
+      "secretValuesPrinted": 0
+    },
+    {
+      "allRawHashesTimestampsMatchRunningSource": true,
+      "applied0013": false,
+      "applied0014": false,
+      "check": "LEDGER",
+      "entries": 13,
+      "lastTag": "0012_awesome_guardsmen",
+      "sha256": "168bf45bf8f77804fdfe95f5ada1607d5cecaf902625d2dd4ce0bbeb5cf975ca"
+    },
+    {
+      "check": "DATABASE",
+      "counts": {
+        "accounts": 9,
+        "drafts": 1,
+        "enabledAccounts": 0,
+        "media": 1,
+        "newColumns": 0,
+        "newTables": 0,
+        "postgresVersion": "17.11",
+        "posts": 1,
+        "publications": 0,
+        "sessions": 3,
+        "targets": 2,
+        "users": 3,
+        "vkCredentials": 0
+      }
+    },
+    {
+      "check": "ACTUAL_LEGACY_PREFLIGHT",
+      "includesDisabledAllOwners": true,
+      "inventory": {
+        "connected": 0,
+        "duplicateGroups": 0,
+        "nullDestinations": 6,
+        "tgMaxAccounts": 6,
+        "unresolvedAliases": 0
+      },
+      "ownershipBackfill": false,
+      "status": "PASS"
+    },
+    {
+      "aggregateSha256": "0ba6f24e966d023192a25e12d9e92d83a13dbfff559d3eb556368abf55a8703b",
+      "check": "ROW_INTEGRITY",
+      "equalToPriorAll22TableFingerprints": true,
+      "tables": 22
+    },
+    {
+      "check": "MINIO_READONLY",
+      "objectFileTree": {
+        "bytes": 1372510,
+        "files": 2,
+        "sha256": "a96a133c334b4a3127906aab91bcf4c3b0635d895ecf570be8043edc01c152f1"
+      },
+      "objectKeysPrinted": 0,
+      "signedGetRechecked": false,
+      "status": "PASS"
+    },
+    {
+      "check": "REDIS_READONLY",
+      "commands": [
+        "PING",
+        "INFO persistence",
+        "LLEN",
+        "ZCARD",
+        "DBSIZE"
+      ],
+      "persistence": {
+        "aofEnabled": "1",
+        "aofLastRewrite": "ok",
+        "aofLastWrite": "ok",
+        "loading": "0",
+        "rdbLastSave": "ok"
+      },
+      "queueCounts": {
+        "active": 0,
+        "completed": 0,
+        "delayed": 0,
+        "failed": 0,
+        "paused": 0,
+        "prioritized": 0,
+        "wait": 0,
+        "waiting-children": 0
+      },
+      "redisWrites": 0,
+      "status": "PASS",
+      "totalKeys": 2
+    },
+    {
+      "bytes": 1716440181,
+      "check": "ROLLBACK_IMAGE_AVAILABLE",
+      "exportRetained": false,
+      "id": "sha256:79c1878d12e3fe9cff1dbc68558bbb8c3f15a41d724fb3977ee3a50021194aef",
+      "practicalRollbackTested": false
+    },
+    {
+      "availableBytes": 29899563008,
+      "check": "RESOURCES",
+      "memoryKiB": {
+        "MemAvailable": 3086328,
+        "MemTotal": 4009844,
+        "SwapFree": 2621432
+      }
+    },
+    {
+      "check": "HTTPS",
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "check": "HTTPS",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "backupWrites": 0,
+      "builds": 0,
+      "check": "FINAL_READONLY_GATE",
+      "checkedAtUtc": "2026-10-17T10:21:03.980924+00:00",
+      "containerLifecycleActions": 0,
+      "existingDbMigrations": 0,
+      "providerCalls": 0,
+      "status": "PASS"
+    }
+  ],
+  "priorIsolatedRehearsal": [
+    {
+      "check": "RUNNING_SOURCE_CLEAN",
+      "sourceSha": "83a0350203d1d37ad0cbbb2e6d61934485b877e1",
+      "status": "PASS",
+      "trackedFiles": 606
+    },
+    {
+      "check": "HISTORICAL_LEDGER_ENCODING",
+      "crlfToLfOnlyEqualsMainGitBlobs": true,
+      "existingEntries": 13,
+      "ledgerEdits": 0,
+      "normalizationAppliedToDatabaseOrRelease": 0,
+      "rawHashesMatchDeployed83aArchive": true,
+      "status": "PASS"
+    },
+    {
+      "appOrWorkerExecuted": false,
+      "check": "ISOLATION",
+      "containerId": "f468c2d669c7054313fe228604ca3efe4b8aa38dae9449d6637707422f34a5e2",
+      "maximumMemoryMiB": 768,
+      "network": "none",
+      "persistentMounts": 0,
+      "publishedPorts": 0,
+      "tmpfsData": true
+    },
+    {
+      "allExistingTables": 22,
+      "check": "FRESH_CLONE_READBACK",
+      "rowsAndSchema": true,
+      "status": "PASS"
+    },
+    {
+      "check": "LOCK_TIMEOUT_ATOMIC_ROLLBACK",
+      "liveDatabaseUntouched": true,
+      "nonTransactionalLedgerSequenceDelta": [
+        {
+          "after": 14,
+          "before": 13,
+          "sequence": "drizzle.__drizzle_migrations_id_seq"
+        }
+      ],
+      "rowsSchemaLedgerUnchanged": true,
+      "sqlstate": "55P03",
+      "status": "PASS"
+    },
+    {
+      "check": "EXACT_0013_0014",
+      "checks": {
+        "accounts": 9,
+        "cancellationColumn": {
+          "default": null,
+          "nullable": "YES",
+          "type": "timestamp with time zone"
+        },
+        "nullCancellationMarkers": 2,
+        "nullPublicationPointers": 0,
+        "oldAccountsDefaulted": 9,
+        "publications": 0,
+        "targets": 2
+      },
+      "ledgerAfter": 15,
+      "ledgerBefore": 13,
+      "newTablesEmpty": true,
+      "originalRowsProjectedEqual": true,
+      "status": "PASS"
+    },
+    {
+      "check": "MIGRATOR_SECOND_RUN",
+      "dataSchemaLedgerUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "allRowsSessionsHistoryAndSchema": true,
+      "check": "ROLLBACK_FRESH_SNAPSHOT_RESTORE",
+      "offVmRecovery": false,
+      "persistentBackupCreated": false,
+      "status": "PASS"
+    },
+    {
+      "archiveMediaFiles": 38,
+      "check": "EXISTING_BACKUP_MANIFEST_MEDIA_READBACK",
+      "extractedFiles": 0,
+      "manifestFiles": 12,
+      "mediaBytes": 1410511,
+      "offVmTransfer": false,
+      "status": "PASS"
+    },
+    {
+      "allArchivedRowCountsDigestsMatch": true,
+      "archiveSha256": "485f1e78a88445df20dd308ded1ecc387c20deb759fbd44d21e60184fda97750",
+      "check": "EXISTING_ARCHIVE_RESTORE",
+      "ledgerEntries": 12,
+      "representsCurrentStaging": false,
+      "status": "PASS"
+    },
+    {
+      "check": "LEGACY_DUPLICATE_STOP",
+      "existingRowsSchemaLedgerUnchanged": true,
+      "scenario": "duplicate_numeric",
+      "status": "PASS"
+    },
+    {
+      "check": "LEGACY_DUPLICATE_STOP",
+      "existingRowsSchemaLedgerUnchanged": true,
+      "scenario": "duplicate_alias",
+      "status": "PASS"
+    },
+    {
+      "check": "EXISTING_STAGING_UNCHANGED",
+      "credentialsAggregateEqual": true,
+      "deploys": 0,
+      "existingDatabaseMigrations": 0,
+      "mediaObjectFileTreeEqual": true,
+      "providerCalls": 0,
+      "runtimeIdentitiesMountsStarts": true,
+      "status": "PASS"
+    },
+    {
+      "check": "PREFLIGHT_REHEARSAL",
+      "checkedAtUtc": "2026-10-17T10:04:25.697834+00:00",
+      "runningSha": "83a0350203d1d37ad0cbbb2e6d61934485b877e1",
+      "sourceSha": "da7ad737a3236f1c161ae46c519386e05869f47a",
+      "status": "PASS"
+    },
+    {
+      "check": "CLEANUP_OWNED_DISPOSABLE",
+      "existingContainersTouched": false,
+      "name": "planly-p04a-rehearsal-14613b2398ef",
+      "removed": true
+    }
+  ],
+  "privacy": "No credentials, user identities, session IDs/cookies, object keys/media bytes or private records included. Counts, public code/image hashes and technical runtime IDs only.",
+  "provenance": "Codex-collected observations; independent Critic reviews source and sanitized evidence, not a separate live VPS audit. Git commit pins content, not independent trust in the measurement.",
+  "rawLocalEvidenceSha256": {
+    "freshReadonly": "b69770d89d6e3765676203d81d06e18b64d16a41d1025a46cf3f24a5267ef26e",
+    "priorRehearsal": "5605a12d3ed8a8f8bf1603991e0769c4a8f0787277d94c46c0a920d6a8c056e5"
+  },
+  "schema": "planly.p04a.sanitized-recovery-evidence.v1",
+  "sourceSha": "da7ad737a3236f1c161ae46c519386e05869f47a"
+}

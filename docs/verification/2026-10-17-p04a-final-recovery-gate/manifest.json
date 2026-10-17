@@ -1,0 +1,27 @@
+{
+  "bundle": "p04a-final-recovery-gate-20261017",
+  "files": [
+    {
+      "bytes": 1008,
+      "file": "critic.md",
+      "sha256": "ebbb6bc007725fbd4c3e6936f7e6fe4c45ca840cfa575fa5f5b38ca8d6d73c3e"
+    },
+    {
+      "bytes": 11234,
+      "file": "current-evidence.json",
+      "sha256": "778a60cbc40b8f7f226882b4bef044ba22d3472b8a95c56f5908128b531e0091"
+    },
+    {
+      "bytes": 9635,
+      "file": "preflight-report.md",
+      "sha256": "a2c8bc28e52fbdc0a4d725e867d0cf71dc23de82fddfbffaa6b145b740fc15e0"
+    },
+    {
+      "bytes": 20404,
+      "file": "release-plan.md",
+      "sha256": "6bf72709c05101268c774131ad7396691b2296dbeaddb6cea65b9f1626dc08b7"
+    }
+  ],
+  "kind": "sanitized-public-documentation-evidence-not-a-backup",
+  "sourceSha": "da7ad737a3236f1c161ae46c519386e05869f47a"
+}
