@@ -22,7 +22,7 @@ export const test = base.extend<{ networkGuard: void; rejectBootstrapOnce: boole
         return route.abort('blockedbyclient');
       }
       if (url.pathname.startsWith('/api/')) {
-        const allowed = url.pathname === '/api/bootstrap' || (url.pathname === '/api/analytics' &&
+        const allowed = url.pathname === '/api/bootstrap' || url.pathname === '/api/library/batch-consent/preview' || (url.pathname === '/api/analytics' &&
           ['telegram', 'max'].includes(url.searchParams.get('provider') ?? '') &&
           url.searchParams.get('period') === '7' && url.searchParams.get('page') === '0');
         if (request.method() !== 'GET' || !allowed) {

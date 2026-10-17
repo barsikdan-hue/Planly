@@ -1,0 +1,101 @@
+import {test,expect,type BrowserContext,type Page} from '@playwright/test';
+import {createHash} from 'node:crypto';
+import {mkdir,readFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import {join} from 'node:path';
+import {canonicalLibraryBatchIntent} from '../../lib/library-batch';
+import type {LibraryBatchIntent} from '../../lib/contracts/library-batch';
+test.use({trace:'off',screenshot:'off'});
+const stamp='2026-10-17T00:00:00.000Z';
+async function fixture(context:BrowserContext,page:Page){
+ const accounts=['telegram','max'].map((provider,i)=>({id:provider,provider,providerAccountId:`-${123+i}`,displayName:`Private ${provider}`,enabled:true,connectionStatus:'CONNECTED',connection:{mode:'verified-user',ready:true,reason:null,state:'enabled',accountHint:provider,bindingRevision:1,checkedAt:stamp,actions:[]}}));
+ const items=['one','two'].map(id=>({id,title:`Заготовка ${id}`,text:`Полный исходный текст ${id}\nПоследняя строка ${id}`,mediaIds:id==='one'?['photo','video']:[],status:'READY',sourcePostId:null,createdAt:stamp,updatedAt:stamp}));
+ const media=[{id:'photo',originalName:'Фото.png',mimeType:'image/png',previewUrl:'/synthetic-photo.png'},{id:'video',originalName:'Видео.mp4',mimeType:'video/mp4',previewUrl:'/synthetic-video.mp4'}].map(m=>({...m,byteSize:1880,width:160,height:90,durationMs:m.id==='video'?1000:null,source:'UPLOAD',createdAt:stamp}));
+ const snapshot={profile:{id:'user-a',email:'a@example.test',displayName:'User A'},posts:[],libraryItems:items,media,socialAccounts:accounts};
+ const flags={eligible:true,eligibilityFail:false,loss:false,get404:false,deleted:false,mediaError:false,hold:null as Promise<void>|null,previewHold:null as Promise<void>|null};const commits:unknown[]=[],lookups:string[]=[],unexpected:string[]=[],errors:string[]=[],consoleErrors:{text:string;url:string}[]=[];let result:unknown=null;
+ const expectedResources=new Map<string,Set<string>>();
+ const expectedResource=(path:string,status:number|'FAILED'|'CONNECTION_FAILED')=>{const text=typeof status==='number'?`Failed to load resource: the server responded with a status of ${status} (${({403:'Forbidden',404:'Not Found',410:'Gone',503:'Service Unavailable'} as Record<number,string>)[status]})`:`Failed to load resource: net::ERR_${status}`;const allowed=expectedResources.get(path)??new Set<string>();allowed.add(text);expectedResources.set(path,allowed);};
+ await context.routeWebSocket('**/*',s=>{unexpected.push('websocket');s.close();});page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push({text:m.text(),url:m.location().url});});
+ await context.route('**/*',async route=>{
+  const req=route.request(),url=new URL(req.url()),path=url.pathname;const respond=(body:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(url.origin!=='http://127.0.0.1:4318'){unexpected.push(url.origin);return route.abort();}
+  if(path==='/synthetic-photo.png')return route.fulfill({contentType:'image/png',body:await readFile(fileURLToPath(new URL('./assets/swipe-photo.png',import.meta.url)))});
+  if(path==='/synthetic-video.mp4'){if(flags.mediaError){expectedResource(path,'FAILED');return route.abort();}return route.fulfill({contentType:'video/mp4',body:await readFile(fileURLToPath(new URL('./assets/library-batch-blue.mp4',import.meta.url)))});}
+  if(!path.startsWith('/api/'))return route.continue();
+  if(req.method()==='GET'&&path==='/api/bootstrap')return respond(snapshot);
+  if(req.method()==='GET'&&path==='/api/profile')return respond(snapshot.profile);
+  if(path==='/api/admin/shared-library'){expectedResource(path,403);return respond({error:'Forbidden'},403);}
+  if(path==='/api/shared-library'&&req.method()==='GET')return respond({items:[]});
+  if(path==='/api/library/batch-consent/preview'&&req.method()==='GET'){if(flags.eligibilityFail){expectedResource(path,503);return respond({code:'BATCH_RESULT_UNCERTAIN'},503);}return respond({eligible:flags.eligible});}
+  if(path==='/api/library/batch-consent/preview'&&req.method()==='POST'){
+   expect(req.headers()['x-planly-library-batch']).toBe('1');const input=req.postDataJSON();
+   const rows=input.sourceIds.map((id:string,i:number)=>({item:items.find(x=>x.id===id),accounts:accounts.filter(a=>input.accountIds.includes(a.id)).map(a=>({id:a.id,provider:a.provider,providerAccountId:a.providerAccountId,displayName:a.displayName,enabled:a.enabled,connectionStatus:a.connectionStatus})),scheduledAt:`2030-01-0${i+2}T07:00:00.000Z`,issue:null}));
+   const intent=canonicalLibraryBatchIntent({contractVersion:1,kind:'LIBRARY_BATCH_FUTURE',settings:input.settings,rows:rows.map((r:{item:typeof items[number];accounts:typeof accounts;scheduledAt:string})=>({sourceId:r.item.id,sourceRevision:r.item.updatedAt,contentHash:'a'.repeat(64),targets:r.accounts.map(a=>({accountId:a.id,provider:a.provider.toUpperCase(),destinationId:a.providerAccountId,scheduledAt:r.scheduledAt}))}))} as LibraryBatchIntent);
+   if(flags.previewHold)await flags.previewHold;
+   return respond({complete:true,descriptor:{intent,requestHash:createHash('sha256').update('planly.library-batch.intent.v1\n'+JSON.stringify(intent)).digest('hex'),snapshotFingerprint:'b'.repeat(64),previewProof:'synthetic-proof'},rows,media});
+  }
+  if(path==='/api/library/batch-consent/commit'&&req.method()==='POST'){
+   const body=req.postDataJSON();commits.push(body);expect(req.headers()['x-planly-library-batch']).toBe('1');expect(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('planly.library-batch.v1:')))).toBe(true);
+   result={replayed:false,receipt:{contractVersion:1,kind:'LIBRARY_BATCH_FUTURE',operationId:body.operationId,requestHash:createHash('sha256').update('planly.library-batch.intent.v1\n'+JSON.stringify(body.intent)).digest('hex'),acceptedSnapshotFingerprint:body.snapshotFingerprint,confirmedAt:stamp,rows:body.intent.rows.map((r:LibraryBatchIntent['rows'][number],i:number)=>({...r,postId:`post-${i}`,targets:r.targets.map((t,j)=>({...t,targetId:`target-${i}-${j}`,publicationId:`publication-${i}-${j}`}))}))}};
+   if(flags.hold)await flags.hold;if(flags.loss){expectedResource(path,'CONNECTION_FAILED');return route.abort('connectionfailed');}return respond(result);
+  }
+  if(path.startsWith('/api/library/batch-consent/operations/')){lookups.push(path);if(flags.get404){expectedResource(path,404);return respond({code:'BATCH_RESULT_NOT_FOUND',error:'Исход пока неизвестен'},404);}if(flags.deleted){expectedResource(path,410);return respond({code:'BATCH_RESULT_DELETED',result:{operationId:(commits[0] as {operationId:string}).operationId,postIds:['post-0','post-1']},error:'Результат удалён'},410);}return respond({...result as object,replayed:true});}
+  unexpected.push(req.method()+' '+path);return route.abort();
+ });
+ return {flags,commits,lookups,snapshot,check(){expect(unexpected).toEqual([]);expect(errors).toEqual([]);expect(consoleErrors.filter(e=>{try{return !expectedResources.get(new URL(e.url).pathname)?.has(e.text);}catch{return true;}})).toEqual([]);}};
+}
+async function open(page:Page){await page.goto('/#content');await expect(page.getByRole('heading',{name:'Библиотека',exact:true})).toBeVisible();await page.getByRole('button',{name:'Запланировать набор',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'Набор из библиотеки'})).toBeVisible();}
+async function preview(page:Page){await page.getByLabel('Выбрать заготовку one').check();await page.getByLabel('Выбрать заготовку two').check();await page.getByLabel('Площадка Private telegram').check();await page.getByLabel('Площадка Private max').check();await page.getByLabel('Начало периода').fill('2030-01-02');await page.getByLabel('Конец периода').fill('2030-01-09');await page.getByRole('button',{name:'Предпросмотр набора',exact:true}).click();await expect(page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true})).toBeEnabled();}
+for(const width of [1366,390,320])test(`one finite consent full ordered content and media ${width}`,async({context,page},info)=>{
+ await page.setViewportSize({width,height:900});const f=await fixture(context,page);await open(page);await preview(page);expect(f.commits).toHaveLength(0);
+  await expect(page.locator('.library-batch-preview').getByText('Последняя строка one',{exact:false})).toBeVisible();await expect(page.locator('.library-batch-preview article')).toHaveCount(2);await expect(page.locator('.library-batch-preview article').first().locator('img,video')).toHaveCount(2);await expect(page.locator('.library-batch-preview')).toContainText('-123');await expect(page.locator('.library-batch-preview')).toContainText('10:00');
+ await expect(page.locator('.library-batch-text')).toHaveText(['Полный исходный текст one\nПоследняя строка one','Полный исходный текст two\nПоследняя строка two']);await expect(page.locator('.library-batch-preview h4')).toHaveText(['1. Заготовка one','2. Заготовка two']);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await expect(page.locator('vite-error-overlay,nextjs-portal')).toHaveCount(0);
+ const previewMedia=page.locator('.library-batch-preview article').first().locator('img,video');expect(await previewMedia.evaluateAll(nodes=>nodes.map(node=>node.tagName))).toEqual(['IMG','VIDEO']);
+ await expect.poll(()=>previewMedia.first().evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+ const video=previewMedia.nth(1);await expect.poll(()=>video.evaluate(node=>{const v=node as HTMLVideoElement;return v.readyState>=2&&v.videoWidth>0&&Number.isFinite(v.duration)&&v.duration>0;})).toBe(true);
+ await video.evaluate(async node=>{const v=node as HTMLVideoElement;v.muted=true;const ended=new Promise<void>(resolve=>v.addEventListener('ended',()=>resolve(),{once:true}));await v.play();await ended;v.pause();});
+ await info.attach('decoded-preview-media',{body:JSON.stringify(await video.evaluate(node=>{const v=node as HTMLVideoElement;return {readyState:v.readyState,width:v.videoWidth,height:v.videoHeight,duration:v.duration,currentTime:v.currentTime,ended:v.ended};})),contentType:'application/json'});
+ const out=process.env.PLANLY_BROWSER_EVIDENCE_DIR??info.outputPath('ui');await mkdir(out,{recursive:true});await page.screenshot({path:join(out,`batch-preview-${info.project.name}-${width}.png`),fullPage:true});
+ await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).press('Enter');await expect(page.getByText('Набор сохранён: 2 поста',{exact:true})).toBeVisible();expect(f.commits).toHaveLength(1);await expect(page.getByText('Сохранено — не означает отправлено.',{exact:true})).toBeVisible();f.check();
+});
+test('lost reply reload 404 never rekeys; exact original retry succeeds after role change',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.loss=true;await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).dblclick();await expect(page.getByRole('button',{name:'Проверить исходное сохранение'})).toBeVisible();expect(f.commits).toHaveLength(1);const original=f.commits[0];
+ f.flags.eligible=false;f.flags.get404=true;await page.reload();await page.getByRole('button',{name:'Проверить набор',exact:true}).click();await page.getByRole('button',{name:'Проверить исходное сохранение'}).click();await expect.poll(()=>f.lookups.length).toBe(1);await expect(page.getByRole('button',{name:'Повторить исходное сохранение'})).toBeVisible();expect(f.commits).toHaveLength(1);
+ f.flags.loss=false;await page.getByRole('button',{name:'Повторить исходное сохранение'}).click();await expect(page.getByText('Набор сохранён: 2 поста',{exact:true})).toBeVisible();expect(f.commits).toHaveLength(2);expect(f.commits[1]).toEqual(original);f.check();
+});
+test('inaccessible media blocks confirmation',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.mediaError=true;await open(page);await page.getByLabel('Выбрать заготовку one').check();await page.getByLabel('Площадка Private telegram').check();await page.getByRole('button',{name:'Предпросмотр набора',exact:true}).click();await expect(page.getByText('Медиа не загрузились. Обнови предпросмотр.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();expect(f.commits).toHaveLength(0);f.check();
+});
+test('new role eligibility denied hides new work',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.eligible=false;await page.goto('/#content');await expect(page.getByRole('heading',{name:'Библиотека',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Запланировать набор',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Проверить набор',exact:true})).toHaveCount(0);expect(f.commits).toHaveLength(0);f.check();
+});
+test('shared originals never offer a batch entry',async({context,page})=>{
+ const f=await fixture(context,page);await page.goto('/#content');await expect(page.getByRole('button',{name:'Запланировать набор',exact:true})).toBeVisible();await page.getByRole('button',{name:'Общие',exact:true}).click();await expect(page.getByRole('region',{name:'Общая библиотека',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Запланировать набор',exact:true})).toHaveCount(0);expect(f.commits).toHaveLength(0);f.check();
+});
+test('source order, time and account changes discard confirmation and late preview cannot restore it',async({context,page})=>{
+ const f=await fixture(context,page);await open(page);await preview(page);
+ await page.getByRole('button',{name:'Выше two',exact:true}).click();await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();
+ let release!:()=>void;f.flags.previewHold=new Promise<void>(r=>release=r);const requested=page.waitForRequest(r=>r.url().endsWith('/api/library/batch-consent/preview')&&r.method()==='POST');await page.getByRole('button',{name:'Предпросмотр набора',exact:true}).click();await requested;
+ await page.getByLabel('Время слотов').fill('11:00');release();await expect(page.locator('.library-batch-preview')).toHaveCount(0);await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();f.flags.previewHold=null;
+ await page.getByRole('button',{name:'Предпросмотр набора',exact:true}).click();await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeEnabled();await page.getByLabel('Площадка Private max').uncheck();await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();expect(f.commits).toHaveLength(0);f.check();
+});
+test('terminal deleted result survives reload and never offers commit retry',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.loss=true;await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();await expect(page.getByRole('button',{name:'Проверить исходное сохранение'})).toBeVisible();f.flags.deleted=true;await page.getByRole('button',{name:'Проверить исходное сохранение'}).click();await expect(page.getByText('Исторический результат удалён. Повторное создание этого набора запрещено.',{exact:true})).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'Проверить набор',exact:true}).click();await expect(page.getByText('Исторический результат удалён. Повторное создание этого набора запрещено.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Повторить исходное сохранение'})).toHaveCount(0);expect(f.commits).toHaveLength(1);f.check();
+});
+test('late commit cannot apply, navigate or erase recovery after owner switch',async({context,page})=>{
+ await page.clock.install();const f=await fixture(context,page);const posts=f.snapshot.posts as unknown[];posts.push({id:'scheduled',title:null,baseText:'Scheduled fixture',status:'READY',mediaIds:[],createdAt:stamp,updatedAt:stamp,targets:[{id:'scheduled-target',socialAccountId:'telegram',provider:'telegram',textOverride:null,scheduledAt:'2030-01-02T07:00:00.000Z',publication:{status:'SCHEDULED',remoteId:null,remoteUrl:null,error:null}}]});
+ let release!:()=>void;f.flags.hold=new Promise<void>(r=>release=r);await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();await expect.poll(()=>f.commits.length).toBe(1);
+ f.snapshot.profile={id:'user-b',email:'b@example.test',displayName:'User B'};f.snapshot.libraryItems=[];await page.clock.fastForward(5000);await expect(page.locator('.profile-button')).toContainText('User B');release();await expect(page.getByText('Набор сохранён: 2 поста',{exact:true})).toHaveCount(0);expect(await page.evaluate(()=>localStorage.getItem('planly.library-batch.v1:user-a'))).not.toBeNull();expect(await page.evaluate(()=>localStorage.getItem('planly.library-batch.v1:user-b'))).toBeNull();await expect(page).not.toHaveURL(/login/);f.check();
+});
+test('eligibility service failure does not block historical receipt lookup',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.loss=true;await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();await expect(page.getByRole('button',{name:'Проверить исходное сохранение'})).toBeVisible();f.flags.eligibilityFail=true;await page.reload();await page.getByRole('button',{name:'Проверить набор',exact:true}).click();await page.getByRole('button',{name:'Проверить исходное сохранение'}).click();await expect(page.getByText('Набор сохранён: 2 поста',{exact:true})).toBeVisible();expect(f.commits).toHaveLength(1);expect(f.lookups).toHaveLength(1);f.check();
+});
+test('server source revision and account destination drift invalidate an already displayed preview',async({context,page})=>{
+ await page.clock.install();const f=await fixture(context,page);(f.snapshot.posts as unknown[]).push({id:'scheduled',title:null,baseText:'Scheduled fixture',status:'READY',mediaIds:[],createdAt:stamp,updatedAt:stamp,targets:[{id:'scheduled-target',socialAccountId:'telegram',provider:'telegram',textOverride:null,scheduledAt:'2030-01-02T07:00:00.000Z',publication:{status:'SCHEDULED',remoteId:null,remoteUrl:null,error:null}}]});
+ await open(page);await preview(page);f.snapshot.libraryItems[0].updatedAt='2026-10-17T00:00:01.000Z';f.snapshot.socialAccounts[0].providerAccountId='-999';await page.clock.fastForward(5000);await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();expect(f.commits).toHaveLength(0);f.check();
+});
+test('expired preview cannot authorize a new commit',async({context,page})=>{
+ await page.clock.install();const f=await fixture(context,page);await open(page);await preview(page);await page.clock.fastForward(600001);await expect(page.getByRole('button',{name:/Подтвердить и сохранить/})).toBeDisabled();expect(f.commits).toHaveLength(0);f.check();
+});

@@ -27,6 +27,10 @@ function fixtureApi(server: PreviewServer | ViteDevServer) {
     if (!pathname.startsWith('/api/')) return next();
     response.setHeader('Content-Type', 'application/json');
     response.setHeader('Cache-Control', 'no-store');
+    if (request.method === 'GET' && pathname === '/api/library/batch-consent/preview') {
+      response.end('{"eligible":false}');
+      return;
+    }
     if (request.method === 'GET' && pathname === '/api/bootstrap') {
       response.end(JSON.stringify(snapshot));
       return;
