@@ -5,16 +5,19 @@ import { sessionTokenHash } from '../auth/session.ts';
 import { createTelegramConnector } from '../connectors/telegram.ts';
 import { createMaxConnector } from '../connectors/max.ts';
 import { socialConnectionConfig } from './config.ts';
+import { approvalHistory } from '../publication-approval-history.ts';
 import { connectionDenied, invalidateConnectionIntents, lockConnectionActor, lockOwnedConnectionAccount, lockProviderDestinations, SocialConnectionError, type ConnectionTransaction } from './state.ts';
 
 // The user lock serializes this read with every new approval/admission. History
 // is preserved, including receipts and uncertain outcomes needing manual recovery.
 export async function requireEmptyConnectionQueue(tx:ConnectionTransaction,accountId:string) {
+  const [account]=await tx.select().from(socialAccounts).where(eq(socialAccounts.id,accountId));
   const targets=await tx.select({target:postTargets,post:posts}).from(postTargets)
     .innerJoin(posts,eq(posts.id,postTargets.postId)).where(eq(postTargets.socialAccountId,accountId));
   for(const {target,post} of targets) {
     const history=await tx.select().from(publications).where(eq(publications.postTargetId,target.id));
-    if(history.some(p=>['SCHEDULED','QUEUED','PUBLISHING','REQUIRES_RECONNECT'].includes(p.status) || p.providerErrorCode==='AMBIGUOUS_DELIVERY'))throw new SocialConnectionError('CONFLICT');
+    const cancelled=account && approvalHistory(post,target,account,history).cancelled;
+    if(history.some(p=>['SCHEDULED','QUEUED','PUBLISHING'].includes(p.status) || p.status==='REQUIRES_RECONNECT' && !cancelled || p.providerErrorCode==='AMBIGUOUS_DELIVERY'))throw new SocialConnectionError('CONFLICT');
     if(post.status==='READY' && target.active && target.scheduledAt && !history.some(p=>p.status==='PUBLISHED' && p.providerRemoteId))throw new SocialConnectionError('CONFLICT');
   }
 }

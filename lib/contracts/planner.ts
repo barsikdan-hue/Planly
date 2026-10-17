@@ -55,6 +55,26 @@ export type PostTargetDto = {
   provider: Provider;
   textOverride: string | null;
   scheduledAt: string | null;
+  approvalCancelledAt?: string | null;
+  cancelApproval?: CancelApprovalDto;
+};
+
+export const cancelApprovalInputSchema = z.object({
+  expectedPublicationId: z.string().min(1).max(128),
+  expectedPublicationUpdatedAt: z.string().datetime({offset:true}),
+  expectedTargetUpdatedAt: z.string().datetime({offset:true}),
+  expectedBindingRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+}).strict();
+export type CancelApprovalInput = z.infer<typeof cancelApprovalInputSchema>;
+export type CancelApprovalResult = {postId:string;targetId:string;publicationId:string;approvalCancelledAt:string;replayed:boolean};
+export type CancelApprovalDto = {
+  eligible:boolean;
+  reason:'AVAILABLE'|'ALREADY_CANCELLED'|'UNSUPPORTED_HISTORY';
+  expectedPublicationId:string|null;
+  expectedPublicationUpdatedAt:string|null;
+  expectedTargetUpdatedAt:string;
+  expectedBindingRevision:number;
+  historicalDestinationId:string|null;
 };
 
 export type PostDto = {

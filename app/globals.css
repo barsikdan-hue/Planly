@@ -181,3 +181,8 @@
 .swipe-review{overflow:hidden;padding:7px;margin:-7px}.swipe-card{touch-action:pan-y pinch-zoom;transition:transform 220ms cubic-bezier(.2,.8,.2,1);animation:swipe-enter 160ms ease-out}.swipe-card[data-motion=dragging]{transition:none;user-select:none}.swipe-card[data-motion=exit]{transition:transform 180ms ease-in;pointer-events:none}.swipe-card[data-motion=submitting]{pointer-events:none}.swipe-card .swipe-text{touch-action:pan-y pinch-zoom}
 @keyframes swipe-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.swipe-card{transform:none!important;animation:none!important;transition:none!important}}
+
+.approval-cancellation { flex: 1 0 100%; min-width: 0; display: grid; gap: 8px; overflow-wrap: anywhere; font-size: 13px; }
+.approval-cancellation p { margin: 0; }
+.approval-cancellation button { white-space: normal; height: auto; min-height: 36px; }
+.target-statuses > div:has(.approval-cancellation) { flex-wrap: wrap; }

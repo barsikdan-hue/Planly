@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { ZodError } from 'zod';
 import { getDb } from '../../db/index.ts';
@@ -19,6 +19,7 @@ import { postEditBlockedReason, PostEditConflictError, samePostInput } from './p
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts, SwipeApprovalValidationError } from './planner-slots.ts';
 import { slotMinuteKey } from '../planner-slots.ts';
+import { cancellationPreview } from './publication-approval-history.ts';
 import { captureSwipeSource, readSwipeReceipt, recordSwipeDecision, DecisionResultDeletedError, type SwipeTransaction } from './swipe-feedback.ts';
 
 const providerOrder = { telegram: 0, max: 1, vk: 2 } as const;
@@ -65,10 +66,13 @@ async function readOwnedPost(userId: string, postId: string, db: ReturnType<type
     .orderBy(asc(postMedia.position));
 
   const publicationRows = await db.select().from(publications)
-    .where(and(eq(publications.postId, postId), eq(publications.userId, userId)))
+    .where(or(eq(publications.postId, postId), inArray(publications.postTargetId, targetRows.map(row=>row.target.id))))
     .orderBy(desc(publications.createdAt), desc(publications.id));
   const latestByTarget = new Map<string, typeof publications.$inferSelect>();
-  for (const row of publicationRows) if (!latestByTarget.has(row.postTargetId)) latestByTarget.set(row.postTargetId, row);
+  for (const row of publicationRows) {
+    // Keep inconsistent rows in the safety classifier, but never project their private diagnostics.
+    if(row.userId===userId && row.postId===postId && targetRows.some(({target,account})=>target.id===row.postTargetId && account.provider===row.provider) && !latestByTarget.has(row.postTargetId))latestByTarget.set(row.postTargetId,row);
+  }
 
   const targets = targetRows.map(({ target, account }) => ({
     id: target.id,
@@ -81,6 +85,8 @@ async function readOwnedPost(userId: string, postId: string, db: ReturnType<type
     provider: fromDbProvider(account.provider),
     textOverride: target.textOverride,
     scheduledAt: target.scheduledAt?.toISOString() ?? null,
+    approvalCancelledAt: target.approvalCancelledAt?.toISOString() ?? null,
+    cancelApproval: cancellationPreview(post,target,account,publicationRows),
   })).sort((a, b) => providerOrder[a.provider] - providerOrder[b.provider]);
 
   return {

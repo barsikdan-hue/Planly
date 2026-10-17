@@ -71,6 +71,11 @@ function jsonRequest(method: string, body: unknown): RequestInit {
 export function loadPlanner(): Promise<PlannerSnapshot> {
   return request('/api/bootstrap');
 }
+export function cancelPostTargetApproval(postId:string,targetId:string,input:import('../contracts/planner.ts').CancelApprovalInput):Promise<import('../contracts/planner.ts').CancelApprovalResult> {
+  return request(`/api/posts/${encodeURIComponent(postId)}/targets/${encodeURIComponent(targetId)}/cancel-approval`,{
+    ...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Social-Connection':'1'},
+  });
+}
 export function loadProfile(): Promise<ProfileDto> { return request('/api/profile'); }
 export function logoutSession(): Promise<void> { return request('/api/auth/logout',{method:'POST'}); }
 export function loadSchedulingDrafts():Promise<PostDto[]> {return request('/api/posts');}

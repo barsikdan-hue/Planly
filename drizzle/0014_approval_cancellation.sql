@@ -1,0 +1,1 @@
+ALTER TABLE "post_targets" ADD COLUMN "approval_cancelled_at" timestamp with time zone;
