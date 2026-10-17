@@ -5,14 +5,14 @@ import type {SocialAccountDto} from '@/lib/contracts/planner';
 import type {LibraryBatchPreview,LibraryBatchCommitResult} from '@/lib/contracts/library-batch';
 import {planSettingsSchema,type PlanSettings} from '@/lib/contracts/scheduling-plan';
 import {loadLibraryBatchEligibility,previewLibraryBatchRequest,commitLibraryBatchRequest,loadLibraryBatchOperation,PlanlyApiError} from '@/lib/client/planly-api';
-import {acceptLibraryBatchResult,makePendingLibraryBatch,readPendingLibraryBatch,resolveLibraryBatchError,submitLibraryBatch,validateLibraryBatchPreview,type LibraryBatchRecovery,type PendingLibraryBatch} from '@/lib/library-batch-recovery';
+import {LibraryBatchSubmissionError,acceptLibraryBatchResult,makePendingLibraryBatch,readPendingLibraryBatch,resolveLibraryBatchError,submitLibraryBatch,validateLibraryBatchPreview,type LibraryBatchRecovery,type PendingLibraryBatch} from '@/lib/library-batch-recovery';
 import {Button} from '@/components/ui/button';
 
 type OwnerContext={id:string;generation:object};
 type Props={ownerContext:OwnerContext;isOwnerCurrent:(owner:OwnerContext)=>boolean;items:LibraryItemDto[];accounts:SocialAccountDto[];onSaved:(result:LibraryBatchCommitResult)=>Promise<void>};
 const defaults=():PlanSettings=>{const startDate=new Date(Date.now()+3*3600000).toISOString().slice(0,10);return {startDate,endDate:new Date(Date.parse(`${startDate}T12:00:00Z`)+6*86400000).toISOString().slice(0,10),weekdays:[1,2,3,4,5,6,7],times:['10:00']};};
 const dateLabel=(value:string)=>new Date(value).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',dateStyle:'medium',timeStyle:'short'});
-const safeMessage=(error:unknown)=>error instanceof PlanlyApiError?'Не удалось подтвердить результат. Проверь исходное сохранение.':error instanceof Error?error.message:'Не удалось проверить набор.';
+const safeMessage=(cause:unknown)=>{const error=cause instanceof LibraryBatchSubmissionError?cause.originalError:cause;return error instanceof PlanlyApiError?'Не удалось подтвердить результат. Проверь исходное сохранение.':error instanceof Error?error.message:'Не удалось проверить набор.';};
 
 export function LibraryBatch({ownerContext,isOwnerCurrent,items,accounts,onSaved}:Props){
  const [expanded,setExpanded]=useState(false),[eligible,setEligible]=useState(false),[eligibilityError,setEligibilityError]=useState(false);
@@ -55,13 +55,13 @@ export function LibraryBatch({ownerContext,isOwnerCurrent,items,accounts,onSaved
   finally{if(active()&&revision.current===requestRevision)setPreviewing(false);}
  };
  const refresh=async(saved:LibraryBatchCommitResult)=>{if(!active())return;setRefreshError(false);try{await onSaved(saved);}catch{if(active())setRefreshError(true);}};
- const failure=(pending:PendingLibraryBatch,cause:unknown,fromCommit:boolean)=>{
-  if(!active())return;let resolved='uncertain';try{if(cause instanceof PlanlyApiError)resolved=resolveLibraryBatchError(window.localStorage,pending,cause.status,cause.body,active,fromCommit);}catch{/* Unavailable recovery storage keeps the operation unresolved. */}
-  setError(resolved==='no-commit'?'Сохранение не применено. Обнови предпросмотр и подтверди новый набор.':resolved==='deleted'?null:safeMessage(cause));setPreview(null);sync();
+ const failure=(pending:PendingLibraryBatch,cause:unknown)=>{
+  if(!active())return;let resolved='uncertain';try{resolved=resolveLibraryBatchError(window.localStorage,pending,cause,active);}catch{/* Unavailable recovery storage keeps the operation unresolved. */}
+  setError(resolved==='no-commit'?'Эта попытка сохранения не применена. Перед новым набором проверь календарь и обнови предпросмотр.':resolved==='deleted'?null:safeMessage(cause));setPreview(null);sync();
  };
  const send=async(pending:PendingLibraryBatch)=>{
   try{const saved=await submitLibraryBatch(window.localStorage,pending,async input=>{if(!active())throw Error('Окно больше не активно.');return commitLibraryBatchRequest(input);},active);if(active()){setResult(saved);setPreview(null);setSourceIds([]);sync();await refresh(saved);}}
-  catch(cause){if(active())failure(pending,cause,true);}
+  catch(cause){if(active())failure(pending,cause);}
   finally{mutex.current=false;if(active())setBusy(false);}
  };
  const requiredMedia=preview?.rows.flatMap(r=>r.item.mediaIds)??[];
@@ -70,7 +70,7 @@ export function LibraryBatch({ownerContext,isOwnerCurrent,items,accounts,onSaved
  const lookup=async(operationId:string)=>{
   if(!active()||mutex.current)return;const pending=sync().pending.find(value=>value.input.operationId===operationId);if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setLookupFailed(current=>current.filter(id=>id!==operationId));setError(null);
   try{const raw=await loadLibraryBatchOperation(pending.input.operationId);if(!active())return;const saved=await acceptLibraryBatchResult(window.localStorage,pending,raw,active);if(active()){setResult(saved);sync();await refresh(saved);}}
-  catch(cause){if(active()){failure(pending,cause,false);setLookupFailed(current=>current.includes(operationId)?current:[...current,operationId]);}}
+  catch(cause){if(active()){failure(pending,cause);setLookupFailed(current=>current.includes(operationId)?current:[...current,operationId]);}}
   finally{mutex.current=false;if(active())setBusy(false);}
  };
  const retry=async(operationId:string)=>{if(!active()||mutex.current)return;const pending=sync().pending.find(value=>value.input.operationId===operationId);if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setError(null);await send(pending);};

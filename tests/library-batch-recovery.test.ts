@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
+import {PlanlyApiError} from '../lib/client/planly-api.ts';
 import {libraryBatchRequestHash} from '../lib/server/library-batch-hash.ts';
 import type {LibraryBatchCommitResult,LibraryBatchIntent,LibraryBatchPreview} from '../lib/contracts/library-batch.ts';
 const recovery=await import('../lib/library-batch-recovery.ts').catch(()=>({})) as typeof import('../lib/library-batch-recovery.ts');
@@ -33,15 +34,17 @@ test('unknown version, malformed schema or conflicting pending fail closed witho
 });
 test('404/503 and conflict never prove rollback; terminal deletion prevents resurrection across reload',async()=>{
  const s=storage(),{preview}=fixture(),p=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!);await assert.rejects(()=>recovery.submitLibraryBatch(s,p,async()=>{throw Error('loss');},()=>true));
- for(const [status,code] of [[404,'BATCH_RESULT_NOT_FOUND'],[503,'BATCH_RESULT_UNCERTAIN'],[409,'BATCH_OPERATION_CONFLICT']] as const){assert.equal(recovery.resolveLibraryBatchError(s,p,status,{code,commitApplied:false},()=>true,false),'uncertain');assert.ok(recovery.readPendingLibraryBatch(s,'owner-a').pending.length);}
- assert.equal(recovery.resolveLibraryBatchError(s,p,410,{code:'BATCH_RESULT_DELETED',result:{operationId,postIds:['post-a']}},()=>true,false),'deleted');
+ for(const [status,code] of [[404,'BATCH_RESULT_NOT_FOUND'],[503,'BATCH_RESULT_UNCERTAIN'],[409,'BATCH_OPERATION_CONFLICT']] as const){assert.equal(recovery.resolveLibraryBatchError(s,p,new PlanlyApiError('Unknown',status,{code,commitApplied:false}),()=>true),'uncertain');assert.ok(recovery.readPendingLibraryBatch(s,'owner-a').pending.length);}
+ assert.equal(recovery.resolveLibraryBatchError(s,p,new PlanlyApiError('Deleted',410,{code:'BATCH_RESULT_DELETED',result:{operationId,postIds:['post-a']}}),()=>true),'deleted');
  const historical=recovery.readPendingLibraryBatch(s,'owner-a').pending[0]!;assert.deepEqual(historical.terminal,{operationId,postIds:['post-a']});let sends=0;await assert.rejects(()=>recovery.submitLibraryBatch(s,historical,async()=>{sends++;return fixture().result;},()=>true));assert.equal(sends,0);
 });
-test('only typed known no-commit from commit response clears recovery; late owner callback cannot clear',async()=>{
- const s=storage(),{preview}=fixture(),p=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!);await assert.rejects(()=>recovery.submitLibraryBatch(s,p,async()=>{throw Error('loss');},()=>true));
- const error={code:'BATCH_PREVIEW_STALE',commitApplied:false};assert.equal(recovery.resolveLibraryBatchError(s,p,409,error,()=>false,true),'uncertain');assert.ok(recovery.readPendingLibraryBatch(s,'owner-a').pending.length);
- assert.equal(recovery.resolveLibraryBatchError(s,p,404,error,()=>true,true),'uncertain');
- assert.equal(recovery.resolveLibraryBatchError(s,p,409,error,()=>true,false),'uncertain');assert.equal(recovery.resolveLibraryBatchError(s,p,409,error,()=>true,true),'no-commit');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').blocked,false);
+test('only the exact dispatched rollback resolves its attempt; stale owner or mismatched status retain recovery',async()=>{
+ const s=storage(),{preview}=fixture(),p=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!),error=new PlanlyApiError('Stale',409,{code:'BATCH_PREVIEW_STALE',commitApplied:false});let submission:unknown;
+ try{await recovery.submitLibraryBatch(s,p,async()=>{throw error;},()=>true);}catch(cause){submission=cause;}
+ assert.equal(recovery.resolveLibraryBatchError(s,p,submission,()=>false),'uncertain');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').pending.length,1);
+ assert.equal(recovery.resolveLibraryBatchError(s,p,error,()=>true),'uncertain');assert.equal(recovery.resolveLibraryBatchError(s,p,submission,()=>true),'no-commit');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').blocked,false);
+ try{await recovery.submitLibraryBatch(s,p,async()=>{throw new PlanlyApiError('Invalid status',404,{code:'BATCH_PREVIEW_STALE',commitApplied:false});},()=>true);}catch(cause){submission=cause;}
+ assert.equal(recovery.resolveLibraryBatchError(s,p,submission,()=>true),'uncertain');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').pending.length,1);
 });
 test('actual server preview account projection needs no optional bootstrap connection metadata',async()=>{
  const {preview,input}=fixture();delete preview.rows[0].accounts[0].connection;assert.equal((await recovery.validateLibraryBatchPreview(preview,input)).complete,true);
@@ -55,7 +58,7 @@ test('known saved receipt survives cleanup failure; changed pending and stale ow
  const base=storage(),s=Object.assign(base,{removeItem:()=>{throw Error('storage unavailable');}}), {preview,result}=fixture(),p=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!);
  assert.deepEqual(await recovery.submitLibraryBatch(s,p,async()=>result,()=>true),result);assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a').pending,[p]);
  const other={...p,input:{...p.input,previewProof:'changed-proof'}};
- await assert.rejects(()=>recovery.submitLibraryBatch(s,p,async()=>{base.setItem(recovery.libraryBatchRecoveryKey('owner-a',operationId),JSON.stringify(other));return result;},()=>true));assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a').pending,[other]);
+ await assert.rejects(()=>recovery.submitLibraryBatch(s,p,async()=>{const key=[...base.data.keys()][0],entry=JSON.parse(base.getItem(key)!);base.setItem(key,JSON.stringify(entry.version===2?{...entry,pending:other}:other));return result;},()=>true));assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a'),{pending:[],blocked:true});assert.equal(s.length,2);assert.equal([...s.data.values()].some(raw=>JSON.parse(raw).pending?.input.previewProof==='changed-proof'),true);
  let active=true;const staleStorage=storage();await assert.rejects(()=>recovery.submitLibraryBatch(staleStorage,p,async()=>{active=false;return result;},()=>active));assert.deepEqual(recovery.readPendingLibraryBatch(staleStorage,'owner-a').pending,[p]);
 });
 test('two actual helper Workers retain both dispatched intents after get-before-set race and response loss',{timeout:15000},async()=>{
@@ -74,7 +77,7 @@ test('two actual helper Workers retain both dispatched intents after get-before-
    if(message.type==='done'){if(message.unexpectedSuccess)reject(Error('response loss should reject'));else resolve();}
   });
  })));assert.equal(dispatched.length,2);assert.equal(writes.length,2);
- assert.equal([...s.data.values()].map(raw=>JSON.parse(raw)).filter(p=>[a.input.operationId,b.input.operationId].includes(p.input.operationId)).length,2,'Both dispatched original operation records must remain durable');
+ assert.equal([...s.data.values()].map(raw=>JSON.parse(raw)).filter(entry=>[a.input.operationId,b.input.operationId].includes((entry.pending??entry).input.operationId)).length,2,'Both dispatched original operation records must remain durable');
  const reloaded=recovery.readPendingLibraryBatch(s,'owner-a');assert.equal(reloaded.pending.length,2,'Both original keys must survive a fresh reload');assert.deepEqual(reloaded.pending.map(p=>p.input.operationId).sort(),[a.input.operationId,b.input.operationId].sort());
  await recovery.acceptLibraryBatchResult(s,a,result,()=>true);assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a').pending,[b]);
  const resultB=structuredClone(result);resultB.receipt.operationId=b.input.operationId;await recovery.acceptLibraryBatchResult(s,b,resultB,()=>true);assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').blocked,false);
@@ -84,7 +87,7 @@ test('legacy owner record stays recoverable alongside operation records; exact a
  const s=storage(),{preview,result}=fixture(),a=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!),b=recovery.makePendingLibraryBatch('owner-a','22222222-2222-4222-8222-222222222222',preview.descriptor!);
  const legacy=recovery.libraryBatchRecoveryKey('owner-a'),keyB=recovery.libraryBatchRecoveryKey('owner-a',b.input.operationId),foreign=recovery.libraryBatchRecoveryKey('owner-b','33333333-3333-4333-8333-333333333333');s.setItem(legacy,JSON.stringify(a));s.setItem(keyB,JSON.stringify(b));s.setItem(foreign,'corrupt foreign record');assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a').pending,[a,b]);
  await recovery.acceptLibraryBatchResult(s,a,result,()=>true);assert.equal(s.getItem(legacy),null);assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a').pending,[b]);assert.equal(s.getItem(foreign),'corrupt foreign record');
- assert.equal(recovery.resolveLibraryBatchError(s,b,410,{code:'BATCH_RESULT_DELETED',result:{operationId:b.input.operationId,postIds:['post-a']}},()=>true,false),'deleted');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').pending[0].terminal?.operationId,b.input.operationId);assert.equal(s.getItem(foreign),'corrupt foreign record');
+ assert.equal(recovery.resolveLibraryBatchError(s,b,new PlanlyApiError('Deleted',410,{code:'BATCH_RESULT_DELETED',result:{operationId:b.input.operationId,postIds:['post-a']}}),()=>true),'deleted');assert.equal(recovery.readPendingLibraryBatch(s,'owner-a').pending[0].terminal?.operationId,b.input.operationId);assert.equal(s.getItem(foreign),'corrupt foreign record');
 });
 test('unknown or corrupt operation keys block fresh work without hiding valid owned recovery or erasing legacy records',async()=>{
  const s=storage(),{preview,result}=fixture(),a=recovery.makePendingLibraryBatch('owner-a',operationId,preview.descriptor!),b=recovery.makePendingLibraryBatch('owner-a','22222222-2222-4222-8222-222222222222',preview.descriptor!);const keyA=recovery.libraryBatchRecoveryKey('owner-a',operationId),legacy=recovery.libraryBatchRecoveryKey('owner-a'),unknown=legacy+':unknown-version';s.setItem(keyA,JSON.stringify(a));s.setItem(legacy,'malformed legacy');s.setItem(unknown,'{"version":9}');assert.deepEqual(recovery.readPendingLibraryBatch(s,'owner-a'),{pending:[a],blocked:true});let sends=0;await assert.rejects(()=>recovery.submitLibraryBatch(s,b,async()=>{sends++;return result;},()=>true));assert.equal(sends,0);
