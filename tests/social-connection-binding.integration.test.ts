@@ -9,6 +9,7 @@ import { sessionTokenHash, deleteSessionByToken } from '../lib/server/auth/sessi
 import { setUserAccessState } from '../lib/server/auth/access.ts';
 import { createSocialConnectionService } from '../lib/server/social-connections/service.ts';
 import { invalidateConnectionIntents, lockConnectionActor, lockOwnedConnectionAccount } from '../lib/server/social-connections/state.ts';
+import { Client } from 'pg';
 
 const TOKEN='123456:TEST_only_never_real_secret', BASE=1800000000000;
 let now=BASE, requests=0, failHuman=false, failBot=false, unavailable=false, wrongDestination=false;
@@ -239,26 +240,47 @@ test('existing legacy destination cannot be replaced before explicit release',as
  await getDb().update(schema.socialAccounts).set({providerAccountId:'-54321',connectionStatus:'CONNECTED',enabled:true}).where(eq(schema.socialAccounts.id,a.account.id));
  await denied(()=>s.start(a.raw,a.account.id,'-12345'));assert.equal((await row(a.account.id)).providerAccountId,'-54321');
 });
-test('session expiring while waiting for its row lock cannot authorize confirmation',async()=>{
+test('session expiring while waiting for its row lock cannot authorize confirmation',async context=>{
  const s=await service(),a=await actor('session-lock-expiry'),t=await ticket(s,a);
  await getDb().update(schema.sessions).set({expiresAt:new Date(now+1000)}).where(eq(schema.sessions.userId,a.id));
  const blocker=await getPool().connect();
- let entered!:()=>void;const ready=new Promise<void>(r=>entered=r);
+ // Reserve a separate observer before confirmation. Observations must not take
+ // its idle connection and race a new backend's connection/startup handshake.
+ const observer=await getPool().connect();
+ const blockerPid=Number((await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+ let finalPhase=false,queryStarted!:((pid:number)=>void);
+ const started=new Promise<number>(resolve=>queryStarted=resolve);
+ const originalQuery=Client.prototype.query;
+ // Observe the real driver's submission; no database operation is replaced.
+ context.mock.method(Client.prototype,'query',function(this:Client,...args:unknown[]) {
+  const config=args[0],text=typeof config==='string'?config:config && typeof config==='object' && 'text' in config?config.text:undefined;
+  const result=Reflect.apply(originalQuery,this,args);
+  if(finalPhase && typeof text==='string' && text.includes('from "sessions"') && text.endsWith('for update')) {
+   finalPhase=false;queryStarted((this as Client & {processID:number}).processID);
+  }
+  return result;
+ } as Client['query']);
  const finishing=createSocialConnectionService({now:()=>now,fetcher:async(input,init)=>{
   const response=await fetcher(input,init);
   if(String(input).endsWith('/getChatMember') && JSON.parse(String(init?.body)).user_id===42) {
-   await blocker.query('BEGIN');await blocker.query('SELECT id FROM sessions WHERE user_id=$1 FOR UPDATE',[a.id]);entered();
+   await blocker.query('BEGIN');await blocker.query('SELECT id FROM sessions WHERE user_id=$1 FOR UPDATE',[a.id]);finalPhase=true;
   }
   return response;
  }});
- const pending=finishing.confirm(a.raw,t.received.ticket);await ready;
+ const pending=finishing.confirm(a.raw,t.received.ticket);
+ // Handle a premature failure while waiting for evidence, without losing it.
+ const outcome=pending.then(value=>({value}),error=>({error}));
  try {
+  const deadline=AbortSignal.timeout(5000);
+  const targetPid=await Promise.race([started,new Promise<never>((_,reject)=>deadline.addEventListener('abort',()=>reject(new Error('Final session lock query was never submitted')),{once:true}))]);
   let blocked=false;
+  let evidence: {pid:number;state:string;wait_event_type:string;blockers:number[];query:string}|undefined;
   for(let i=0;i<100 && !blocked;i++) {
-   const result=await getPool().query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%\"sessions\"%' AND pid<>pg_backend_pid()");
-   blocked=result.rows[0].count>0;
+   const result=await observer.query('SELECT pid,state,wait_event_type,pg_blocking_pids(pid) AS blockers,query FROM pg_stat_activity WHERE datname=current_database() AND pid=$1',[targetPid]);
+   evidence=result.rows[0];
+   blocked=evidence?.state==='active' && evidence.wait_event_type==='Lock' && evidence.blockers.includes(blockerPid) && evidence.query.includes('from "sessions"') && evidence.query.endsWith('for update');
   }
-  assert.equal(blocked,true,'confirmation must reach the actual session row lock');now+=1001;
- } finally {await blocker.query('ROLLBACK');blocker.release();}
+  assert.equal(blocked,true,`confirmation must wait on its exact session blocker: ${JSON.stringify({targetPid,blockerPid,evidence})}`);now+=1001;
+ } finally {await blocker.query('ROLLBACK');blocker.release();observer.release();await outcome;}
  await denied(()=>pending);assert.equal((await row(a.account.id)).providerAccountId,null);
 });
