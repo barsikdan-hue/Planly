@@ -47,7 +47,7 @@ GitHub: current refs/CI and final Draft PR. Shell: isolated checkout, synthetic 
 
 **Files:** Create `lib/server/library-batch.ts` plus focused session/snapshot modules if needed, `lib/server/post-relations-insert.ts`, `tests/library-batch.integration.test.ts`, `tests/helpers/library-batch-db.ts`; modify only insertion blocks in `lib/server/posts.ts`.
 
-**Interfaces:** `previewLibraryBatch(rawToken, input, options?)`, `commitLibraryBatch(rawToken,input,options?)`, `readLibraryBatchOperation(rawToken,operationId,options?)`. Options use injected fresh clock/storage signer/mirror only; no production-only test synchronization hooks. Export typed LibraryBatchError with safe code/status. Use Task1 schemas/table; return contract Preview/CommitResult. No DB suites concurrently sharing fixture DB.
+**Interfaces:** `previewLibraryBatch(rawToken, input, options?)`, `commitLibraryBatch(rawToken,input,options?)`, `readLibraryBatchOperation(rawToken,operationId,options?)`, `canPreviewLibraryBatch(rawToken,options?):Promise<boolean>`. Options use injected fresh clock/storage signer/mirror only; no production-only test synchronization hooks. Export typed LibraryBatchError with safe code/status. Use Task1 schemas/table; return contract Preview/CommitResult. No DB suites concurrently sharing fixture DB.
 
 - [ ] RED native assertions: preview creates zero Post/publication; two sources/two targets produce 2 Posts/4 targets/4 publications/one receipt; invalid second source rolls all back; USER A/B/ADMIN/OWNER deny; opposite-order input/concurrent same and conflicting keys; fresh stale source/account/slot rejects without reallocating.
 - [ ] RED recovery: real COMMIT then mirror throws, replay same IDs after USED/new session/binding change/proof expiry, deleted result410; original C kept. DB→Redis repeated/concurrent reconcile yields one live job per eligible publication, no extra DB rows.
@@ -59,7 +59,7 @@ GitHub: current refs/CI and final Draft PR. Shell: isolated checkout, synthetic 
 
 **Files:** Create `components/planner/library-batch.tsx`, `lib/library-batch-recovery.ts` and corresponding tests/e2e; modify `components/planner/app.tsx` and bounded Library/CSS wiring. Inspect existing library tab and Phase9 patterns first.
 
-**Interfaces:** dialog accepts own Library/accounts/media and owner identity, invokes new endpoint family, reports saved result and triggers existing refresh. Existing single-post/Swipe/shared copy UI unchanged. Existing safe Post cancellation remains sole path.
+**Interfaces:** dialog accepts own Library/accounts/media and owner identity, invokes new endpoint family, reports saved result and triggers existing refresh. GET on the new preview route returns only `{eligible:boolean}` for the current principal, so UI does not infer USER role from legacy profile/account DTOs; POST revalidates authoritatively. Historical recovery remains available when eligibility becomes false. Existing single-post/Swipe/shared copy UI unchanged. Existing safe Post cancellation remains sole path.
 
 - [ ] RED behavior: finite owned selection/common TG/MAX, preview count/content/time, one button commits, no preconsent write, incomplete/stale disable; double click/lost response/reload preserve exact owner-scoped intent/key, never rekey uncertain404; logout discards stale callbacks; role USER-only.
 - [ ] Implement strict complete descriptor handling, owner-scoped recovery, keyboard/mobile accessible bounded dialog; no editable text overrides, publish-now or partial-target cancellation claims.
@@ -69,7 +69,7 @@ GitHub: current refs/CI and final Draft PR. Shell: isolated checkout, synthetic 
 
 **Files:** Create new `app/api/library/batch-consent/{preview,commit}/route.ts`, `operations/[operationId]/route.ts`, focused HTTP wrapper/test/smoke; modify CI/self-host fixture smoke only if needed for actual boundary proof; add verification report.
 
-**Interfaces:** HTTP routes call Task2 service with current raw session cookie; same-origin mutation and identity selector safeguards; private/no-store responses; safe typed401/403/404/409/410/422/uncertain503. No error logging of DB/raw payload/proofs.
+**Interfaces:** HTTP routes call Task2 service with current raw session cookie; GET preview is read-only current-principal `{eligible:boolean}` via canPreviewLibraryBatch, no new legacy profile/auth contract. Same-origin mutation and identity selector safeguards; private/no-store responses; safe typed401/403/404/409/410/422/uncertain503. No error logging of DB/raw payload/proofs.
 
 - [ ] RED real handler/compiled HTTP tests for no login/foreign ownership/media bytes denial, fresh role guards, all-or-nothing consent/replay and safe uncertainty projection.
 - [ ] Implement narrow routes/wrapper and compiled fixture probe. GREEN targeted tests, full suite, typecheck/lint/build, disposable migration drift and real PG/Redis/Worker recovery checks.
