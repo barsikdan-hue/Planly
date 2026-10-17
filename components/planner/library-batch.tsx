@@ -16,22 +16,22 @@ const safeMessage=(error:unknown)=>error instanceof PlanlyApiError?'Не уда�
 
 export function LibraryBatch({ownerContext,isOwnerCurrent,items,accounts,onSaved}:Props){
  const [expanded,setExpanded]=useState(false),[eligible,setEligible]=useState(false),[eligibilityError,setEligibilityError]=useState(false);
- const [recovery,setRecovery]=useState<LibraryBatchRecovery>({pending:null,blocked:true});
+ const [recovery,setRecovery]=useState<LibraryBatchRecovery>({pending:[],blocked:true});
  const [sourceIds,setSourceIds]=useState<string[]>([]),[accountIds,setAccountIds]=useState<string[]>([]),[settings,setSettings]=useState(defaults),[times,setTimes]=useState('10:00');
  const [preview,setPreview]=useState<LibraryBatchPreview|null>(null),[previewSignature,setPreviewSignature]=useState(''),[previewToken,setPreviewToken]=useState(0),[previewing,setPreviewing]=useState(false),[busy,setBusy]=useState(false);
  const [previewDeadline,setPreviewDeadline]=useState(0);
- const [loaded,setLoaded]=useState<string[]>([]),[mediaError,setMediaError]=useState(false),[error,setError]=useState<string|null>(null),[result,setResult]=useState<LibraryBatchCommitResult|null>(null),[refreshError,setRefreshError]=useState(false),[lookupFailed,setLookupFailed]=useState(false);
+ const [loaded,setLoaded]=useState<string[]>([]),[mediaError,setMediaError]=useState(false),[error,setError]=useState<string|null>(null),[result,setResult]=useState<LibraryBatchCommitResult|null>(null),[refreshError,setRefreshError]=useState(false),[lookupFailed,setLookupFailed]=useState<string[]>([]);
  const mounted=useRef(false),mutex=useRef(false),revision=useRef(0),heading=useRef<HTMLHeadingElement>(null);
  const active=()=>mounted.current&&isOwnerCurrent(ownerContext);
  const signature=JSON.stringify({sourceIds,accountIds,settings,items:items.filter(i=>sourceIds.includes(i.id)),accounts:accounts.filter(a=>accountIds.includes(a.id))});
  const currentSignature=useRef(signature);
  useLayoutEffect(()=>{currentSignature.current=signature;},[signature]);
- const sync=()=>{if(!active())return {pending:null,blocked:true};let found:LibraryBatchRecovery;try{found=readPendingLibraryBatch(window.localStorage,ownerContext.id);}catch{found={pending:null,blocked:true};}setRecovery(found);return found;};
+ const sync=()=>{if(!active())return {pending:[],blocked:true};let found:LibraryBatchRecovery;try{found=readPendingLibraryBatch(window.localStorage,ownerContext.id);}catch{found={pending:[],blocked:true};}setRecovery(found);return found;};
  useEffect(()=>{
   mounted.current=true;let live=true;
   Promise.resolve().then(()=>{if(live&&active())sync();});
   loadLibraryBatchEligibility().then(value=>{if(live&&active()){setEligible(value?.eligible===true);setEligibilityError(typeof value?.eligible!=='boolean');}}).catch(()=>{if(live&&active())setEligibilityError(true);});
-  const storage=()=>{if(active()){revision.current++;setPreview(null);sync();}};window.addEventListener('storage',storage);
+  const storage=()=>{if(active()){revision.current++;setPreview(null);setPreviewing(false);sync();}};window.addEventListener('storage',storage);
   return()=>{live=false;mounted.current=false;window.removeEventListener('storage',storage);};
   // The owner generation is remounted by App; every asynchronous result is fenced.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,22 +67,22 @@ export function LibraryBatch({ownerContext,isOwnerCurrent,items,accounts,onSaved
  const requiredMedia=preview?.rows.flatMap(r=>r.item.mediaIds)??[];
  const canConfirm=eligible&&!recovery.blocked&&!busy&&!previewing&&preview?.complete===true&&previewSignature===signature&&!mediaError&&requiredMedia.every(id=>loaded.includes(id));
  const confirm=async()=>{if(!active()||mutex.current||!canConfirm||!preview?.complete||sync().blocked)return;if(Date.now()>=previewDeadline){revision.current++;setPreview(null);setError('Срок предпросмотра истёк. Обнови его перед подтверждением.');return;}mutex.current=true;setBusy(true);setError(null);await send(makePendingLibraryBatch(ownerContext.id,crypto.randomUUID(),preview.descriptor));};
- const lookup=async()=>{
-  if(!active()||mutex.current)return;const pending=sync().pending;if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setLookupFailed(false);setError(null);
+ const lookup=async(operationId:string)=>{
+  if(!active()||mutex.current)return;const pending=sync().pending.find(value=>value.input.operationId===operationId);if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setLookupFailed(current=>current.filter(id=>id!==operationId));setError(null);
   try{const raw=await loadLibraryBatchOperation(pending.input.operationId);if(!active())return;const saved=await acceptLibraryBatchResult(window.localStorage,pending,raw,active);if(active()){setResult(saved);sync();await refresh(saved);}}
-  catch(cause){if(active()){failure(pending,cause,false);setLookupFailed(true);}}
+  catch(cause){if(active()){failure(pending,cause,false);setLookupFailed(current=>current.includes(operationId)?current:[...current,operationId]);}}
   finally{mutex.current=false;if(active())setBusy(false);}
  };
- const retry=async()=>{if(!active()||mutex.current)return;const pending=sync().pending;if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setError(null);await send(pending);};
+ const retry=async(operationId:string)=>{if(!active()||mutex.current)return;const pending=sync().pending.find(value=>value.input.operationId===operationId);if(!pending||pending.terminal)return;mutex.current=true;setBusy(true);setError(null);await send(pending);};
  const open=()=>{if(!active())return;setExpanded(true);requestAnimationFrame(()=>{if(active())heading.current?.focus();});};
  if(!expanded)return eligible||recovery.blocked?<div className="library-batch-entry"><Button variant="outline" onClick={open}>{recovery.blocked?'Проверить набор':'Запланировать набор'}</Button></div>:eligibilityError?<p className="mini-note" role="status">Проверка доступности набора временно недоступна.</p>:null;
  const ownReady=items.filter(i=>i.status==='READY'&&!i.sourcePostId),usable=accounts.filter(a=>['telegram','max'].includes(a.provider)&&a.enabled&&a.connectionStatus==='CONNECTED'&&a.connection?.mode==='verified-user'&&a.connection.state==='enabled'&&a.connection.ready);
  return <section className="library-batch scheduling-plan" aria-label="Набор из библиотеки">
-  <div className="page-heading"><h2 ref={heading} tabIndex={-1}>Набор из библиотеки</h2><Button variant="outline" disabled={busy} onClick={()=>{if(active()&&!mutex.current){revision.current++;setExpanded(false);setPreview(null);}}}>Закрыть набор</Button></div>
+  <div className="page-heading"><h2 ref={heading} tabIndex={-1}>Набор из библиотеки</h2><Button variant="outline" disabled={busy} onClick={()=>{if(active()&&!mutex.current){revision.current++;setExpanded(false);setPreview(null);setPreviewing(false);}}}>Закрыть набор</Button></div>
   <p>Один конечный набор из 1–20 личных готовых заготовок. Одинаковые выбранные площадки для всех постов. Время — Москва.</p>
   <p>Сохранено — не означает отправлено.</p><p className="mini-note">Бесплатный сервис может задержать публикацию. Новые заготовки не включаются автоматически. Если данные браузера очищены, сначала проверь календарь.</p>
   <p className="mini-note">Отмена — только для поста целиком через существующий редактор до любой попытки публикации. После начала или частичной отправки отмена не гарантируется; отмены отдельной площадки здесь нет.</p>
-  {recovery.blocked&&<aside className="scheduling-warning" role="status"><strong>Сначала проверь исходное сохранение</strong>{recovery.pending?<><p>Новый ключ не создаётся. Исходный набор: {recovery.pending.input.intent.rows.length} постов.</p><ol>{recovery.pending.input.intent.rows.map(r=><li key={r.sourceId}>{r.sourceId} · {dateLabel(r.targets[0].scheduledAt)}{r.targets.map(t=><div key={t.accountId}>{t.provider} · {t.destinationId}</div>)}</li>)}</ol>{recovery.pending.terminal?<p>Исторический результат удалён. Повторное создание этого набора запрещено.</p>:<><Button disabled={busy} onClick={()=>void lookup()}>Проверить исходное сохранение</Button>{lookupFailed&&<Button variant="outline" disabled={busy} onClick={()=>void retry()}>Повторить исходное сохранение</Button>}</>}</>:<p>Данные восстановления повреждены или недоступны. Проверь календарь; новый набор заблокирован.</p>}</aside>}
+  {recovery.blocked&&<aside className="scheduling-warning" role="status"><strong>Сначала проверь исходное сохранение</strong>{recovery.pending.map(pending=><article key={pending.input.operationId} aria-label={`Восстановление ${pending.input.operationId}`}><p>Операция {pending.input.operationId}</p><p>Новый ключ не создаётся. Исходный набор: {pending.input.intent.rows.length} постов.</p><ol>{pending.input.intent.rows.map(r=><li key={r.sourceId}>{r.sourceId} · {dateLabel(r.targets[0].scheduledAt)}{r.targets.map(t=><div key={t.accountId}>{t.provider} · {t.destinationId}</div>)}</li>)}</ol>{pending.terminal?<p>Исторический результат удалён. Повторное создание этого набора запрещено.</p>:<><Button disabled={busy} onClick={()=>void lookup(pending.input.operationId)}>Проверить исходное сохранение</Button>{lookupFailed.includes(pending.input.operationId)&&<Button variant="outline" disabled={busy} onClick={()=>void retry(pending.input.operationId)}>Повторить исходное сохранение</Button>}</>}</article>)}{!recovery.pending.length&&<p>Данные восстановления повреждены или недоступны. Проверь календарь; новый набор заблокирован.</p>}</aside>}
   {result&&<aside className="scheduling-success" role="status"><strong>Набор сохранён: {result.receipt.rows.length} поста</strong><p>{result.replayed?'Это исторический результат; текущие посты могли измениться.':'Посты сохранены в календаре.'}</p><ul>{result.receipt.rows.map(r=><li key={r.postId}>{r.postId} · {dateLabel(r.targets[0].scheduledAt)}</li>)}</ul>{refreshError&&<p>Календарь не обновился; набор уже сохранён.</p>}<Button variant="outline" onClick={()=>void refresh(result)}>Обновить календарь</Button></aside>}
   {!eligible&&<p role="status">Новые наборы доступны только подходящему USER. Исторический результат можно проверить выше.</p>}
   {error&&<p role="alert">{error}</p>}

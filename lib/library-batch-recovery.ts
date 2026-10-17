@@ -2,12 +2,13 @@ import {z} from 'zod';
 import {libraryBatchCommitInputSchema,libraryBatchHashSchema,libraryBatchReceiptSchema,type LibraryBatchDescriptor,type LibraryBatchPreview,type LibraryBatchPreviewInput,type LibraryBatchCommitResult} from './contracts/library-batch.ts';
 import {canonicalLibraryBatchIntent} from './library-batch.ts';
 
-type Storage=Pick<globalThis.Storage,'getItem'|'setItem'|'removeItem'>;
+type Storage=Pick<globalThis.Storage,'length'|'key'|'getItem'|'setItem'|'removeItem'>;
 const pendingSchema=z.object({version:z.literal(1),ownerId:z.string().min(1),requestHash:libraryBatchHashSchema,input:libraryBatchCommitInputSchema,
  terminal:z.object({operationId:z.string().uuid(),postIds:z.array(z.string().min(1)).min(1).max(20)}).strict().optional()}).strict();
 export type PendingLibraryBatch=z.infer<typeof pendingSchema>;
-export type LibraryBatchRecovery={pending:PendingLibraryBatch|null;blocked:boolean};
-export const libraryBatchRecoveryKey=(ownerId:string)=>`planly.library-batch.v1:${encodeURIComponent(ownerId)}`;
+export type LibraryBatchRecovery={pending:PendingLibraryBatch[];blocked:boolean};
+// The owner-only key is retained solely for conservative legacy read/ack compatibility.
+export const libraryBatchRecoveryKey=(ownerId:string,operationId?:string)=>`planly.library-batch.v1:${encodeURIComponent(ownerId)}${operationId?`:${operationId}`:""}`;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const stale=()=>new Error('Результат нужно проверить в исходном аккаунте.');
 export async function browserLibraryBatchRequestHash(intent:LibraryBatchDescriptor['intent']):Promise<string>{
@@ -17,14 +18,35 @@ export async function browserLibraryBatchRequestHash(intent:LibraryBatchDescript
 export function makePendingLibraryBatch(ownerId:string,operationId:string,descriptor:LibraryBatchDescriptor):PendingLibraryBatch{
  return pendingSchema.parse({version:1,ownerId,requestHash:descriptor.requestHash,input:{operationId,intent:canonicalLibraryBatchIntent(descriptor.intent),snapshotFingerprint:descriptor.snapshotFingerprint,previewProof:descriptor.previewProof}});
 }
+function readEntries(storage:Storage,ownerId:string){
+ const entries:{key:string;pending:PendingLibraryBatch}[]=[],legacy=libraryBatchRecoveryKey(ownerId),prefix=legacy+':';let blocked=false;
+ try{
+  const keys=new Set<string>();if(storage.getItem(legacy)!==null)keys.add(legacy);
+  for(let i=0;i<storage.length;i++){const key=storage.key(i);if(key?.startsWith(prefix))keys.add(key);}
+  for(const key of [...keys].sort()){
+   try{const raw=storage.getItem(key);if(raw===null)continue;const pending=pendingSchema.parse(JSON.parse(raw));
+    if(pending.ownerId!==ownerId||key!==legacy&&key!==libraryBatchRecoveryKey(ownerId,pending.input.operationId)||pending.terminal&&pending.terminal.operationId!==pending.input.operationId)throw Error('Invalid recovery');
+    entries.push({key,pending});
+   }catch{blocked=true;}
+  }
+ }catch{blocked=true;}
+ return {entries,blocked};
+}
 export function readPendingLibraryBatch(storage:Storage,ownerId:string):LibraryBatchRecovery{
- try{const raw=storage.getItem(libraryBatchRecoveryKey(ownerId));if(raw===null)return {pending:null,blocked:false};const parsed=pendingSchema.safeParse(JSON.parse(raw));
-  if(!parsed.success||parsed.data.ownerId!==ownerId||parsed.data.terminal&&parsed.data.terminal.operationId!==parsed.data.input.operationId)return {pending:null,blocked:true};
-  return {pending:parsed.data,blocked:true};
- }catch{return {pending:null,blocked:true};}
+ const {entries,blocked}=readEntries(storage,ownerId),byOperation=new Map<string,PendingLibraryBatch>(),conflicts=new Set<string>();
+ for(const {pending} of entries){const id=pending.input.operationId,existing=byOperation.get(id);if(existing&&!same(existing,pending))conflicts.add(id);else byOperation.set(id,pending);}
+ for(const id of conflicts)byOperation.delete(id);
+ return {pending:[...byOperation.values()],blocked:blocked||conflicts.size>0||entries.length>0};
 }
 async function validatePending(pending:PendingLibraryBatch){const parsed=pendingSchema.parse(pending);if(await browserLibraryBatchRequestHash(parsed.input.intent)!==parsed.requestHash)throw new Error('Данные восстановления повреждены.');return parsed;}
-function removeExact(storage:Storage,pending:PendingLibraryBatch,isCurrent:()=>boolean,knownSaved=false){if(!isCurrent())throw stale();const found=readPendingLibraryBatch(storage,pending.ownerId);if(!same(found.pending,pending))throw new Error('Данные восстановления изменились.');try{storage.removeItem(libraryBatchRecoveryKey(pending.ownerId));}catch(error){if(!knownSaved)throw error;}}
+function matchedKeys(storage:Storage,pending:PendingLibraryBatch){
+ const matching=readEntries(storage,pending.ownerId).entries.filter(entry=>entry.pending.input.operationId===pending.input.operationId);
+ if(!matching.length||matching.some(entry=>!same(entry.pending,pending)))throw new Error('Данные восстановления изменились.');return matching.map(entry=>entry.key);
+}
+function removeExact(storage:Storage,pending:PendingLibraryBatch,isCurrent:()=>boolean,knownSaved=false){
+ if(!isCurrent())throw stale();const keys=matchedKeys(storage,pending);
+ for(const key of keys){if(!isCurrent())throw stale();const raw=storage.getItem(key);if(raw===null)continue;if(!same(pendingSchema.parse(JSON.parse(raw)),pending))throw new Error('Данные восстановления изменились.');try{storage.removeItem(key);}catch(error){if(!knownSaved)throw error;}}
+}
 export async function acceptLibraryBatchResult(storage:Storage,pending:PendingLibraryBatch,raw:unknown,isCurrent:()=>boolean):Promise<LibraryBatchCommitResult>{
  await validatePending(pending);if(!isCurrent())throw stale();
  const result=z.object({receipt:libraryBatchReceiptSchema,replayed:z.boolean()}).strict().parse(raw),receipt=result.receipt;
@@ -34,8 +56,8 @@ export async function acceptLibraryBatchResult(storage:Storage,pending:PendingLi
 }
 export async function submitLibraryBatch(storage:Storage,pending:PendingLibraryBatch,send:(input:PendingLibraryBatch['input'])=>Promise<unknown>,isCurrent:()=>boolean):Promise<LibraryBatchCommitResult>{
  const parsed=await validatePending(pending);if(!isCurrent())throw stale();if(parsed.terminal)throw new Error('Результат удалён; повторное создание запрещено.');
- const found=readPendingLibraryBatch(storage,pending.ownerId);if(found.blocked&&!same(found.pending,pending))throw new Error('Сначала проверь исходное сохранение.');
- storage.setItem(libraryBatchRecoveryKey(pending.ownerId),JSON.stringify(parsed));if(!same(readPendingLibraryBatch(storage,pending.ownerId).pending,parsed))throw new Error('Браузер не сохранил данные восстановления.');
+ const found=readPendingLibraryBatch(storage,pending.ownerId),existing=found.pending.find(value=>value.input.operationId===pending.input.operationId);if(found.blocked&&!same(existing,pending))throw new Error('Сначала проверь исходное сохранение.');
+ if(existing)matchedKeys(storage,pending);else storage.setItem(libraryBatchRecoveryKey(pending.ownerId,pending.input.operationId),JSON.stringify(parsed));if(!readPendingLibraryBatch(storage,pending.ownerId).pending.some(value=>same(value,parsed)))throw new Error('Браузер не сохранил данные восстановления.');
  if(!isCurrent())throw stale();const raw=await send(parsed.input);if(!isCurrent())throw stale();return acceptLibraryBatchResult(storage,parsed,raw,isCurrent);
 }
 // Only an explicit server rollback projection may release a pending operation.
@@ -44,8 +66,8 @@ export function resolveLibraryBatchError(storage:Storage,pending:PendingLibraryB
  if(!isCurrent())return 'uncertain';const body=raw as {code?:unknown;commitApplied?:unknown;result?:unknown}|null;
  if(status===410&&body?.code==='BATCH_RESULT_DELETED'){
   const result=z.object({operationId:z.literal(pending.input.operationId),postIds:z.array(z.string().min(1)).length(pending.input.intent.rows.length)}).strict().safeParse(body.result);
-  if(result.success&&new Set(result.data.postIds).size===result.data.postIds.length&&same(readPendingLibraryBatch(storage,pending.ownerId).pending,pending)){
-   storage.setItem(libraryBatchRecoveryKey(pending.ownerId),JSON.stringify({...pending,terminal:result.data}));return 'deleted';
+  if(result.success&&new Set(result.data.postIds).size===result.data.postIds.length){
+   const keys=matchedKeys(storage,pending);for(const key of keys){if(!isCurrent())return 'uncertain';const raw=storage.getItem(key);if(raw===null||!same(pendingSchema.parse(JSON.parse(raw)),pending))throw new Error('Данные восстановления изменились.');storage.setItem(key,JSON.stringify({...pending,terminal:result.data}));}return 'deleted';
   }
  }
  const rollbackCodes:Record<string,number>={BATCH_INVALID:422,BATCH_FORBIDDEN:403,BATCH_UNAVAILABLE:404,BATCH_PREVIEW_STALE:409,BATCH_ACCOUNT_UNAVAILABLE:409,BATCH_CONTENT_INVALID:409,BATCH_SLOT_CONFLICT:409};
