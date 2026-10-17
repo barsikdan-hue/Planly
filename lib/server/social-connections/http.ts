@@ -5,6 +5,7 @@ import {SESSION_COOKIE_NAME} from '../auth/session.ts';
 import {PayloadLimitError, readBoundedJson} from '../analytics/body.ts';
 import {createSocialConnectionService, SocialConnectionError} from './service.ts';
 import {SocialProofError} from './launch.ts';
+import {createSocialConnectionLifecycle} from './lifecycle.ts';
 import {socialConnectionAccountHint} from './account-hint.ts';
 
 export const socialConnectionJson=(body:unknown,status=200)=>Response.json(body,{status,headers:{'cache-control':'private, no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff'}});
@@ -66,5 +67,15 @@ export async function connectionTicket(request:Request,action:'preview'|'confirm
   await requireApiOwner(request);requireSocialConnectionRequest(request);
   const body=ticketInput.parse(await input(request,1024));
   return socialConnectionJson(await createSocialConnectionService()[action](requestCookie(request,SESSION_COOKIE_NAME)??'',body.ticket));
+ }catch(error){return socialConnectionApiError(error);}
+}
+
+const lifecycleInput=z.object({bindingRevision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict();
+export async function connectionLifecycle(request:Request,context:{params:Promise<{id:string}>},action:'pause'|'enable'|'release'):Promise<Response> {
+ try {
+  await requireApiOwner(request);requireSocialConnectionRequest(request);
+  const {id}=await context.params;z.string().min(1).max(128).parse(id);
+  const body=lifecycleInput.parse(await input(request,1024));
+  return socialConnectionJson(await createSocialConnectionLifecycle()[action](requestCookie(request,SESSION_COOKIE_NAME)??'',id,body.bindingRevision));
  }catch(error){return socialConnectionApiError(error);}
 }
