@@ -78,6 +78,18 @@ test('Settings start rejects unsafe launch and release409 retains reservation wi
  await expect(page.getByText('Нерешённые публикации требуют отдельного ручного разбора.',{exact:false})).toBeVisible();await expect(telegram).toContainText('Подтверждено · выключено');await f.check(testInfo);
 });
 
+test('Settings channel heading keeps its count inside 320px with increased text spacing',async({context,page},testInfo)=>{
+ test.skip(testInfo.project.name==='mobile','Explicit narrow viewport covers the boundary once');
+ await page.setViewportSize({width:320,height:900});const f=await fixture(context,page);await page.goto('/#settings');
+ const heading=page.locator('.settings-socials > .page-heading');await expect(heading).toContainText('1 из 2 подключены');
+ // A user text-spacing override exercises wider text metrics on every host font.
+ await page.addStyleTag({content:'.settings-socials > .page-heading, .settings-socials > .page-heading * { letter-spacing: .12em !important; }'});
+ await expect(heading.locator('.pill')).toBeVisible();
+ const bounds=await heading.evaluate(element=>({container:element.getBoundingClientRect().toJSON(),count:element.querySelector('.pill')!.getBoundingClientRect().toJSON()}));
+ expect(bounds.count.right).toBeLessThanOrEqual(bounds.container.right+1);
+ await health(page);await screenshot(page,testInfo,'settings-320-text-spacing');await f.check(testInfo);
+});
+
 for(const provider of ['telegram','max'])test(`actual ${provider} production documents require consent and confirm, strip fragment and preserve privacy`,async({context,page},testInfo)=>{
  const f=await fixture(context,page);
  const data=new URLSearchParams({auth_date:'1780000000',user:JSON.stringify({id:4242,first_name:'Synthetic'}),start_param:'synthetic'});data.set('hash',createHmac('sha256','LOCAL_SYNTHETIC_KEY_NOT_PROVIDER').update(data.toString()).digest('hex'));
