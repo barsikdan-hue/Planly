@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import type { LibraryItemDto } from '@/lib/contracts/library';
-import type { Provider, SocialAccountDto } from '@/lib/contracts/planner';
+import {isSocialAccountUsable, type Provider, type SocialAccountDto} from '@/lib/contracts/planner';
 import { slotQuerySchema, type SlotQuery } from '@/lib/contracts/swipe-planner';
 import { slotPresets } from '@/lib/planner-slots';
 import { moscowDate, networkNames, type Media } from '@/lib/planner';
@@ -78,7 +78,7 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     const current = working && heldCard ? heldCard : nextCard;
     const focusNext = useRef(false);
     useEffect(() => { if (focusNext.current) { focusNext.current = false; cardRef.current?.focus({ preventScroll: true }); } }, [current?.id, started]);
-    const available = providers.filter(provider => socialAccounts.some(account => account.provider === provider && account.enabled && account.connectionStatus === 'CONNECTED'));
+    const available = providers.filter(provider => socialAccounts.some(account => account.provider === provider && isSocialAccountUsable(account)));
     const chosen = selected;
     const accountsReady = chosen.length > 0 && chosen.every(provider => available.includes(provider));
     const schedule = preset === 'custom' ? { weekdays, times } : slotPresets[preset];

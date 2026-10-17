@@ -1,4 +1,4 @@
-import type {PublishInput,PublishResult,SocialConnector,PublicationErrorType} from './types.ts';
+import type {ControlValidationResult,PublishInput,PublishResult,SocialConnector,PublicationErrorType} from './types.ts';
 import {validatePublicationContent} from '../../publication-content.ts';
 type Failure=Extract<PublishResult,{ok:false}>;
 type ApiResult={ok:true,result:unknown}|Failure;
@@ -10,6 +10,7 @@ const attachmentToken=(v:unknown):v is string=>typeof v==='string'&&v.length>0&&
 
 export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,timeoutMs?:number}):SocialConnector & {
  validate(destinationId:string):Promise<{ok:true,destinationId:string,displayName:string}|Failure>;
+ validateControl(destinationId:string,humanId:string):Promise<ControlValidationResult>;
 } {
  const token=options.token.trim();const fetcher=options.fetcher??fetch;
  async function call(path:string,method:'GET'|'POST',body?:unknown,mutation=false):Promise<ApiResult>{
@@ -51,6 +52,28 @@ export function createMaxConnector(options:{token:string,fetcher?:typeof fetch,t
  }
  return {
   provider:'MAX',
+  async validateControl(destinationId,humanId){
+   if(!validId(destinationId))return failure('VALIDATION','MAX_DESTINATION','Use a numeric MAX chat ID.');
+   if(!/^[1-9]\d{0,15}$/.test(humanId)||!Number.isSafeInteger(Number(humanId)))return failure('AUTH','MAX_HUMAN_INVALID','MAX human identity could not be verified.');
+   const me=await call('/me','GET');if(!me.ok)return me;const bot=record(me.result);
+   if(bot?.is_bot!==true||!Number.isSafeInteger(bot.user_id)||Number(bot.user_id)<=0)return failure('AUTH','MAX_BOT_INVALID','MAX did not confirm the bot identity.');
+   const info=await call(`/chats/${destinationId}`,'GET');if(!info.ok)return info;const chat=record(info.result);
+   if(!Number.isSafeInteger(chat?.chat_id)||String(chat?.chat_id)!==destinationId||!['chat','channel'].includes(String(chat?.type))||chat?.status!=='active')return failure('VALIDATION','MAX_CHAT_INVALID','Select an active MAX group or channel accessible to this bot.');
+   const knownPermissions=new Set(['read_all_messages','add_remove_members','add_admins','change_chat_info','pin_message','edit_link','write','edit','delete','can_call','view_stats','post_edit_delete_message','edit_message','delete_message']);
+   const privileged=(member:Record<string,unknown>|null,id:number,isBot:boolean)=>{
+    if(member?.user_id!==id||member?.is_bot!==isBot||typeof member.is_owner!=='boolean'||typeof member.is_admin!=='boolean')return false;
+    const permissions=member.permissions;
+    if(permissions!=null&&(!Array.isArray(permissions)||permissions.some(permission=>typeof permission!=='string'||!knownPermissions.has(permission))))return false;
+    return member.is_owner||(member.is_admin&&(chat.type==='chat'||(Array.isArray(permissions)&&(permissions.includes('write')||permissions.includes('post_edit_delete_message')))));
+   };
+   const membership=await call(`/chats/${destinationId}/members/me`,'GET');if(!membership.ok)return membership;
+   if(!privileged(record(membership.result),Number(bot.user_id),true))return failure('AUTH','MAX_POST_PERMISSION','Add the MAX bot as administrator; channels also require posting permission.');
+   // Official OpenAPI: comma-separated user_ids; this path requests exactly one H.
+   const people=await call(`/chats/${destinationId}/members?user_ids=${humanId}`,'GET');if(!people.ok)return people;
+   const members=record(people.result)?.members;
+   if(!Array.isArray(members)||members.length!==1||!privileged(record(members[0]),Number(humanId),false))return failure('AUTH','MAX_HUMAN_PERMISSION','Confirm a channel or group you own or administer with posting permission.');
+   return {ok:true,destinationId,displayName:typeof chat.title==='string'?chat.title.slice(0,200):'MAX',humanId,botId:String(bot.user_id)};
+  },
   async validate(destinationId){
    if(!validId(destinationId))return failure('VALIDATION','MAX_DESTINATION','Use a numeric MAX chat ID.');
    const me=await call('/me','GET');if(!me.ok)return me;const bot=record(me.result);

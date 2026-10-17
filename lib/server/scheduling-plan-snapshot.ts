@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { posts, postTargets, socialAccounts, mediaAssets, postMedia, publications } from '../../db/schema.ts';
 import type { Transaction } from './planner-slots.ts';
-import { fromDbProvider, type PostDto, type SocialAccountDto, type MediaAssetDto } from '../contracts/planner.ts';
+import { fromDbProvider, type PostDto, type MediaAssetDto } from '../contracts/planner.ts';
 import type { SchedulingIssue } from '../contracts/scheduling-plan.ts';
 import { validatePublicationContent } from '../publication-content.ts';
 type PostRow=typeof posts.$inferSelect;type TargetRow=typeof postTargets.$inferSelect;type AccountRow=typeof socialAccounts.$inferSelect;type MediaRow=typeof mediaAssets.$inferSelect;type PublicationRow=typeof publications.$inferSelect;
@@ -36,5 +36,4 @@ export function schedulingPostDto(snapshot:SchedulingSnapshot):PostDto {
   return {id:snapshot.post.id,title:snapshot.post.title,baseText:snapshot.post.baseText,status:snapshot.post.status,createdAt:snapshot.post.createdAt.toISOString(),updatedAt:snapshot.post.updatedAt.toISOString(),mediaIds:snapshot.media.map(row=>row.asset.id),
     targets:snapshot.targets.filter(row=>row.target.active).map(({target,account})=>({id:target.id,socialAccountId:account.id,provider:fromDbProvider(account.provider),textOverride:target.textOverride,scheduledAt:target.scheduledAt?.toISOString()??null}))};
 }
-export function schedulingAccountDto(account:AccountRow):SocialAccountDto{return {id:account.id,provider:fromDbProvider(account.provider),providerAccountId:account.providerAccountId,displayName:account.displayName,enabled:account.enabled,connectionStatus:account.connectionStatus};}
 export function schedulingMediaDto(asset:MediaRow):MediaAssetDto{return {id:asset.id,originalName:asset.originalName,mimeType:asset.mimeType,byteSize:asset.byteSize,width:asset.width,height:asset.height,durationMs:asset.durationMs,source:asset.source,createdAt:asset.createdAt.toISOString()};}

@@ -55,6 +55,26 @@ export type PostTargetDto = {
   provider: Provider;
   textOverride: string | null;
   scheduledAt: string | null;
+  approvalCancelledAt?: string | null;
+  cancelApproval?: CancelApprovalDto;
+};
+
+export const cancelApprovalInputSchema = z.object({
+  expectedPublicationId: z.string().min(1).max(128),
+  expectedPublicationUpdatedAt: z.string().datetime({offset:true}),
+  expectedTargetUpdatedAt: z.string().datetime({offset:true}),
+  expectedBindingRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+}).strict();
+export type CancelApprovalInput = z.infer<typeof cancelApprovalInputSchema>;
+export type CancelApprovalResult = {postId:string;targetId:string;publicationId:string;approvalCancelledAt:string;replayed:boolean};
+export type CancelApprovalDto = {
+  eligible:boolean;
+  reason:'AVAILABLE'|'ALREADY_CANCELLED'|'UNSUPPORTED_HISTORY';
+  expectedPublicationId:string|null;
+  expectedPublicationUpdatedAt:string|null;
+  expectedTargetUpdatedAt:string;
+  expectedBindingRevision:number;
+  historicalDestinationId:string|null;
 };
 
 export type PostDto = {
@@ -82,6 +102,17 @@ export type MediaAssetDto = {
 };
 
 export type SocialConnectionStatus = 'DISCONNECTED' | 'CONNECTED' | 'ERROR';
+export type SocialConnectionAction = 'begin' | 'enable' | 'pause' | 'release';
+export type SocialConnectionMetadata = {
+  mode: 'verified-user';
+  ready: boolean;
+  reason: 'SETUP_REQUIRED' | 'ACCESS_REQUIRED' | 'REVERIFY_REQUIRED' | null;
+  state: 'unverified' | 'pending' | 'verified-disabled' | 'enabled' | 'stale';
+  accountHint: string;
+  bindingRevision: number;
+  checkedAt: string | null;
+  actions: SocialConnectionAction[];
+};
 export type SocialAccountDto = {
   id: string;
   provider: Provider;
@@ -89,7 +120,13 @@ export type SocialAccountDto = {
   displayName: string;
   enabled: boolean;
   connectionStatus: SocialConnectionStatus;
+  connection?: SocialConnectionMetadata;
 };
+
+export function isSocialAccountUsable(account: SocialAccountDto): boolean {
+  return account.enabled && account.connectionStatus === 'CONNECTED' &&
+    (!account.connection || account.connection.state === 'enabled');
+}
 
 export const updateProfileInputSchema = z.object({
   displayName: z.string().trim().min(1).max(40),

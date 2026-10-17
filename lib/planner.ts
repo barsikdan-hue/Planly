@@ -21,6 +21,9 @@ export type Post = {
   time: string;
   status: Status;
   targets: {
+    id?: string;
+    approvalCancelledAt?: string | null;
+    cancelApproval?: import('./contracts/planner.ts').CancelApprovalDto;
     network: Network;
     status: Status;
     remoteUrl?: string | null;
@@ -128,7 +131,8 @@ export function fromServerPost(input: PostDto): Post {
       : publication?.status === 'FAILED' || publication?.status === 'REQUIRES_RECONNECT' ? 'failed'
       : publication?.status === 'CANCELLED' ? 'draft'
       : input.status === 'READY' ? 'scheduled' : 'draft';
-    return { network: target.provider, status, remoteUrl: publication?.remoteUrl, error: publication?.error };
+    return { id:target.id, approvalCancelledAt:target.approvalCancelledAt, cancelApproval:target.cancelApproval,
+      network: target.provider, status, remoteUrl: publication?.remoteUrl, error: publication?.error };
   });
   const status: Status = targets.some(target => target.status === 'failed') ? 'failed'
     : targets.length > 0 && targets.every(target => target.status === 'published') ? 'published'

@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
 import { posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
+import { capturePublicationBinding } from './social-connections/publication-authorization.ts';
 import { lockOwnerSchedule } from './planner-slots.ts';
 
 export type PublicationQueueChange = {
@@ -99,8 +100,10 @@ export async function reconcilePostPublicationsInTx(
     );
     if (hasUnsafeTerminalHistory) continue;
 
+    const binding = await capturePublicationBinding(tx,userId,account.id,account.provider);
     const publicationId = randomUUID();
     await tx.insert(publications).values({
+      ...binding,
       id: publicationId,
       userId,
       postId,

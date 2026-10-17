@@ -14,6 +14,10 @@ export type PublishResult =
   | { ok: true; remoteId: string; remoteUrl?: string | null }
   | { ok: false; errorType: PublicationErrorType; code?: string | null; message: string; retryAfterMs?: number };
 
+export type ControlValidationResult =
+  | { ok: true; destinationId: string; displayName: string; humanId: string; botId: string }
+  | Extract<PublishResult, { ok: false }>;
+
 export interface SocialConnector {
   provider: SocialProvider;
   publish(input: PublishInput): Promise<PublishResult>;
