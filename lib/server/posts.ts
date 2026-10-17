@@ -14,6 +14,7 @@ import {
 import { reconcilePostPublicationsInTx, type PublicationQueueChange } from './publications.ts';
 import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
 import { validatePostRelations } from './post-relations.ts';
+import { insertPostRelations } from './post-relations-insert.ts';
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
 import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
@@ -207,22 +208,7 @@ export async function createPost(
       return swipeReview ? replay(existing.id) : { postId: existing.id, changes: [] as PublicationQueueChange[], created: false };
     }
 
-    if (input.targets.length) {
-      await tx.insert(postTargets).values(input.targets.map(target => ({
-        id: randomUUID(),
-        postId,
-        socialAccountId: accounts.get(toDbProvider(target.provider))!,
-        textOverride: target.textOverride,
-        scheduledAt: target.scheduledAt ? new Date(target.scheduledAt) : null,
-        active: true,
-        createdAt: now,
-        updatedAt: now,
-      })));
-    }
-
-    if (input.mediaIds.length) {
-      await tx.insert(postMedia).values(input.mediaIds.map((mediaId, position) => ({ postId, mediaId, position })));
-    }
+    await insertPostRelations(tx, postId, input, accounts, now);
 
     const changes = await reconcilePostPublicationsInTx(tx, userId, postId);
     if (sourceLibraryItemId) {
