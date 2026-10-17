@@ -22,14 +22,25 @@ export async function lockConnectionActor(tx:ConnectionTransaction, tokenHash:st
   const [reference]=await tx.select().from(sessions).where(eq(sessions.tokenHash,tokenHash));
   if(!reference) return connectionDenied();
   const [user]=await tx.select().from(users).where(eq(users.id,reference.userId)).for('update');
-  if(!user || !user.authInitialized || user.accessState!=='ACTIVE' || user.sessionVersion!==reference.sessionVersion || reference.expiresAt.getTime()<=clockValue(now)) return connectionDenied();
+  if(
+    !user ||
+    !user.authInitialized ||
+    user.accessState!=='ACTIVE' ||
+    user.sessionVersion!==reference.sessionVersion ||
+    reference.expiresAt.getTime()<=clockValue(now)
+  ) return connectionDenied();
   return {userId:user.id,sessionId:reference.id,sessionVersion:user.sessionVersion,sessionExpiresAt:reference.expiresAt.getTime(),displayName:user.displayName.slice(0,100)};
 }
 export async function lockOwnedConnectionAccount(tx:ConnectionTransaction,actor:ConnectionActor,accountId:string,now:ConnectionClock) {
   const [account]=await tx.select().from(socialAccounts).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,actor.userId))).for('update');
   if(!account || account.provider==='VK') return connectionDenied();
   const [session]=await tx.select().from(sessions).where(eq(sessions.id,actor.sessionId)).for('update');
-  if(!session || session.userId!==actor.userId || session.sessionVersion!==actor.sessionVersion || session.expiresAt.getTime()<=clockValue(now)) return connectionDenied();
+  if(
+    !session ||
+    session.userId!==actor.userId ||
+    session.sessionVersion!==actor.sessionVersion ||
+    session.expiresAt.getTime()<=clockValue(now)
+  ) return connectionDenied();
   actor.sessionExpiresAt=session.expiresAt.getTime();
   return account;
 }

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {toast} from 'sonner';
 import {fixture,cleanup,deferred} from './helpers/library-editor-fixture.mjs';
 import * as api from '../lib/client/planly-api.ts';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+const {Composer}=await import('../components/planner/composer.tsx');
 const originalToast={success:toast.success,error:toast.error};
 afterEach(()=>{cleanup();Object.assign(toast,originalToast);});
 const launchUrl=`https://t.me/test_bot?startapp=${'a'.repeat(43)}`;
@@ -46,7 +49,23 @@ test('release conflict reports manual review, preserves data, and offers no auto
  const observed=messages(),{value}=await open(()=>Response.json({error:'private data',code:'CONFLICT'},{status:409}));assert.equal(typeof props(value).release,'function');const before=props(value).accounts;
  await act(value,'release');await value.settle();assert.deepEqual(props(value).accounts,before);assert.match(observed[0].message,/ручн/);assert.match(observed[0].message,/сохран/);assert.doesNotMatch(observed[0].message,/private|удали|отмени/i);
 });
-for(const state of ['unverified','stale','pending','verified-disabled','enabled'])test(`actual Composer usability follows verified ${state} without stripping private draft selection`,async()=>{
- const {value}=await open(()=>{throw Error('No mutation');});value.snapshot.socialAccounts=[{...account('owner',state),enabled:true}];await value.poll();await value.navigate('create');
- assert.equal(value.app.find('Composer').props.accounts.telegram,state==='enabled');assert.equal(value.requests.length,0);
+for(const state of ['unverified','stale','pending','verified-disabled','enabled'])test(`actual Composer usability follows verified ${state} and retains selected private Telegram/MAX draft targets`,async()=>{
+ const {value}=await open(()=>{throw Error('No mutation');});
+ value.snapshot.posts=[{...value.snapshot.posts[0],id:'private-draft',status:'DRAFT',baseText:'Private draft',mediaIds:['A'],targets:[
+  {id:'private-telegram',socialAccountId:'owner-telegram',provider:'telegram',textOverride:null,scheduledAt:null,publication:null},
+  {id:'private-max',socialAccountId:'owner-max',provider:'max',textOverride:'Private MAX text',scheduledAt:null,publication:null},
+ ]},value.snapshot.posts[0]];
+ value.snapshot.socialAccounts=[account('owner','enabled'),{...account('owner','enabled'),id:'owner-max',provider:'max'}];
+ await value.poll();await value.navigate('content');
+ const content=value.app.find('Content').props;content.editPost(content.posts.find(post=>post.id==='private-draft'));await value.settle();
+ const before=value.app.find('Composer').props.draft;
+ assert.equal(before.id,'private-draft');assert.deepEqual(before.networks,['telegram','max']);
+ for(const network of ['Telegram','MAX'])assert.match(renderToStaticMarkup(createElement(Composer,value.app.find('Composer').props)),new RegExp(`<[^>]+aria-label="${network}"[^>]+aria-checked="true"|<[^>]+aria-checked="true"[^>]+aria-label="${network}"`));
+ value.snapshot.socialAccounts=value.snapshot.socialAccounts.map(item=>({...item,...account('owner',state),id:item.id,provider:item.provider,enabled:true}));
+ await value.poll();
+ const composer=value.app.find('Composer').props;
+ assert.equal(composer.accounts.telegram,state==='enabled');assert.equal(composer.accounts.max,state==='enabled');
+ assert.deepEqual(composer.draft,before);
+ for(const network of ['Telegram','MAX'])assert.match(renderToStaticMarkup(createElement(Composer,composer)),new RegExp(`<[^>]+aria-label="${network}"[^>]+aria-checked="true"|<[^>]+aria-checked="true"[^>]+aria-label="${network}"`));
+ assert.equal(value.requests.length,0);
 });
