@@ -52,6 +52,9 @@ export function createSocialConnectionLifecycle(options:{now?:()=>number;fetcher
       return db.transaction(async tx=>{
         const current=await proven(tx,raw,id,revision);
         if(now()<checkedAt || now()-checkedAt>30000 || current.actor.sessionId!==snapshot.actor.sessionId || current.account.connectionGeneration!==snapshot.account.connectionGeneration || current.config.revision!==snapshot.config.revision || current.binding.humanId!==snapshot.binding.humanId || current.binding.botId!==snapshot.binding.botId || current.binding.destinationId!==snapshot.binding.destinationId)return connectionDenied();
+        // Fresh control replaces the authorization observed by older handoffs
+        // and proof operations, even when no pause or reproof preceded enable.
+        await invalidateConnectionIntents(tx,id);
         await tx.update(socialAccounts).set({enabled:true,connectionStatus:'CONNECTED',updatedAt:new Date(now())}).where(eq(socialAccounts.id,id));
         return {accountId:id,bindingRevision:revision,enabled:true};
       });

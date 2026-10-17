@@ -198,3 +198,41 @@ for(const uncertain of [false,true])test(`admitted ${uncertain?'ambiguous':'conf
  const [saved]=await getDb().select().from(schema.publications).where(eq(schema.publications.id,p.id));assert.equal(uncertain?saved.providerErrorCode:saved.providerRemoteId,uncertain?'AMBIGUOUS_DELIVERY':'9');
  await processPublication(p.id);assert.equal(starts,1);
 });
+
+for(const provider of ['TELEGRAM','MAX'] as const)test(`${provider} direct enable fences late AUTH from two admitted sends without pause`,async()=>{
+ const {a,l}=await ready(provider),pA=await work(a);
+ await getDb().insert(schema.posts).values({id:'e4p-post-b',userId:a.id,baseText:'private B',status:'READY'});
+ await getDb().insert(schema.postTargets).values({id:'e4p-target-b',postId:'e4p-post-b',socialAccountId:a.account.id,active:true,scheduledAt:new Date(BASE+999999)});
+ await reconcilePostPublications(a.id,'e4p-post-b');
+ const [pB]=await getDb().select().from(schema.publications).where(eq(schema.publications.postId,'e4p-post-b'));
+ let enteredA!:()=>void,enteredB!:()=>void,releaseA!:()=>void,releaseB!:()=>void;
+ const entryA=new Promise<void>(r=>enteredA=r),entryB=new Promise<void>(r=>enteredB=r);
+ const gateA=new Promise<void>(r=>releaseA=r),gateB=new Promise<void>(r=>releaseB=r);
+ let ordinal=0;
+ sendHold=async()=>{if(++ordinal===1){enteredA();await gateA;}else{enteredB();await gateB;}};
+ const jobA=processPublication(pA.id);let jobB:ReturnType<typeof processPublication>|undefined;
+ try {
+ assert.equal(await Promise.race([entryA.then(()=>true),jobA.then(()=>false)]),true);
+ jobB=processPublication(pB.id);
+ assert.equal(await Promise.race([entryB.then(()=>true),jobB.then(()=>false)]),true);
+ const generationBefore=(await row(a.account.id)).connectionGeneration;
+ authError=true;releaseA();
+ assert.equal((await jobA).status,'REQUIRES_RECONNECT');
+ assert.equal((await row(a.account.id)).connectionStatus,'ERROR');
+ await l.enable(a.raw,a.account.id,1);
+ const afterEnable=await row(a.account.id);
+ assert.equal(afterEnable.connectionStatus,'CONNECTED');
+ releaseB();assert.equal((await jobB).status,'REQUIRES_RECONNECT');
+ const afterLateAuth=await row(a.account.id);
+ assert.equal(afterLateAuth.connectionStatus,'CONNECTED','late AUTH must not overwrite fresh successful enable');
+ assert.equal(afterLateAuth.enabled,true);assert.equal(afterEnable.connectionGeneration,generationBefore+1);assert.equal(afterLateAuth.connectionGeneration,afterEnable.connectionGeneration);
+ assert.equal(afterLateAuth.bindingRevision,1);assert.equal(afterLateAuth.providerAccountId,provider==='MAX'?'-66666':'-12345');
+ const [binding]=await getDb().select().from(schema.socialBindings).where(eq(schema.socialBindings.accountId,a.account.id));assert.equal(binding.revision,1);assert.equal(binding.destinationId,provider==='MAX'?'-66666':'-12345');
+ for(const id of [pA.id,pB.id]){
+  const [saved]=await getDb().select().from(schema.publications).where(eq(schema.publications.id,id));
+  assert.equal(saved.status,'REQUIRES_RECONNECT');assert.equal(saved.normalizedErrorType,'AUTH');assert.equal(saved.socialBindingRevision,1);assert.equal(saved.socialBindingDestinationId,provider==='MAX'?'-66666':'-12345');
+  await processPublication(id);
+ }
+ assert.equal(starts,2);
+ }finally{releaseA();releaseB();await Promise.allSettled([jobA,...(jobB?[jobB]:[])]);}
+});

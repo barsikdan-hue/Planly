@@ -83,9 +83,9 @@ test('pause preserves reservation and cancels pending proof without provider rea
  await denied(()=>s.confirm(a.raw,pending.received.ticket));
 });
 for(const failure of ['human','bot','unknown'] as const)test(`enable rejects ${failure} with no cached positive`,async()=>{
- const {a}=await verified(),l=await lifecycle();
+ const {a}=await verified(),l=await lifecycle(),generation=(await row(a.account.id)).connectionGeneration;
  if(failure==='human')failHuman=true;if(failure==='bot')failBot=true;if(failure==='unknown')unavailable=true;
- await denied(()=>l.enable(a.raw,a.account.id,1));assert.equal((await row(a.account.id)).enabled,false);
+ await denied(()=>l.enable(a.raw,a.account.id,1));assert.equal((await row(a.account.id)).enabled,false);assert.equal((await row(a.account.id)).connectionGeneration,generation);
 });
 for(const provider of ['TELEGRAM','MAX'] as const)test(`${provider} enable independently checks H and B and creates no work`,async()=>{
  const {a}=await verified(provider),l=await lifecycle(),before=requests;
@@ -101,7 +101,8 @@ for(const change of ['pause','reproof','config','stale-time'] as const)test(`old
  if(change==='reproof'){const t=await ticket(s,a);await s.confirm(a.raw,t.received.ticket);}
  if(change==='config')process.env.TELEGRAM_MINI_APP_URL='https://t.me/other_bot';
  if(change==='stale-time')now+=30001;
- release();await denied(()=>old);assert.equal((await row(a.account.id)).enabled,false);
+ const generationBeforeFinish=(await row(a.account.id)).connectionGeneration;
+ release();await denied(()=>old);assert.equal((await row(a.account.id)).enabled,false);assert.equal((await row(a.account.id)).connectionGeneration,generationBeforeFinish);
 });
 async function work(a:Awaited<ReturnType<typeof actor>>,status:string|null,postStatus:'READY'|'DRAFT'='READY') {
  await getDb().insert(schema.posts).values({id:'e4-post',userId:a.id,baseText:'private',status:postStatus});
@@ -163,4 +164,15 @@ test('release waits for admitted work under the same native user lock and refuse
  }finally{releaseAdmission();await admission;await outcome;}
  await denied(()=>pending);assert.equal((await row(a.account.id)).providerAccountId,'-12345');
  assert.equal((await getDb().select().from(schema.publications).where(eq(schema.publications.postId,'e4-post'))).length,1);
+});
+
+for(const state of ['PENDING','CANDIDATE'] as const)test(`direct successful enable invalidates older ${state} proof without changing binding`,async()=>{
+ const {s,a}=await verified(),l=await lifecycle();
+ const started=await s.start(a.raw,a.account.id,'-12345');
+ const candidate=state==='CANDIDATE'?await s.receive('TELEGRAM',signed(started.launchUrl)):null;
+ const before=await row(a.account.id);await l.enable(a.raw,a.account.id,1);
+ const [intent]=await getDb().select().from(schema.socialConnectionIntents).where(eq(schema.socialConnectionIntents.id,started.operationId));
+ assert.equal(intent.state,'CANCELLED');
+ if(candidate)await denied(()=>s.confirm(a.raw,candidate.ticket));else await denied(()=>s.receive('TELEGRAM',signed(started.launchUrl)));
+ const account=await row(a.account.id);assert.equal(account.connectionGeneration,before.connectionGeneration+1);assert.equal(account.bindingRevision,1);assert.equal(account.providerAccountId,'-12345');assert.equal(account.enabled,true);
 });
