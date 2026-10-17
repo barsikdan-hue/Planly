@@ -1,6 +1,7 @@
 import { defineConfig, type PreviewServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import {buildSocialConnectionFinish,buildSocialConnectionMiniApp} from '../../lib/server/social-connections/documents';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const timestamp = '2026-10-12T00:00:00.000Z';
@@ -18,6 +19,11 @@ function fixtureApi(server: PreviewServer | ViteDevServer) {
   server.middlewares.use((request, response, next) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1:4318');
     const pathname = url.pathname;
+    if(request.method==='GET' && (pathname==='/social-connections/finish' || /^\/social-connections\/miniapp\/(telegram|max)$/.test(pathname))) {
+      const document=pathname==='/social-connections/finish'?buildSocialConnectionFinish():buildSocialConnectionMiniApp(pathname.endsWith('/telegram')?'telegram':'max',true);
+      response.writeHead(document.status,Object.fromEntries(document.headers));
+      void document.text().then(body=>response.end(body));return;
+    }
     if (!pathname.startsWith('/api/')) return next();
     response.setHeader('Content-Type', 'application/json');
     response.setHeader('Cache-Control', 'no-store');

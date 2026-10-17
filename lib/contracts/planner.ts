@@ -82,6 +82,17 @@ export type MediaAssetDto = {
 };
 
 export type SocialConnectionStatus = 'DISCONNECTED' | 'CONNECTED' | 'ERROR';
+export type SocialConnectionAction = 'begin' | 'enable' | 'pause' | 'release';
+export type SocialConnectionMetadata = {
+  mode: 'verified-user';
+  ready: boolean;
+  reason: 'SETUP_REQUIRED' | 'ACCESS_REQUIRED' | 'REVERIFY_REQUIRED' | null;
+  state: 'unverified' | 'pending' | 'verified-disabled' | 'enabled' | 'stale';
+  accountHint: string;
+  bindingRevision: number;
+  checkedAt: string | null;
+  actions: SocialConnectionAction[];
+};
 export type SocialAccountDto = {
   id: string;
   provider: Provider;
@@ -89,7 +100,13 @@ export type SocialAccountDto = {
   displayName: string;
   enabled: boolean;
   connectionStatus: SocialConnectionStatus;
+  connection?: SocialConnectionMetadata;
 };
+
+export function isSocialAccountUsable(account: SocialAccountDto): boolean {
+  return account.enabled && account.connectionStatus === 'CONNECTED' &&
+    (!account.connection || account.connection.state === 'enabled');
+}
 
 export const updateProfileInputSchema = z.object({
   displayName: z.string().trim().min(1).max(40),

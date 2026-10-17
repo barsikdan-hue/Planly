@@ -1,23 +1,13 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../db/index.ts';
 import { createMaxConnector } from './connectors/max.ts';
 import { createTelegramConnector } from './connectors/telegram.ts';
 import { socialAccounts, socialBindings, users } from '../../db/schema.ts';
 import { assertDestinationAvailable, lockProviderDestinations, SocialConnectionError } from './social-connections/state.ts';
-import { fromDbProvider, type SocialAccountDto } from '../contracts/planner.ts';
+import { type SocialAccountDto } from '../contracts/planner.ts';
+import {readSocialAccountDtos, socialAccountDto as toDto} from './social-connections/metadata.ts';
 import { disconnectVkAccount } from './vk/oauth.ts';
-
-function toDto(row: typeof socialAccounts.$inferSelect): SocialAccountDto {
-  return {
-    id: row.id,
-    provider: fromDbProvider(row.provider),
-    providerAccountId: row.providerAccountId,
-    displayName: row.displayName,
-    enabled: row.enabled,
-    connectionStatus: row.connectionStatus,
-  };
-}
 
 export async function ensureOwnerSocialAccounts(userId: string): Promise<void> {
   const db = getDb();
@@ -46,11 +36,7 @@ export async function ensureOwnerSocialAccounts(userId: string): Promise<void> {
 }
 
 export async function listSocialAccounts(userId: string): Promise<SocialAccountDto[]> {
-  const db = getDb();
-  const rows = await db.select().from(socialAccounts)
-    .where(eq(socialAccounts.userId, userId))
-    .orderBy(asc(socialAccounts.provider));
-  return rows.map(toDto);
+  return readSocialAccountDtos(getDb(),userId);
 }
 
 export async function setSocialAccountEnabled(

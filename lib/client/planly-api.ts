@@ -168,6 +168,23 @@ export function connectSocialAccount(id: string, destinationId: string): Promise
 
 export const connectTelegramAccount = connectSocialAccount;
 
+function socialConnectionRequest<T>(id:string,action:string,body:unknown):Promise<T> {
+  return request(`/api/social-connections/accounts/${encodeURIComponent(id)}/${action}`,{
+    ...jsonRequest('POST',body),headers:{'content-type':'application/json','X-Planly-Social-Connection':'1'},
+  });
+}
+export function beginSocialConnection(id:string,destinationId:string):Promise<{launchUrl:string}> {
+  return socialConnectionRequest(id,'start',{destinationId});
+}
+export function changeSocialConnection(id:string,action:'enable'|'pause'|'release',bindingRevision:number):Promise<{accountId:string;bindingRevision:number;enabled:boolean}> {
+  return socialConnectionRequest(id,action,{bindingRevision});
+}
+export function validatedSocialConnectionLaunch(provider:string,value:string):string {
+  const pattern=provider==='telegram'?/^https:\/\/t\.me\/[A-Za-z][A-Za-z0-9_]{4,63}\?startapp=[A-Za-z0-9_-]{43}$/:provider==='max'?/^https:\/\/max\.ru\/[A-Za-z][A-Za-z0-9_-]{2,63}\?startapp=[A-Za-z0-9_-]{43}$/:null;
+  if(typeof value!=='string' || !pattern?.test(value))throw new Error('Неподдерживаемый адрес Mini App. Начни подключение заново.');
+  return value;
+}
+
 export function startVkConnection(accountId: string, communityId: string): Promise<{ authorizationUrl: string }> {
   return request('/api/social-accounts/vk/start', jsonRequest('POST', { accountId, communityId }));
 }

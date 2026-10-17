@@ -56,6 +56,11 @@ test('explicit setup without networks still permits skip/reject but never approv
  assert.deepEqual(calls.approve,[]);assert.equal(calls.reject.length,1);assert.match(text(h.tree),/Одобрено: 0/);
 });
 
+test('verified USER stale bot-only status cannot be selected for new approval',async()=>{
+ const {h,calls}=await ui({socialAccounts:[account('telegram',{connection:{mode:'verified-user',state:'stale'}})]},false);
+ assert.equal(button(h,'Telegram').props.disabled,true);await click(h,'Начать разбор');assert.equal(button(h,'В календарь').props.disabled,true);assert.deepEqual(calls.approve,[]);
+});
+
 test('no slot, API error, stale time and disconnected selected network produce zero right-gesture approvals',async()=>{
  for(const scenario of ['no-slot','error','elapsed','disconnect']){
   const {h,calls,state}=await ui({onPreview:async()=>{if(scenario==='error')throw Error('Preview unavailable');return{scheduledAt:scenario==='no-slot'?null:scenario==='elapsed'?new Date(Date.now()+59_000).toISOString():'2099-10-04T07:00:00Z'};}});

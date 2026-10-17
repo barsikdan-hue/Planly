@@ -3,14 +3,16 @@ import { schedulingPlanPreviewInputSchema, type SchedulingPlanPreviewInput, type
 import { fromDbProvider } from '../contracts/planner.ts';
 import { allocateDraftSlots } from '../scheduling-plan.ts';
 import { occupiedSlotMinutes } from './planner-slots.ts';
-import { readSchedulingSnapshots, schedulingEligibility, fingerprintSchedulingSnapshot, schedulingPostDto, schedulingAccountDto, schedulingMediaDto } from './scheduling-plan-snapshot.ts';
+import { readSchedulingSnapshots, schedulingEligibility, fingerprintSchedulingSnapshot, schedulingPostDto, schedulingMediaDto } from './scheduling-plan-snapshot.ts';
+import {readSocialAccountDtos} from './social-connections/metadata.ts';
 import { getObjectStorage, type ObjectStorage } from './storage.ts';
 
 export async function previewSchedulingPlan(userId:string,raw:SchedulingPlanPreviewInput,options:{now?:()=>Date;storage?:Pick<ObjectStorage,'signedGetUrl'>}={}):Promise<SchedulingPlanPreview> {
   const input=schedulingPlanPreviewInputSchema.parse(raw);
   return getDb().transaction(async tx=>{
     const snapshots=await readSchedulingSnapshots(tx,userId,input.postIds);
-    const rows:SchedulingPlanPreview['rows']=snapshots.map(snapshot=>{const issue=schedulingEligibility(snapshot);return {post:schedulingPostDto(snapshot),accounts:snapshot.targets.filter(row=>row.target.active).map(row=>schedulingAccountDto(row.account)),fingerprint:issue?null:fingerprintSchedulingSnapshot(snapshot),scheduledAt:null,issue};});
+    const accounts=new Map((await readSocialAccountDtos(tx,userId)).map(account=>[account.id,account]));
+    const rows:SchedulingPlanPreview['rows']=snapshots.map(snapshot=>{const issue=schedulingEligibility(snapshot);return {post:schedulingPostDto(snapshot),accounts:snapshot.targets.filter(row=>row.target.active).map(row=>accounts.get(row.account.id)!),fingerprint:issue?null:fingerprintSchedulingSnapshot(snapshot),scheduledAt:null,issue};});
     if(rows.every(row=>!row.issue)){
       const providers=[...new Set(snapshots.flatMap(snapshot=>snapshot.targets.filter(row=>row.target.active).map(row=>fromDbProvider(row.account.provider))))];
       const assigned=allocateDraftSlots(input.postIds,{...input.settings,providers},await occupiedSlotMinutes(tx,userId,{providers}),options.now?.()??new Date());
