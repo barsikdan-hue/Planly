@@ -1,4 +1,4 @@
-import type { PublicationErrorType, PublishInput, PublishResult, SocialConnector } from './types.ts';
+import type { ControlValidationResult, PublicationErrorType, PublishInput, PublishResult, SocialConnector } from './types.ts';
 import { validatePublicationContent } from '../../publication-content.ts';
 
 export type TelegramValidationResult =
@@ -13,6 +13,7 @@ const validDestination = (value: string | null) => !!value && (/^-[1-9]\d{0,15}$
 
 export function createTelegramConnector(options: { token: string; fetcher?: typeof fetch; timeoutMs?: number }): SocialConnector & {
   validate(destinationId: string): Promise<TelegramValidationResult>;
+  validateControl(destinationId: string, humanId: string): Promise<ControlValidationResult>;
 } {
   const fetcher = options.fetcher ?? fetch;
   const token = options.token.trim();
@@ -52,6 +53,31 @@ export function createTelegramConnector(options: { token: string; fetcher?: type
 
   return {
     provider: 'TELEGRAM',
+    async validateControl(destinationId, humanId) {
+      if (!validDestination(destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a channel/group @username or negative chat ID.');
+      if (!/^[1-9]\d{0,15}$/.test(humanId) || !Number.isSafeInteger(Number(humanId))) return failure('AUTH', 'TELEGRAM_HUMAN_INVALID', 'Telegram human identity could not be verified.');
+      const me = await call('getMe', {}, false);
+      if (!me.ok) return me;
+      const bot = record(me.result);
+      if (bot?.is_bot !== true || !Number.isSafeInteger(bot.id) || Number(bot.id) <= 0) return failure('AUTH', 'TELEGRAM_BOT_INVALID', 'Telegram did not confirm the bot identity.');
+      const info = await call('getChat', { chat_id: destinationId }, false);
+      if (!info.ok) return info;
+      const chat = record(info.result);
+      if (!['channel', 'supergroup', 'group'].includes(String(chat?.type)) || !Number.isSafeInteger(chat?.id) || Number(chat?.id) >= 0 || !validDestination(String(chat?.id)) || (!destinationId.startsWith('@') && String(chat?.id) !== destinationId)) return failure('VALIDATION', 'TELEGRAM_CHAT_REQUIRED', 'Select a Telegram channel or group.');
+      const canonicalId = String(chat!.id);
+      const privileged = (member: Record<string, unknown> | null, id: number, isBot: boolean) => {
+        const user = record(member?.user);
+        // Creator status itself confers owner rights; only administrator has can_post_messages.
+        return user?.id === id && user?.is_bot === isBot && (member?.status === 'creator' || (member?.status === 'administrator' && (chat!.type !== 'channel' || member.can_post_messages === true)));
+      };
+      const botResponse = await call('getChatMember', { chat_id: canonicalId, user_id: bot.id }, false);
+      if (!botResponse.ok) return botResponse;
+      if (!privileged(record(botResponse.result), Number(bot.id), true)) return failure('AUTH', 'TELEGRAM_POST_PERMISSION', 'Add the bot as administrator; channels also require permission to post messages.');
+      const humanResponse = await call('getChatMember', { chat_id: canonicalId, user_id: Number(humanId) }, false);
+      if (!humanResponse.ok) return humanResponse;
+      if (!privileged(record(humanResponse.result), Number(humanId), false)) return failure('AUTH', 'TELEGRAM_HUMAN_PERMISSION', 'Confirm a channel or group you own or administer with posting permission.');
+      return { ok: true, destinationId: canonicalId, displayName: typeof chat!.title === 'string' ? chat!.title.slice(0, 200) : 'Telegram', humanId, botId: String(bot.id) };
+    },
     async validate(destinationId) {
       if (!validDestination(destinationId)) return failure('VALIDATION', 'TELEGRAM_DESTINATION', 'Use a channel/group @username or negative chat ID.');
       const me = await call('getMe', {}, false);
