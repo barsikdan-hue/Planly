@@ -41,7 +41,7 @@ function documentResponse(script:string,body:string,sdk?:string,finish=false):Re
  return new Response(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Подключение канала — Planly</title><script>${script}</script><style>${style}</style></head><body><main><h1>Подключение канала</h1><p id="status" role="status">Проверяем подключение…</p><p id="details"></p>${body}<p><a href="/">Вернуться в Planly</a></p></main></body></html>`,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'private, no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':csp}});
 }
 export function buildSocialConnectionFinish():Response {
- return documentResponse(finishScript,'<button id="confirm" type="button" disabled>Подтвердить выключенное подключение</button>',undefined,true);
+ return documentResponse(finishScript,'<p>Не пересылайте подтверждение другим людям.</p><button id="confirm" type="button" disabled>Подтвердить выключенное подключение</button>',undefined,true);
 }
 export function buildSocialConnectionMiniApp(provider:'telegram'|'max',available:boolean):Response {
  const bridge=provider==='telegram'?'window.Telegram && window.Telegram.WebApp':'window.WebApp';
@@ -80,5 +80,5 @@ export function buildSocialConnectionMiniApp(provider:'telegram'|'max',available
   const sdk=document.createElement('script');sdk.src=SDK_URL;sdk.referrerPolicy='no-referrer';sdk.onload=receive;sdk.onerror=fail;document.head.appendChild(sdk);
  });
 })();`.replaceAll('BRIDGE',bridge).replace('AVAILABLE',String(available)).replace('RESTART',JSON.stringify(restart)).replace('PROOF_URL',JSON.stringify(`/api/social-connections/providers/${provider}/proof`)).replace('SDK_URL',JSON.stringify(bridgeUrls[provider]));
- return documentResponse(script,'<label><input id="consent" type="checkbox"> Согласен подтвердить указанные аккаунт Planly, пользователя и канал</label><button id="continue" type="button" disabled>Согласиться и продолжить в Planly</button>',available?bridgeUrls[provider]:undefined);
+ return documentResponse(script,'<p>Не пересылайте подтверждение другим людям.</p><label><input id="consent" type="checkbox"> Согласен подтвердить указанные аккаунт Planly, пользователя и канал</label><button id="continue" type="button" disabled>Согласиться и продолжить в Planly</button>',available?bridgeUrls[provider]:undefined);
 }

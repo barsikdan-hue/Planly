@@ -83,11 +83,25 @@ for(const provider of ['telegram','max'])test(`actual ${provider} production doc
  const data=new URLSearchParams({auth_date:'1780000000',user:JSON.stringify({id:4242,first_name:'Synthetic'}),start_param:'synthetic'});data.set('hash',createHmac('sha256','LOCAL_SYNTHETIC_KEY_NOT_PROVIDER').update(data.toString()).digest('hex'));
  await context.addInitScript(({provider,raw})=>{const bridge={initData:raw,openLink:(url:string)=>{(window as unknown as {opened:string}).opened=url;}};Object.assign(window,provider==='telegram'?{Telegram:{WebApp:bridge}}:{WebApp:bridge});},{provider,raw:data.toString()});
  const response=await page.goto(`/social-connections/miniapp/${provider}#synthetic-fragment`);expect(response!.headers()['content-security-policy']).not.toContain('unsafe-inline');
+ await expect(page.getByText('Не пересылайте подтверждение другим людям.',{exact:true})).toBeVisible();await health(page);await screenshot(page,testInfo,`${provider}-miniapp-consent`);
  await expect(page.locator('#details')).toContainText(unsafe);expect(page.url()).not.toContain('#');await page.locator('#continue').click();expect(await page.evaluate(()=>(window as unknown as {opened?:string}).opened)).toBeUndefined();
  await page.locator('#consent').press('Space');await page.locator('#continue').press('Enter');const opened=await page.evaluate(()=>(window as unknown as {opened:string}).opened);expect(opened).toBe(origin+'/social-connections/finish#'+ticket);
  expect(f.writes).toHaveLength(1);const finish=await page.goto(opened);expect(finish!.headers()['cache-control']).toBe('private, no-store');expect(finish!.headers()['content-security-policy']).not.toContain('telegram.org');
+ await expect(page.getByText('Не пересылайте подтверждение другим людям.',{exact:true})).toBeVisible();
  await expect(page.locator('#confirm')).toBeEnabled();expect(f.writes.map(w=>w.path.split('/').at(-1))).toEqual(['proof','preview']);expect(await page.content()).not.toContain(ticket);expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length}))).toEqual({local:0,session:0});await expect(page.locator('#details img')).toHaveCount(0);
  await health(page);await screenshot(page,testInfo,`${provider}-finish-preview`);await page.locator('#confirm').press('Enter');await expect(page.locator('#status')).toContainText('подтверждено и выключено');
   f.flags.injectingBlockedScript=true;await page.evaluate(()=>{const script=document.createElement('script');script.textContent='window.__forbidden=1';document.head.appendChild(script);});expect(await page.evaluate(()=>(window as unknown as {__forbidden?:number}).__forbidden)).toBeUndefined();f.flags.injectingBlockedScript=false;
  await page.reload();await expect(page.locator('#status')).toContainText('начните подключение заново');await expect(page.locator('#confirm')).toBeDisabled();expect(f.writes).toHaveLength(3);await f.check(testInfo);
+});
+
+test('actual production documents keep the non-forwarding warning and consent controls readable at 320px',async({context,page},testInfo)=>{
+ await page.setViewportSize({width:320,height:844});const f=await fixture(context,page);
+ await context.addInitScript(()=>{Object.assign(window,{WebApp:{initData:'SYNTHETIC_BROWSER_ONLY',openLink:()=>{}}});});
+ for(const path of ['/social-connections/miniapp/max','/social-connections/finish#'+ticket]){
+  await page.goto(path);await expect(page.locator(path.includes('miniapp')?'#continue':'#confirm')).toBeEnabled();
+  const warning=page.getByText('Не пересылайте подтверждение другим людям.',{exact:true});await expect(warning).toBeVisible();
+  const bounds=await warning.boundingBox();expect(bounds).not.toBeNull();expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(320);
+  await health(page);await screenshot(page,testInfo,path.includes('miniapp')?'max-miniapp-320':'finish-320');
+ }
+ expect(f.writes.map(w=>w.path.split('/').at(-1))).toEqual(['proof','preview']);await f.check(testInfo);
 });

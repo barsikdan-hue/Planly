@@ -5,6 +5,14 @@ import {createHash} from 'node:crypto';
 import * as docs from '../lib/server/social-connections/documents.ts';
 const ticket='a'.repeat(43), evil='<img src=x onerror=alert(1)>',origin='https://planly.example.test';
 const consent={planlyName:evil,accountId:'account-1',accountHint:'Planly • abcd123456',provider:'TELEGRAM',humanId:'42',humanName:evil,destinationId:'-12345',destinationName:evil,expiresAt:new Date(Date.now()+60000).toISOString()};
+for(const [name,build,control] of [
+ ['finish',()=>docs.buildSocialConnectionFinish(),'button id="confirm"'],
+ ['telegram Mini App',()=>docs.buildSocialConnectionMiniApp('telegram',true),'label'],
+ ['max Mini App',()=>docs.buildSocialConnectionMiniApp('max',true),'label'],
+])test(`${name} emitted consent document warns against forwarding before the consent control`,async()=>{
+ const html=await build().text();
+ assert.ok(html.includes(`<p>Не пересылайте подтверждение другим людям.</p><${control}`));
+});
 async function execute(response,{fragment='#'+ticket,provider,fail=false,deferred=false}={}) {
  const html=await response.text(),scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]),events={},elements={},calls=[],opened=[],resources=[];
  assert.ok(scripts.length);assert.equal(response.headers.get('cache-control'),'private, no-store');assert.equal(response.headers.get('referrer-policy'),'no-referrer');
