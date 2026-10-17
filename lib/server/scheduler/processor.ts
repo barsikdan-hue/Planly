@@ -15,6 +15,8 @@ export type ProcessPublicationResult = {
 };
 
 type PublicationDb = ReturnType<typeof getDb> | Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+type OwnerErrorObservation = Readonly<Pick<typeof socialAccounts.$inferSelect,
+  'id' | 'userId' | 'provider' | 'connectionGeneration' | 'bindingRevision' | 'providerAccountId'>>;
 
 async function readPublication(publicationId: string, db: PublicationDb = getDb()) {
   const [row] = await db.select({
@@ -88,6 +90,7 @@ async function markFailure(
   message: string,
   retryAfterMs?: number,
   observed?: PublicationAuthorization,
+  ownerObserved?: OwnerErrorObservation,
 ): Promise<ProcessPublicationResult> {
   const status = errorType === 'AUTH' ? 'REQUIRES_RECONNECT' : 'FAILED';
   await getDb().update(publications).set({
@@ -100,6 +103,15 @@ async function markFailure(
   }).where(eq(publications.id, publicationId));
   if (errorType === 'AUTH' && observed) {
     await markObservedConnectionError(observed);
+  } else if (errorType === 'AUTH' && ownerObserved) {
+    await getDb().update(socialAccounts).set({connectionStatus:'ERROR',updatedAt:new Date()}).where(and(
+      eq(socialAccounts.id, ownerObserved.id),
+      eq(socialAccounts.userId, ownerObserved.userId),
+      eq(socialAccounts.provider, ownerObserved.provider),
+      eq(socialAccounts.connectionGeneration, ownerObserved.connectionGeneration),
+      eq(socialAccounts.bindingRevision, ownerObserved.bindingRevision),
+      sql`${socialAccounts.providerAccountId} is not distinct from ${ownerObserved.providerAccountId}`,
+    ));
   } else if (errorType === 'AUTH') {
     const row = await readPublication(publicationId);
     await getDb().update(socialAccounts).set({connectionStatus:'ERROR',updatedAt:new Date()}).where(eq(socialAccounts.id,row.account.id));
@@ -163,6 +175,14 @@ export async function processPublication(
   }
 
   const row = await readPublication(publicationId);
+  // Keep the actual pre-handoff account snapshot across AUTH persistence and IO.
+  // R2 cancellation/release may become possible as soon as AUTH commits.
+  const ownerObserved: OwnerErrorObservation | undefined = ownerAccess &&
+    (row.publication.provider === 'TELEGRAM' || row.publication.provider === 'MAX')
+    ? Object.freeze({id: row.account.id, userId: row.account.userId, provider: row.account.provider,
+      connectionGeneration: row.account.connectionGeneration, bindingRevision: row.account.bindingRevision,
+      providerAccountId: row.account.providerAccountId})
+    : undefined;
   // Historical/queued rows may outlive a change back to a draft or archive.
   // Re-read after the claim; edit locking now prevents the post changing
   // between this check and provider handoff.
@@ -189,7 +209,7 @@ export async function processPublication(
     }
     if (resolveConnector === resolveRegisteredConnector && ((row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN) || (row.publication.provider === 'MAX' && process.env.MAX_BOT_TOKEN)) &&
       (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
-      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.',undefined,observed);
+      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.',undefined,observed,ownerObserved);
     }
     // Only implemented providers prepare media; an unconfigured MAX remains an honest unsupported result.
     if (row.publication.provider === 'VK' || row.publication.provider === 'TELEGRAM' || (row.publication.provider === 'MAX' && (process.env.MAX_BOT_TOKEN || resolveConnector !== resolveRegisteredConnector))) {
@@ -221,7 +241,7 @@ export async function processPublication(
       result=await connector.publish(input);
     }
     if (!result.ok) {
-      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs, observed);
+      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs, observed, ownerObserved);
     }
 
     if (!result.remoteId.trim()) {

@@ -65,3 +65,18 @@
 - [ ] Appropriate fresh root regression/type/lint/default build (known local junction limitation reported honestly); exact new HEAD CI and Self-host with native tests, fresh migration drift, canonical build and compiled browser checks.
 - [ ] Push the new R2 commit only to existing PR67 feature branch; read back Draft/head/base, CI SHA and source/PR-merge tree identity. Update sanitized PR/Issue evidence with scope and remaining live gates.
 - [ ] Preserve evidence, stop only owned local test services. No deploy/merge/live provider actions; report exact source SHA, native/CI/Self-host/Critic and supported cancellation boundary.
+
+### Task 2: Separately approved OWNER AUTH account-error fence
+
+**Owner gate 2026-10-17:** after native final Critic I1 proved the race, Owner explicitly approved only an OWNER Telegram/MAX outcome-state fence in existing Scheduler, a separate commit in Draft PR67. Observation must precede AUTH; ERROR only if original generation/revision/destination still match. AUTH/receipts, USER guard, VK, Queue, Worker, retry and architecture remain unchanged. No real providers, setup/secrets, migration, merge or deploy.
+
+**Files:** narrow `lib/server/scheduler/processor.ts` failure seam; new focused native test file `tests/owner-auth-error-fence.integration.test.ts`; clarify `docs/social-connections.md` scope and late-AUTH wording (final Critic M3). No refactor or formatting of unrelated R2 code (M1 retained minor).
+
+**Spec/evidence:** Issue66 comment6231811299 and the direct Owner gate; original native exact6f0524b probe `artifacts/i66-implementation/2026-10-17/final-critic-owner-race.source.txt` and `.log` outside checkout; prospective early-observation design `r2-owner-auth-fence-proposal.md`. Capture before AUTH is committed, never recapture current account after AUTH.
+
+- [ ] Read exact pre-AUTH account snapshots/call paths. TDD native RED for Telegram AND MAX with default configured OWNER resolver and fake metadata-only fetch. Actual R2 cancellation→release→connect at newer generation; hold after AUTH commit/before trailing work and before account ERROR SQL. Preserve deterministic promise barriers, expected CONNECTED and byte-equivalent AUTH assertions; no sleeps or real network.
+- [ ] Minimal GREEN: carry immutable earlier account identity/generation/bindingRevision/destination into the existing unobserved OWNER Telegram/MAX AUTH error side effect; make ERROR conditional on all those original values. Null destination comparison must be safe. Preserve unchanged-account ERROR behavior, publication AUTH/result/receipt writes and existing USER observed error branch. VK behavior/source path untouched.
+- [ ] Test each generation/revision/destination mismatch independently plus the real lifecycle sequence and unchanged observation, Telegram/MAX, late-result receipt/history preservation and no duplicate send. Label direct state-mutation defense fixtures separately from real reconnect flow.
+- [ ] Run focused new cases, R2 native/source-hook, existing USER generation/publication/legacy/processor and retry regressions appropriate to changed seam; typecheck/lint/diff-check. No successful unrelated full-suite reruns. Fix only proven failures within scope.
+- [ ] Correct docs: whole branch contains approved narrow USER authorization hooks and this OWNER error-state fence; engine/Queue/Worker/retry architecture remains unchanged. Clarify protected late AUTH applies Telegram/MAX with these observations; do not claim VK/live proof.
+- [ ] Self-review and one separate fix commit, no push. Report `.superpowers/sdd/i66-r2-cancellation/task-2-report.md`. Controller scoped independent Critic of final fix wave I1+M3, fresh exact-HEAD CI/Self-host and Draft readback; stop before merge.
