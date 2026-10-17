@@ -152,5 +152,3 @@ export async function commitLibraryBatch(rawToken:string,raw:unknown,options:Lib
  if(!result.replayed){try{await (options.mirrorQueue??applyPublicationQueueChanges)(result.changes);}catch{/* Durable receipt remains authoritative; scheduler reconstructs the mirror. */}}
  return {receipt:result.receipt,replayed:result.replayed};
 }
-
-

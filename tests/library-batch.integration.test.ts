@@ -180,3 +180,45 @@ test('Phase9 and Library batch competing for the exact minute admit only one pla
 });
 
 
+
+test('committed PUBLISHING claim blocks cancellation before any provider handoff',async()=>{
+ const saved=await service().commitLibraryBatch(token(),await request(),options);
+ const row=saved.receipt.rows[1],publicationId=row.targets[0].publicationId,change=await cancelInput(row.postId);
+ let release!:()=>void,claimReturned=false,calls=0,intercepted=0;
+ const barrier=new Promise<void>(resolve=>{release=resolve;});
+ const original=Client.prototype.query;
+ // pg Pool uses a Client callback; direct Client callers use its Promise form.
+ // In either case the native autocommit CAS finishes before its JS result is held.
+ const patched=mock.method(Client.prototype,'query',function(this:Client,...args:unknown[]){
+  const query=args[0] as string|{text:string},sql=typeof query==='string'?query:query.text;
+  const values=args[1];
+  const isClaim=sql.startsWith('update "publications" set ')&&sql.includes('"attempt_count" + 1')&&Array.isArray(values)&&values.includes(publicationId)&&values.includes('PUBLISHING');
+  if(!isClaim||intercepted)return Reflect.apply(original,this,args);
+  intercepted++;
+  const last=args.length-1,callback=args[last];
+  if(typeof callback==='function'){
+   args[last]=(error:unknown,result:unknown)=>{
+    if(error){Reflect.apply(callback,this,[error,result]);return;}
+    claimReturned=true;
+    void barrier.then(()=>Reflect.apply(callback,this,[error,result]));
+   };
+   return Reflect.apply(original,this,args);
+  }
+  return Promise.resolve(Reflect.apply(original,this,args)).then(async result=>{claimReturned=true;await barrier;return result;});
+ });
+ const resolver:ConnectorResolver=provider=>({provider,async publish(){calls++;return {ok:true,remoteId:'mock-after-claim-barrier'};}});
+ const delivery=processPublication(publicationId,resolver);
+ try{
+  await waitUntil(async()=>claimReturned);
+  assert.equal(intercepted,1);
+  // A different connection sees committed state while the processor has not
+  // received claimed[] and therefore cannot have reached its provider callback.
+  const [claimed]=await getDb().select().from(publications).where(eq(publications.id,publicationId));
+  assert.equal(claimed.status,'PUBLISHING');assert.equal(claimed.attemptCount,1);assert.equal(calls,0);
+  await assert.rejects(updatePost(owner,row.postId,change,options),error=>error instanceof Error&&error.name==='PostEditConflictError');
+  assert.equal(calls,0);
+  const [unchanged]=await getDb().select().from(posts).where(eq(posts.id,row.postId));assert.equal(unchanged.status,'READY');
+  release();assert.equal((await delivery).status,'PUBLISHED');assert.equal(calls,1);
+  await processPublication(publicationId,resolver);assert.equal(calls,1);
+ }finally{release();await Promise.allSettled([delivery]);patched.mock.restore();}
+});
