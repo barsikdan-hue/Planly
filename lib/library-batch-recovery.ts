@@ -31,6 +31,7 @@ function decodeEntry(key:string,raw:string,ownerId:string):Entry{
  const json=JSON.parse(raw),attempt=json?.version===2?attemptSchema.parse(json):null,pending=attempt?.pending??pendingSchema.parse(json);
  const expected=libraryBatchRecoveryKey(ownerId,pending.input.operationId,attempt?.attemptId),legacy=libraryBatchRecoveryKey(ownerId);
  if(pending.ownerId!==ownerId||(attempt?key!==expected:key!==legacy&&key!==expected)||pending.terminal&&pending.terminal.operationId!==pending.input.operationId)throw Error('Invalid recovery');
+  if(pending.terminal&&(pending.terminal.postIds.length!==pending.input.intent.rows.length||new Set(pending.terminal.postIds).size!==pending.terminal.postIds.length))throw Error('Invalid terminal recovery');
  return {key,pending,...(attempt?{attemptId:attempt.attemptId}:{})};
 }
 function encodedEntry(entry:Entry,pending=entry.pending){return JSON.stringify(entry.attemptId?{version:2,attemptId:entry.attemptId,pending}:pending);}
@@ -47,7 +48,7 @@ export function readPendingLibraryBatch(storage:Storage,ownerId:string):LibraryB
  const {entries,blocked}=readEntries(storage,ownerId),byOperation=new Map<string,PendingLibraryBatch>(),conflicts=new Set<string>();
  for(const {pending} of entries){const id=pending.input.operationId,existing=byOperation.get(id);if(existing&&(!samePending(existing,pending)||existing.terminal&&pending.terminal&&!same(existing.terminal,pending.terminal)))conflicts.add(id);else if(!existing?.terminal)byOperation.set(id,pending);}
  for(const id of conflicts)byOperation.delete(id);
- return {pending:[...byOperation.values()],blocked:blocked||conflicts.size>0||entries.length>0};
+  return {pending:[...byOperation.values()],blocked:blocked||conflicts.size>0||entries.some(entry=>!entry.pending.terminal)};
 }
 async function validatePending(pending:PendingLibraryBatch){const parsed=pendingSchema.parse(pending);if(await browserLibraryBatchRequestHash(parsed.input.intent)!==parsed.requestHash)throw new Error('Данные восстановления повреждены.');return parsed;}
 function matchedEntries(storage:Storage,pending:PendingLibraryBatch,terminal=false){
@@ -67,7 +68,11 @@ export async function acceptLibraryBatchResult(storage:Storage,pending:PendingLi
 }
 export async function submitLibraryBatch(storage:Storage,pending:PendingLibraryBatch,send:(input:PendingLibraryBatch['input'])=>Promise<unknown>,isCurrent:()=>boolean):Promise<LibraryBatchCommitResult>{
  const parsed=await validatePending(pending);if(!isCurrent())throw stale();if(parsed.terminal)throw new Error('Результат удалён; повторное создание запрещено.');
+  const terminals=readEntries(storage,pending.ownerId).entries.filter(entry=>entry.pending.terminal).map(entry=>entry.pending);
+  for(const terminal of terminals)await validatePending(terminal);
+  if(!isCurrent())throw stale();
  const found=readPendingLibraryBatch(storage,pending.ownerId),existing=found.pending.find(value=>value.input.operationId===pending.input.operationId);if(found.blocked&&!same(existing,parsed))throw new Error('Сначала проверь исходное сохранение.');
+  if(found.pending.some(value=>value.terminal&&!terminals.some(terminal=>same(terminal,value))))throw new Error('Данные восстановления изменились.');
  if(existing)matchedEntries(storage,parsed);
  // A distinct immutable local record for this POST, even when replaying the same server operation.
  const attempt=attemptSchema.parse({version:2,attemptId:crypto.randomUUID(),pending:parsed}),key=libraryBatchRecoveryKey(parsed.ownerId,parsed.input.operationId,attempt.attemptId),raw=JSON.stringify(attempt);

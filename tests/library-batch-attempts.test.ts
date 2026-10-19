@@ -49,3 +49,72 @@ test('terminal deletion survives late attempt rollbacks and blocks subsequent su
 test('INVALID422 is not historical rollback proof even with a false projection',async()=>{
  const s=storage(),{pending}=fixture(),error=await capture(submitLibraryBatch(s,pending,async()=>{throw new PlanlyApiError('Invalid',422,{code:'BATCH_INVALID',commitApplied:false});},()=>true));assert.equal(resolveLibraryBatchError(s,pending,error,()=>true),'uncertain');assert.equal(s.length,1);assert.equal(readPendingLibraryBatch(s,'owner-a').pending.length,1);
 });
+
+test('known terminal deletion permits an unrelated intent after reload while retaining its tombstone',async()=>{
+ const s=storage(),{pending,result}=fixture();
+ await capture(submitLibraryBatch(s,pending,async()=>{throw Error('Accepted reply lost');},()=>true));
+ assert.equal(resolveLibraryBatchError(s,pending,new PlanlyApiError('Deleted',410,{code:'BATCH_RESULT_DELETED',result:{operationId,postIds:['post-a']}}),()=>true),'deleted');
+ const terminalBytes=[...s.data.entries()];
+ const foreignKey=libraryBatchRecoveryKey('owner-b','33333333-3333-4333-8333-333333333333');
+ s.setItem(foreignKey,'preserve private owner-b recovery');
+ const loaded=readPendingLibraryBatch(s,'owner-a');
+ assert.equal(loaded.blocked,false,'A resolved terminal result must not block unrelated new work');
+ assert.deepEqual(loaded.pending[0].terminal,{operationId,postIds:['post-a']});
+ let oldSends=0;
+ for(const old of [pending,loaded.pending[0]])await assert.rejects(()=>submitLibraryBatch(s,old,async()=>{oldSends++;return result;},()=>true));
+ assert.equal(oldSends,0,'Neither a stale caller nor a reloaded terminal intent may resend');
+ const next=structuredClone(pending);
+ next.input.operationId='22222222-2222-4222-8222-222222222222';
+ next.input.intent.rows[0].sourceId='source-unrelated-ready';
+ next.requestHash=libraryBatchRequestHash(next.input.intent);
+ const saved=structuredClone(result);
+ saved.receipt.operationId=next.input.operationId;saved.receipt.requestHash=next.requestHash;
+ saved.receipt.rows[0].sourceId='source-unrelated-ready';saved.receipt.rows[0].postId='post-b';
+ saved.receipt.rows[0].targets[0].targetId='target-b';saved.receipt.rows[0].targets[0].publicationId='publication-b';
+ let newSends=0;
+ await submitLibraryBatch(s,next,async input=>{newSends++;assert.equal(input.intent.rows[0].sourceId,'source-unrelated-ready');return saved;},()=>true);
+ assert.equal(newSends,1);
+ assert.equal(readPendingLibraryBatch(s,'owner-a').blocked,false);
+ assert.equal(readPendingLibraryBatch(s,'owner-a').pending.length,1);
+ for(const [key,value] of terminalBytes)assert.equal(s.getItem(key),value,'Terminal history is never blindly removed');
+ assert.equal(s.getItem(foreignKey),'preserve private owner-b recovery');
+});
+
+for(const kind of ['uncertain','corrupt','conflicting'] as const)test(`terminal history does not bypass ${kind} recovery protection`,async()=>{
+ const s=storage(),{pending,result}=fixture();
+ await capture(submitLibraryBatch(s,pending,async()=>{throw Error('Accepted reply lost');},()=>true));
+ resolveLibraryBatchError(s,pending,new PlanlyApiError('Deleted',410,{code:'BATCH_RESULT_DELETED',result:{operationId,postIds:['post-a']}}),()=>true);
+ const next=structuredClone(pending);next.input.operationId='22222222-2222-4222-8222-222222222222';
+ next.input.intent.rows[0].sourceId='source-unrelated-ready';next.requestHash=libraryBatchRequestHash(next.input.intent);
+ if(kind==='uncertain')s.setItem(libraryBatchRecoveryKey('owner-a',next.input.operationId),JSON.stringify(next));
+ if(kind==='corrupt')s.setItem(libraryBatchRecoveryKey('owner-a')+':broken','{"version":9}');
+ if(kind==='conflicting'){
+  const terminal=readPendingLibraryBatch(s,'owner-a').pending[0];
+  s.setItem(libraryBatchRecoveryKey('owner-a',operationId),JSON.stringify({...terminal,terminal:{operationId,postIds:['conflicting-result']}}));
+ }
+ const before=[...s.data.entries()];assert.equal(readPendingLibraryBatch(s,'owner-a').blocked,true);
+ const fresh=structuredClone(next);fresh.input.operationId='44444444-4444-4444-8444-444444444444';
+ let sends=0;await assert.rejects(()=>submitLibraryBatch(s,fresh,async()=>{sends++;return result;},()=>true));
+ assert.equal(sends,0);assert.deepEqual([...s.data.entries()],before);
+});
+
+for(const kind of ['wrong-count','duplicate-results','wrong-hash'] as const)test(`semantically corrupt terminal ${kind} never permits a fresh dispatch`,async()=>{
+ const s=storage(),{pending,result}=fixture();
+ await capture(submitLibraryBatch(s,pending,async()=>{throw Error('Accepted reply lost');},()=>true));
+ resolveLibraryBatchError(s,pending,new PlanlyApiError('Deleted',410,{code:'BATCH_RESULT_DELETED',result:{operationId,postIds:['post-a']}}),()=>true);
+ const [key,raw]=[...s.data.entries()][0],record=JSON.parse(raw);
+ if(kind==='wrong-count')record.pending.terminal.postIds=['post-a','extra-result'];
+ if(kind==='duplicate-results'){
+  record.pending.input.intent.rows.push({...structuredClone(record.pending.input.intent.rows[0]),sourceId:'source-b'});
+  record.pending.requestHash=libraryBatchRequestHash(record.pending.input.intent);
+  record.pending.terminal.postIds=['post-a','post-a'];
+ }
+ if(kind==='wrong-hash')record.pending.requestHash='f'.repeat(64);
+ s.setItem(key,JSON.stringify(record));
+ const before=[...s.data.entries()],fresh=structuredClone(pending);
+ fresh.input.operationId='22222222-2222-4222-8222-222222222222';
+ fresh.input.intent.rows[0].sourceId='source-unrelated-ready';fresh.requestHash=libraryBatchRequestHash(fresh.input.intent);
+ let sends=0;await assert.rejects(()=>submitLibraryBatch(s,fresh,async()=>{sends++;return {...result,receipt:{...result.receipt,operationId:fresh.input.operationId,requestHash:fresh.requestHash,rows:result.receipt.rows.map(row=>({...row,sourceId:'source-unrelated-ready'}))}};},()=>true));
+ assert.equal(sends,0,'Corrupt terminal history must be rejected before dispatch');
+ assert.deepEqual([...s.data.entries()],before,'Corrupt history and unrelated data must be retained');
+});

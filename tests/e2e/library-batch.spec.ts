@@ -86,6 +86,30 @@ test('terminal deleted result survives reload and never offers commit retry',asy
  const f=await fixture(context,page);f.flags.loss=true;await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();await expect(page.getByRole('button',{name:'Проверить исходное сохранение'})).toBeVisible();f.flags.deleted=true;await page.getByRole('button',{name:'Проверить исходное сохранение'}).click();await expect(page.getByText('Исторический результат удалён. Повторное создание этого набора запрещено.',{exact:true})).toBeVisible();
  await page.reload();await page.getByRole('button',{name:'Проверить набор',exact:true}).click();await expect(page.getByText('Исторический результат удалён. Повторное создание этого набора запрещено.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Повторить исходное сохранение'})).toHaveCount(0);expect(f.commits).toHaveLength(1);f.check();
 });
+
+test('terminal 410 history permits a different READY batch after reload',async({context,page})=>{
+ const f=await fixture(context,page);f.flags.loss=true;await open(page);await preview(page);
+ await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Проверить исходное сохранение'})).toBeVisible();
+ const original=f.commits[0] as {operationId:string};f.flags.deleted=true;
+ await page.getByRole('button',{name:'Проверить исходное сохранение'}).click();
+ await expect(page.getByText('Исторический результат удалён. Повторное создание этого набора запрещено.',{exact:true})).toBeVisible();
+ f.snapshot.libraryItems.push({id:'three',title:'Новая независимая заготовка',text:'Независимый READY материал',mediaIds:[],status:'READY',sourcePostId:null,createdAt:stamp,updatedAt:stamp});
+ await page.reload();await page.getByRole('button',{name:'Проверить набор',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Повторить исходное сохранение'})).toHaveCount(0);
+ await expect(page.getByLabel('Выбрать заготовку three')).toBeEnabled();
+ await page.getByLabel('Выбрать заготовку three').check();await page.getByLabel('Площадка Private telegram').check();
+ await page.getByRole('button',{name:'Предпросмотр набора',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Подтвердить и сохранить 1 поста',exact:true})).toBeEnabled();
+ f.flags.loss=false;await page.getByRole('button',{name:'Подтвердить и сохранить 1 поста',exact:true}).click();
+ await expect(page.getByText('Набор сохранён: 1 поста',{exact:true})).toBeVisible();
+ expect(f.commits).toHaveLength(2);
+ const next=f.commits[1] as {operationId:string;intent:{rows:{sourceId:string}[]}};
+ expect(next.operationId).not.toBe(original.operationId);expect(next.intent.rows.map(r=>r.sourceId)).toEqual(['three']);
+ const history=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('planly.library-batch.v1:user-a:')).map(k=>JSON.parse(localStorage.getItem(k)!)));
+ expect(history).toHaveLength(1);expect(history[0].pending.terminal.operationId).toBe(original.operationId);
+ f.check();
+});
 test('late commit cannot apply, navigate or erase recovery after owner switch',async({context,page})=>{
  await page.clock.install();const f=await fixture(context,page);const posts=f.snapshot.posts as unknown[];posts.push({id:'scheduled',title:null,baseText:'Scheduled fixture',status:'READY',mediaIds:[],createdAt:stamp,updatedAt:stamp,targets:[{id:'scheduled-target',socialAccountId:'telegram',provider:'telegram',textOverride:null,scheduledAt:'2030-01-02T07:00:00.000Z',publication:{status:'SCHEDULED',remoteId:null,remoteUrl:null,error:null}}]});
  let release!:()=>void;f.flags.hold=new Promise<void>(r=>release=r);await open(page);await preview(page);await page.getByRole('button',{name:'Подтвердить и сохранить 2 поста',exact:true}).click();await expect.poll(()=>f.commits.length).toBe(1);
