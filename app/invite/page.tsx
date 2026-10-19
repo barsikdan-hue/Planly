@@ -56,13 +56,13 @@ export default function InvitePage() {
     finally { activating.current = false; setBusy(false); }
   }
   return <main className="login-shell"><section className="login-card">
-    <div className="login-brand">planly.</div><h1>Принять приглашение</h1>
+    <div className="login-brand">Lentaro</div><h1>Принять приглашение</h1>
     <p>{checking ? 'Проверяем приглашение…' : email ? `Личный кабинет для ${email}` : 'Доступ предоставляется администратором.'}</p>
     {email && <form onSubmit={activate}>
       <label htmlFor="invite-password">Пароль</label><input id="invite-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} disabled={busy}/>
       <label htmlFor="invite-confirmation">Подтверждение пароля</label><input id="invite-confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy}/>
       <p>От 12 до 128 символов.</p><button type="submit" disabled={busy}>{busy ? 'Активируем…' : 'Активировать аккаунт'}</button>
     </form>}
-    {error && <p role="alert" className="login-error">{error}</p>}<p><a href="/login">Войти в Planly</a></p>
+    {error && <p role="alert" className="login-error">{error}</p>}<p><a href="/login">Войти в Lentaro</a></p>
   </section></main>;
 }

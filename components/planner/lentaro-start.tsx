@@ -1,0 +1,7 @@
+'use client';
+import {Button} from '@/components/ui/button';
+import {isSocialAccountUsable,type SocialAccountDto} from '@/lib/contracts/planner';
+export function LentaroStart({accounts,openFeed,openSettings,openCalendar}:{accounts:SocialAccountDto[];openFeed:()=>void;openSettings:()=>void;openCalendar:()=>void}){
+ const connected=accounts.some(account=>['telegram','max'].includes(account.provider)&&isSocialAccountUsable(account));
+ return <section className="planner-card lentaro-start" aria-label="Начать с Lentaro"><div><div className="eyebrow">LENTARO · ДЛЯ АГЕНТОВ ПО НЕДВИЖИМОСТИ</div><h2>От готового материала к твоей публикации</h2><p>Выбирай посты редакции, проверяй текст и время. Каждый выход в соцсети требует твоего одобрения.</p></div><ol><li><Button variant="outline" onClick={openSettings}>{connected?'1. Проверить Telegram / MAX':'1. Подключить Telegram / MAX'}</Button><p>{connected?'Подключение доступно. Перед выбором проверь нужную площадку.':'Подключи свою площадку в настройках. Пока можно смотреть и откладывать материалы.'}</p></li><li><Button onClick={openFeed}>2. Выбрать готовый контент</Button><p>Вправо — личная публикация в календаре, влево — скрыть для себя, «Позже» — вернуться к материалу.</p></li><li><Button variant="outline" onClick={openCalendar}>3. Открыть календарь</Button><p>Проверь расписание и статус отдельно для каждой сети. До отправки одобрение можно отменить.</p></li></ol></section>;
+}

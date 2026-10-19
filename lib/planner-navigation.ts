@@ -1,4 +1,4 @@
-const views = ['dashboard', 'create', 'calendar', 'content', 'media', 'analytics', 'settings'] as const;
+const views = ['dashboard', 'feed', 'create', 'calendar', 'content', 'media', 'analytics', 'settings'] as const;
 export type PlannerView = typeof views[number];
 
 export function normalizePlannerView(view: string): PlannerView | null {

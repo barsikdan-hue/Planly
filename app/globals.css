@@ -203,3 +203,11 @@
 .library-batch .scheduling-settings { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
 .library-batch .scheduling-settings label { min-width: 0; }
 .library-batch .scheduling-warning { overflow-wrap: anywhere; }
+.lentaro-start { margin-bottom: 24px; overflow-wrap: anywhere; }
+.lentaro-start h2 { font-size: 20px; font-weight: 650; }
+.lentaro-start p { margin-block: 8px; font-size: 13px; line-height: 1.6; color: #59657a; }
+.lentaro-start ol { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin-top: 16px; }
+.lentaro-start button, .shared-feed > .notice button { white-space: normal; height: auto; min-height: 40px; max-width: 100%; }
+.shared-feed > button { margin-bottom: 16px; }
+.shared-feed .notice { overflow-wrap: anywhere; flex-wrap: wrap; }
+@media(max-width: 700px) { .lentaro-start ol { grid-template-columns: 1fr; gap: 12px; } }
