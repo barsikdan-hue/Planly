@@ -11,7 +11,7 @@ export async function runSharedFeedHttpSmoke(){
  const feed=async cookie=>(await read(await api('/api/shared-feed',cookie),200)).items;
  const post=async(cookie,id)=>(await read(await api('/api/posts',cookie),200)).find(row=>row.id===id);
  const decide=(cookie,input)=>api('/api/shared-feed/decisions',cookie,'POST',input);
- const decision=(item,kind='LIKE',time='2030-01-02T10:00:00.000Z')=>({operationId:randomUUID(),shareId:item.id,sourceRevision:item.updatedAt,decision:kind,...(kind==='LIKE'?{approval:{providers:['telegram','max'],scheduledAt:time,inputMethod:'gesture'}}:{})});
+ const decision=(item,kind='LIKE',time='2030-01-02T10:00:00.000Z',expectedActorId=ids[1])=>({expectedActorId,operationId:randomUUID(),shareId:item.id,sourceRevision:item.updatedAt,decision:kind,...(kind==='LIKE'?{approval:{providers:['telegram','max'],scheduledAt:time,inputMethod:'gesture'}}:{})});
  try{
   await read(await api('/api/shared-feed'),401);
   // Exercise the existing editorial loading path via actual HTTP, not direct DB inserts.
@@ -26,7 +26,10 @@ export async function runSharedFeedHttpSmoke(){
   assert.equal((await feed(b)).find(row=>row.id===item.id).text,text);
   await read(await api('/api/admin/shared-library/'+source.id,a,'POST',{shared:false}),403);
   const before=(await db.select().from(posts).where(eq(posts.userId,ids[1]))).length;
-  const input=decision(item),response=await read(await decide(a,input),201);
+  const input=decision(item);
+  const mismatch=await read(await decide(b,input),409);assert.equal(mismatch.code,'SHARED_FEED_ACTOR_CHANGED');
+  assert.equal((await db.select().from(posts).where(eq(posts.userId,ids[2]))).length,0);
+  const response=await read(await decide(a,input),201);
   assert.equal(response.replayed,false);assert.ok(response.receipt.postId&&response.receipt.personalItemId);
   const receipt=response.receipt;
   assert.equal((await db.select().from(posts).where(eq(posts.userId,ids[1]))).length,before+1);
@@ -38,7 +41,7 @@ export async function runSharedFeedHttpSmoke(){
   await read(await api(lookup,b),404);await read(await api(lookup,admin),404);
   assert.equal(await post(b,receipt.postId),undefined);assert.equal(await post(admin,receipt.postId),undefined);
   assert.ok(!(await feed(a)).some(row=>row.id===item.id));assert.ok((await feed(b)).some(row=>row.id===item.id));
-  const reject=decision(item,'DISLIKE'),postCount=(await db.select().from(posts).where(eq(posts.userId,ids[2]))).length;
+  const reject=decision(item,'DISLIKE',undefined,ids[2]),postCount=(await db.select().from(posts).where(eq(posts.userId,ids[2]))).length;
   const rejected=await read(await decide(b,reject),201);assert.equal(rejected.receipt.postId,null);assert.equal(rejected.receipt.personalItemId,null);
   assert.equal((await db.select().from(posts).where(eq(posts.userId,ids[2]))).length,postCount);assert.ok(!(await feed(b)).some(row=>row.id===item.id));
   const own=await post(a,receipt.postId);assert.equal(own.baseText,text);assert.equal(own.mediaIds.length,1);assert.notEqual(own.mediaIds[0],uploaded.id);

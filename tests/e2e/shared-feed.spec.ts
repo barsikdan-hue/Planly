@@ -1,7 +1,11 @@
 import {test as base,expect,type Page} from '@playwright/test';
+import {mkdir,readFile} from 'node:fs/promises';
+import {join} from 'node:path';
 import {sharedFeedDecisionInputSchema,sharedFeedDecisionReceiptSchema,type SharedFeedDecisionInput,type SharedFeedDecisionResult} from '../../lib/contracts/shared-feed';
 import type {SharedLibraryItemDto} from '../../lib/contracts/shared-library';
 import type {PostDto} from '../../lib/contracts/planner';
+import type {LibraryItemDto} from '../../lib/contracts/library';
+import type {MediaAssetWithPreview} from '../../lib/client/planly-api';
 
 const origin='http://127.0.0.1:4318',stamp='2026-10-19T00:00:00.000Z';
 const shareIds=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333'];
@@ -9,10 +13,10 @@ const tail='Последняя строка общего материала — 
 const fullText=[...Array.from({length:36},(_,i)=>`Строка ${i+1}: синтетический материал для проверки полного текста.`),'ДлинноеСлово'.repeat(90),tail].join('\n');
 const makeItems=():SharedLibraryItemDto[]=>shareIds.map((id,i)=>({id,title:`Общий материал ${i+1}`,text:i===0?fullText:`Синтетический общий текст ${i+1}`,updatedAt:stamp,media:[]}));
 type Recorded={owner:string;body:string;input:SharedFeedDecisionInput};
-type Fixture={owner:string;items:SharedLibraryItemDto[];requests:Recorded[];posts:Map<string,PostDto[]>;results:Map<string,SharedFeedDecisionResult>;loss:boolean;deleted:boolean;stale:boolean;hold:Promise<void>|null;slot:string|null;pollSentinel:boolean;feedReads:number};
+type Fixture={owner:string;items:SharedLibraryItemDto[];requests:Recorded[];posts:Map<string,PostDto[]>;privateMedia:Map<string,MediaAssetWithPreview[]>;privateItems:Map<string,LibraryItemDto[]>;privateImageReads:number;results:Map<string,SharedFeedDecisionResult>;loss:boolean;deleted:boolean;stale:boolean;hold:Promise<void>|null;slot:string|null;pollSentinel:boolean;feedReads:number};
 const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
  const tomorrow=new Date(Date.now()+86400000);tomorrow.setUTCHours(7,0,0,0);
- const f:Fixture={owner:'feed-a',items:makeItems(),requests:[],posts:new Map([['feed-a',[]],['feed-b',[]]]),results:new Map(),loss:false,deleted:false,stale:false,hold:null,slot:tomorrow.toISOString(),pollSentinel:false,feedReads:0};
+ const f:Fixture={owner:'feed-a',items:makeItems(),requests:[],posts:new Map([['feed-a',[]],['feed-b',[]]]),privateMedia:new Map([['feed-a',[]],['feed-b',[]]]),privateItems:new Map([['feed-a',[]],['feed-b',[]]]),privateImageReads:0,results:new Map(),loss:false,deleted:false,stale:false,hold:null,slot:tomorrow.toISOString(),pollSentinel:false,feedReads:0};
  const unexpected:string[]=[],errors:string[]=[],consoleErrors:{url:string;text:string}[]=[],expectedResources=new Set<string>();
  const watch=(p:Page)=>{p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error')consoleErrors.push({url:m.location().url,text:m.text()});});};watch(page);context.on('page',watch);
  const ownedResults=()=>[...f.results.entries()].filter(([key])=>key.startsWith(f.owner+':')).map(([,result])=>result);
@@ -25,11 +29,16 @@ const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
   const request=route.request(),url=new URL(request.url()),path=url.pathname;
   const reply=(body:unknown,status=200)=>{if(status>=400)expectedResources.add(`${request.url()}|${status}`);return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});};
   if(url.origin!==origin){unexpected.push(`EXTERNAL ${url.origin}`);return route.abort('blockedbyclient');}
+  if(request.method()==='GET'&&url.search===''&&(path==='/fixture-shared.png'||path===`/fixture-private-${f.owner}.png`)){
+   if(path.startsWith('/fixture-private-')){expect(f.privateMedia.get(f.owner)!.length).toBeGreaterThan(0);f.privateImageReads++;}
+   return route.fulfill({status:200,contentType:'image/png',body:await readFile(new URL('./assets/swipe-photo.png',import.meta.url))});
+  }
   if(!path.startsWith('/api/')&&request.method()==='GET')return route.continue();
   if(request.method()==='GET'&&url.search===''){
-   if(path==='/api/bootstrap')return reply({profile:profile(),posts:[...(f.posts.get(f.owner)??[]),...(f.pollSentinel?[sentinel()]:[])],media:[],socialAccounts:accounts(),libraryItems:[]});
+   if(path==='/api/bootstrap')return reply({profile:profile(),posts:[...(f.posts.get(f.owner)??[]),...(f.pollSentinel?[sentinel()]:[])],media:f.privateMedia.get(f.owner)??[],socialAccounts:accounts(),libraryItems:f.privateItems.get(f.owner)??[]});
    if(path==='/api/profile')return reply(profile());
-   if(path==='/api/library-items'||path==='/api/media')return reply([]);
+   if(path==='/api/library-items')return reply(f.privateItems.get(f.owner)??[]);
+   if(path==='/api/media')return reply(f.privateMedia.get(f.owner)??[]);
    if(path==='/api/shared-feed'){f.feedReads++;return reply({items:ownItems()});}
    if(path==='/api/library/batch-consent/preview')return reply({eligible:false});
    if(path==='/api/admin/shared-library')return reply({sourceIds:[]});
@@ -42,8 +51,9 @@ const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
   if(request.method()==='POST'&&path==='/api/shared-feed/decisions'&&url.search===''){
    const input=sharedFeedDecisionInputSchema.parse(request.postDataJSON()),owner=f.owner,key=owner+':'+input.operationId;
    expect(request.headers()['content-type']).toBe('application/json');
-   expect(await page.evaluate(({owner,id})=>JSON.parse(localStorage.getItem(`lentaro:shared-decision:v1:${encodeURIComponent(owner)}:${id}`)??'null')?.input,{owner,id:input.operationId})).toEqual(input);
+   expect(await page.evaluate(({owner,id})=>JSON.parse(localStorage.getItem(`lentaro:shared-decision:v1:${encodeURIComponent(owner)}:${id}`)??'null')?.input,{owner:input.expectedActorId,id:input.operationId})).toEqual(input);
    f.requests.push({owner,body:request.postData()!,input});
+   if(input.expectedActorId!==owner)return reply({code:'SHARED_FEED_ACTOR_CHANGED',error:'Synthetic authenticated actor changed'},409);
    const previous=f.results.get(key);
    if(previous){
     expect(f.requests.find(r=>r.owner===owner&&r.input.operationId===input.operationId)!.input).toEqual(input);
@@ -57,7 +67,11 @@ const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
    const receipt=sharedFeedDecisionReceiptSchema.parse(input.decision==='LIKE'?{...identity,decision:'LIKE',personalItemId:`personal-${owner}-${input.shareId}`,postId:`post-${owner}-${input.shareId}`,scheduledAt:input.approval.scheduledAt}:{...identity,decision:'DISLIKE',personalItemId:null,postId:null,scheduledAt:null});
    if(input.decision==='LIKE'){
     expect(Date.parse(input.approval.scheduledAt)).toBeGreaterThan(Date.now()+59_000);
-    f.posts.get(owner)!.push({id:receipt.postId!,title:source!.title,baseText:source!.text,status:'READY',mediaIds:[],createdAt:stamp,updatedAt:stamp,targets:input.approval.providers.map(provider=>({id:`target-${owner}-${input.shareId}-${provider}`,socialAccountId:`${owner}-${provider}`,provider,textOverride:null,scheduledAt:input.approval.scheduledAt,publication:{status:'SCHEDULED',remoteId:null,remoteUrl:null,error:null}}))});
+    const copiedMedia=source!.media.map((asset,index):MediaAssetWithPreview=>({id:`private-${owner}-${input.shareId}-${index}`,originalName:asset.name,mimeType:asset.mimeType,previewUrl:`/fixture-private-${owner}.png`,byteSize:100,width:160,height:90,durationMs:null,source:'UPLOAD',createdAt:stamp}));
+    f.privateMedia.get(owner)!.push(...copiedMedia);
+    const mediaIds=copiedMedia.map(asset=>asset.id);
+    f.privateItems.get(owner)!.push({id:receipt.personalItemId!,title:source!.title,text:source!.text,mediaIds,status:'USED',sourcePostId:receipt.postId!,createdAt:stamp,updatedAt:stamp});
+    f.posts.get(owner)!.push({id:receipt.postId!,title:source!.title,baseText:source!.text,status:'READY',mediaIds,createdAt:stamp,updatedAt:stamp,targets:input.approval.providers.map(provider=>({id:`target-${owner}-${input.shareId}-${provider}`,socialAccountId:`${owner}-${provider}`,provider,textOverride:null,scheduledAt:input.approval.scheduledAt,publication:{status:'SCHEDULED',remoteId:null,remoteUrl:null,error:null}}))});
    }
    const result={receipt,replayed:false};f.results.set(key,result);
    await f.hold;
@@ -77,6 +91,7 @@ async function openFeed(page:Page){await page.goto('/');await expect(page.locato
 async function begin(page:Page){const feed=page.getByRole('region',{name:'Готовый контент',exact:true}),telegram=feed.getByRole('button',{name:'Telegram',exact:true});await expect(telegram).toBeEnabled();if(await telegram.getAttribute('aria-pressed')!=='true')await telegram.click();const start=feed.getByRole('button',{name:'Начать разбор',exact:true});if(await start.isVisible())await start.click();await expect(feed.locator('.swipe-card')).toBeVisible();}
 async function journal(page:Page,owner='feed-a'){return page.evaluate(owner=>Object.keys(localStorage).filter(key=>key.startsWith(`lentaro:shared-decision:v1:${owner}:`)).map(key=>JSON.parse(localStorage.getItem(key)!)),owner);}
 async function noOverflow(page:Page){expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);await expect(page.locator('nextjs-portal,vite-error-overlay')).toHaveCount(0);}
+async function captureEvidence(page:Page,name:string){const directory=process.env.PLANLY_SHARED_FEED_EVIDENCE_DIR;if(!directory)return;await mkdir(directory,{recursive:true});await page.screenshot({path:join(directory,name+'.png'),fullPage:true});}
 
 test('feed deep link opens ready shared content after profile hydration',async({page,feed})=>{
  await page.goto('/#feed');await expect(page.locator('.profile-button')).toContainText('Агент А');await expect(page.getByRole('heading',{name:'Готовый контент',exact:true})).toBeVisible();await begin(page);await expect(page.locator('.swipe-card')).toContainText('Общий материал 1');expect(feed.requests).toHaveLength(0);
@@ -111,6 +126,48 @@ test('lost acknowledgement reload manually replays byte-identical original inten
  expect(feed.requests).toHaveLength(2);expect(feed.requests[1]).toEqual(original);expect(feed.posts.get('feed-a')).toHaveLength(1);expect((await journal(page))[0].state).toBe('confirmed');
 });
 
+test('stale A tab cannot submit a fresh choice as newly authenticated B before owner polling',async({page,feed})=>{
+ await openFeed(page);await begin(page);await expect(page.locator('.profile-button')).toContainText('Агент А');expect(feed.pollSentinel).toBe(false);expect(feed.posts.get('feed-a')).toHaveLength(0);
+ feed.owner='feed-b';await page.getByRole('button',{name:'В календарь',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Проверить результат выбора',exact:true})).toBeVisible();expect(feed.requests).toHaveLength(1);expect(feed.requests[0]).toMatchObject({owner:'feed-b',input:{expectedActorId:'feed-a'}});
+ expect(feed.posts.get('feed-b')).toHaveLength(0);expect(feed.posts.get('feed-a')).toHaveLength(0);expect(feed.results.size).toBe(0);
+ expect((await journal(page))[0].state).toBe('pending');expect(await journal(page,'feed-b')).toEqual([]);await expect(page.getByText('Выбор подтверждён. Публикация в личном календаре.',{exact:true})).toHaveCount(0);
+});
+
+test('lost A acknowledgement cannot be replayed under B or falsely acknowledged before owner polling',async({page,feed})=>{
+ feed.loss=true;await openFeed(page);await begin(page);await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(page.getByRole('button',{name:'Проверить результат выбора',exact:true})).toBeVisible();
+ const original=feed.requests[0],savedJournal=await journal(page);expect(feed.posts.get('feed-a')).toHaveLength(1);expect(feed.pollSentinel).toBe(false);
+ feed.owner='feed-b';await page.getByRole('button',{name:'Проверить результат выбора',exact:true}).click();await expect.poll(()=>feed.requests.length).toBe(2);await expect(page.getByRole('button',{name:'Проверить результат выбора',exact:true})).toBeEnabled();
+ expect(feed.requests[1].body).toBe(original.body);expect(feed.requests[1]).toMatchObject({owner:'feed-b',input:{expectedActorId:'feed-a'}});expect(feed.posts.get('feed-b')).toHaveLength(0);expect(feed.posts.get('feed-a')).toHaveLength(1);expect(feed.results.size).toBe(1);expect([...feed.results.keys()].every(key=>key.startsWith('feed-a:'))).toBe(true);
+ expect(await journal(page)).toEqual(savedJournal);expect(await journal(page,'feed-b')).toEqual([]);await expect(page.getByText('Выбор подтверждён. Публикация в личном календаре.',{exact:true})).toHaveCount(0);
+});
+
+test('recovered LIKE refreshes the next card slot before its independent approval',async({page,feed})=>{
+ feed.loss=true;await openFeed(page);await begin(page);await page.getByRole('button',{name:'В календарь',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Проверить результат выбора',exact:true})).toBeVisible();const original=feed.requests[0],firstSlot=feed.slot!;
+ feed.slot=new Date(Date.parse(firstSlot)+86400000).toISOString();
+ await page.getByRole('button',{name:'Проверить результат выбора',exact:true}).click();await expect(page.getByText('Выбор подтверждён. Публикация в личном календаре.',{exact:true})).toBeVisible();
+ expect(feed.requests[1]).toEqual(original);expect(feed.posts.get('feed-a')).toHaveLength(1);
+ await expect(page.locator('.swipe-card')).toContainText('Общий материал 2');await expect(page.getByRole('button',{name:'В календарь',exact:true})).toBeEnabled();await page.getByRole('button',{name:'В календарь',exact:true}).click();
+ await expect.poll(()=>feed.posts.get('feed-a')!.length).toBe(2);expect(feed.requests).toHaveLength(3);
+ expect(feed.requests[2].input).toMatchObject({shareId:shareIds[1],decision:'LIKE',approval:{scheduledAt:feed.slot}});
+ expect(feed.posts.get('feed-a')![0].targets[0].scheduledAt).toBe(firstSlot);expect(feed.posts.get('feed-a')![1].targets[0].scheduledAt).toBe(feed.slot);
+});
+
+test('new personal image is visible immediately in the saved publication without reload or polling',async({page,feed},info)=>{
+ if(info.project.name==='mobile')await page.setViewportSize({width:320,height:844});
+ const now=new Date();await page.clock.install({time:now});await page.clock.pauseAt(now);await page.emulateMedia({reducedMotion:'reduce'});
+ feed.items[0].media=[{name:'Обложка редакции.png',mimeType:'image/png',previewUrl:'/fixture-shared.png'}];await openFeed(page);await begin(page);
+ const sharedImage=page.locator('.swipe-card img');await expect.poll(()=>sharedImage.evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);expect(feed.privateImageReads).toBe(0);
+ if(info.project.name==='desktop')await captureEvidence(page,'shared-feed-desktop');
+ await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(page.getByRole('button',{name:'Открыть публикацию',exact:true})).toBeEnabled();
+ expect(feed.privateMedia.get('feed-a')).toHaveLength(1);expect(feed.privateItems.get('feed-a')).toHaveLength(1);expect(feed.posts.get('feed-a')![0].mediaIds).toEqual([feed.privateMedia.get('feed-a')![0].id]);
+ await page.getByRole('button',{name:'Открыть публикацию',exact:true}).click();await expect(page.getByRole('heading',{name:'Публикация',exact:true})).toBeVisible();
+ const personalImage=page.locator('.post-sheet img');await expect(personalImage).toHaveAttribute('src','/fixture-private-feed-a.png');await expect.poll(()=>personalImage.evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+ expect(feed.privateImageReads).toBeGreaterThan(0);expect(feed.requests).toHaveLength(1);
+ if(info.project.name==='mobile')await captureEvidence(page,'shared-feed-private-image-320');
+});
+
 test('terminal 410 retains history across reload and allows a separate shared choice without replaying deleted result',async({page,feed})=>{
  feed.loss=true;await openFeed(page);await begin(page);await page.getByRole('button',{name:'В календарь',exact:true}).click();await expect(page.getByRole('button',{name:'Проверить результат выбора',exact:true})).toBeVisible();
  feed.deleted=true;await page.getByRole('button',{name:'Проверить результат выбора',exact:true}).click();await expect(page.getByText('Результат предыдущего выбора удалён. Повторная копия не создана.',{exact:true})).toBeVisible();
@@ -131,10 +188,11 @@ test('missing slot disables approval and skip makes no durable decision',async({
  await openFeed(page);await begin(page);await expect(page.locator('.swipe-card')).toContainText('Общий материал 1');
 });
 
-for(const width of [390,320])test(`full text scroll and keyboard approval preserve exact shared choice at ${width}`,async({page,feed})=>{
+for(const width of [390,320])test(`full text scroll and keyboard approval preserve exact shared choice at ${width}`,async({page,feed},info)=>{
  await page.setViewportSize({width,height:844});await openFeed(page);await begin(page);const text=page.locator('.swipe-text');await expect(text).toHaveText(fullText);await text.scrollIntoViewIfNeeded();
  await text.evaluate(node=>{node.scrollTop=node.scrollHeight;});await expect.poll(()=>text.evaluate((node,tail)=>{const value=node.firstChild!,start=value.textContent!.lastIndexOf(tail),range=document.createRange();range.setStart(value,start);range.setEnd(value,value.textContent!.length);const last=range.getBoundingClientRect(),box=node.getBoundingClientRect();return last.top>=Math.max(box.top,0)-1&&last.bottom<=Math.min(box.bottom,innerHeight)+1;},tail)).toBe(true);
  expect(feed.requests).toEqual([]);expect(await text.evaluate(node=>node.scrollWidth-node.clientWidth)).toBeLessThanOrEqual(1);await noOverflow(page);
+ if(width===320&&info.project.name==='mobile')await captureEvidence(page,'shared-feed-fulltext-320');
  await page.locator('.swipe-card').focus();await page.keyboard.press('ArrowRight');await expect(page.getByText('Выбор подтверждён. Публикация в личном календаре.',{exact:true})).toBeVisible();expect(feed.requests[0].input).toMatchObject({shareId:shareIds[0],decision:'LIKE',approval:{inputMethod:'keyboard',providers:['telegram']}});
 });
 

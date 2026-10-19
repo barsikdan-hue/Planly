@@ -14,6 +14,7 @@ export type SwipePlannerProps = {
     presentation?: { heading: string; description: string; rejected: string; empty: string };
     providerOptions?: Provider[];
     editable?: boolean;
+    slotRevision?: number;
     origin?: 'dashboard' | 'content';
     onAddItem?: () => void;
     items: LibraryItemDto[];
@@ -30,7 +31,7 @@ export type SwipePlannerProps = {
     onOpenPost?: (id: string) => void;
 };
 type Preset = keyof typeof slotPresets | 'custom';
-type Preview = { key: string; scheduledAt: string | null; error?: string };
+type Preview = { key: string; scheduledAt: string | null; revision:number; error?: string };
 const weekdayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const providers: Provider[] = ['telegram', 'max', 'vk'];
 const todayMoscow = () => new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
@@ -39,7 +40,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const interactive = (target: EventTarget | null) => !!(target as Element | null)?.closest?.('button, input, textarea, select, a, video, audio, img, [contenteditable], [data-swipe-ignore]');
 const scheduleLabel = (iso: string) => new Date(iso).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'medium', timeStyle: 'short' });
 
-export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, preferences, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost, presentation, providerOptions=providers, editable=true }: SwipePlannerProps) {
+export function SwipePlanner({ origin = 'content', onAddItem, items, media, socialAccounts, busy = false, pending = false, preferences, onPreview, onApprove, onReject, onEdit, onClose, onOpenPost, presentation, providerOptions=providers, editable=true, slotRevision=0 }: SwipePlannerProps) {
     const [now, setNow] = useState(Date.now);
     const [startDate, setStartDate] = useState(todayMoscow);
     const refreshWindow = () => setStartDate(todayMoscow());
@@ -70,7 +71,7 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     const [archiveResult, setArchiveResult] = useState(false);
     const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const previewCallback = useRef(onPreview);
-    const previewAttempt = useRef<{ key: string; refresh: number } | null>(null);
+    const previewAttempt = useRef<{ key: string; refresh: number; revision:number } | null>(null);
     useEffect(() => { previewCallback.current = onPreview; }, [onPreview]);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
@@ -91,21 +92,21 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     useEffect(() => {
         if (!queryKey) { previewAttempt.current = null; return; }
         if (pending || busy) return;
-        if (previewAttempt.current?.key === queryKey && previewAttempt.current.refresh === refresh) return;
-        const attempt = {key:queryKey,refresh};
+        if (previewAttempt.current?.key === queryKey && previewAttempt.current.refresh === refresh && previewAttempt.current.revision===slotRevision) return;
+        const attempt = {key:queryKey,refresh,revision:slotRevision};
         previewAttempt.current = attempt;
         let cancelled = false;
         let settled = false;
         void previewCallback.current(JSON.parse(queryKey) as SlotQuery).then(value => {
             settled = true;
-            if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: value.scheduledAt });
+            if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: value.scheduledAt,revision:slotRevision });
         }).catch(cause => {
             settled = true;
-            if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: null, error: errorMessage(cause) });
+            if (!cancelled && mounted.current) setPreview({ key: queryKey, scheduledAt: null,revision:slotRevision, error: errorMessage(cause) });
         });
         return () => { cancelled = true; if(!settled && previewAttempt.current === attempt) previewAttempt.current = null; };
-    }, [queryKey, refresh, pending, busy]);
-    const previewReady = !!queryKey && preview?.key === queryKey;
+    }, [queryKey, refresh, pending, busy,slotRevision]);
+    const previewReady = !!queryKey && preview?.key === queryKey && preview.revision===slotRevision;
     const manualDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? moscowDate(date, time) : null;
     const manualValid = manualDate && Number.isFinite(manualDate.getTime()) && new Date(manualDate.getTime() + 3 * 3600000).toISOString().slice(0, 10) === date && manualDate.getTime() >= now+60_000;
     const scheduledAt = mode === 'manual' ? manualValid ? manualDate!.toISOString() : null : previewReady ? preview!.scheduledAt : null;

@@ -16,7 +16,7 @@ export function readSharedJournal(storage:SharedJournalStorage,owner:string){
   try{
    const raw=storage.getItem(name);if(!raw||raw.length>16_384)throw corrupt();
    const entry=entrySchema.parse(JSON.parse(raw));
-   if(entry.owner!==owner||name!==key(owner,entry.input.operationId))throw corrupt();
+   if(entry.owner!==owner||entry.input.expectedActorId!==owner||name!==key(owner,entry.input.operationId))throw corrupt();
    if(entry.state==='confirmed'&&(!entry.receipt||!matches(entry.input,entry.receipt)))throw corrupt();
    entries.push(entry);
   }catch{throw corrupt();}
@@ -42,8 +42,8 @@ async function dispatch(storage:SharedJournalStorage,entry:SharedJournalEntry,is
  if(!current||JSON.stringify(current.input)!==JSON.stringify(entry.input))return {status:'stale'};
  if(response.status===410){write(storage,{...entry,state:'terminal',error:'Результат предыдущего выбора удалён. Повторная копия не создана.'});return {status:'terminal'};}
  if(!response.ok){
-  const error=message(response.status);
   const body=await response.json().catch(()=>null) as {code?:string}|null;
+  const error=body?.code==='SHARED_FEED_ACTOR_CHANGED'?'Кабинет изменился в другой вкладке. Вернись в исходный кабинет для проверки выбора.':message(response.status);
   if(!isCurrent())return {status:'stale'};
   // Recognized fresh-input failures have no outcome. Access loss, unknown errors and
   // operation-key conflicts cannot establish whether an earlier attempt committed.
@@ -62,6 +62,7 @@ export async function submitSharedDecision(storage:SharedJournalStorage,owner:st
  const journal=readSharedJournal(storage,owner);
  if(journal.pending.length)throw Error('Сначала проверь результат предыдущего выбора.');
  const parsed=sharedFeedDecisionInputSchema.parse(input);
+ if(parsed.expectedActorId!==owner)throw Error('Кабинет изменился. Обнови страницу перед новым выбором.');
  if(storage.getItem(key(owner,parsed.operationId))!==null)throw Error('Это решение уже сохранено. Используй восстановление.');
  const entry:SharedJournalEntry={version:1,owner,input:parsed,state:'pending'};
  write(storage,entry);

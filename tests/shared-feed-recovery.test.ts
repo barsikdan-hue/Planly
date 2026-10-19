@@ -4,7 +4,7 @@ import {existsSync} from 'node:fs';
 
 const path=new URL('../lib/client/shared-feed-recovery.ts',import.meta.url);
 const owner='user-a', other='user-b';
-const input={operationId:'00000000-0000-4000-8000-000000000001',shareId:'00000000-0000-4000-8000-000000000002',sourceRevision:'2026-10-19T10:00:00.000Z',decision:'LIKE' as const,approval:{providers:['telegram' as const],scheduledAt:'2030-10-20T10:00:00.000Z',inputMethod:'button' as const}};
+const input={operationId:'00000000-0000-4000-8000-000000000001',shareId:'00000000-0000-4000-8000-000000000002',sourceRevision:'2026-10-19T10:00:00.000Z',expectedActorId:owner,decision:'LIKE' as const,approval:{providers:['telegram' as const],scheduledAt:'2030-10-20T10:00:00.000Z',inputMethod:'button' as const}};
 const receipt={operationId:input.operationId,shareId:input.shareId,sourceRevision:input.sourceRevision,decision:'LIKE',personalItemId:'private-a',postId:'post-a',scheduledAt:input.approval.scheduledAt};
 class Storage {values=new Map<string,string>();get length(){return this.values.size;}key(i:number){return [...this.values.keys()][i]??null;}getItem(k:string){return this.values.get(k)??null;}setItem(k:string,v:string){this.values.set(k,v);}removeItem(k:string){this.values.delete(k);}}
 async function api(){assert.ok(existsSync(path),'shared-feed durable recovery implementation exists');return import(path.href);}
@@ -32,7 +32,7 @@ test('terminal receipt remains history; unrelated future operation may proceed',
  const m=await api(),s=new Storage();const result=await m.submitSharedDecision(s,owner,input,()=>true,async()=>new Response(JSON.stringify({code:'DECISION_RESULT_DELETED'}),{status:410}));
  assert.equal(result.status,'terminal');assert.equal(m.readSharedJournal(s,owner).history[0].state,'terminal');
  const dislike={...input,operationId:'00000000-0000-4000-8000-000000000003',shareId:'00000000-0000-4000-8000-000000000004',decision:'DISLIKE' as const};delete (dislike as {approval?:unknown}).approval;
- const saved=await m.submitSharedDecision(s,owner,dislike,()=>true,async()=>new Response(JSON.stringify({receipt:{...dislike,personalItemId:null,postId:null,scheduledAt:null},replayed:false})));
+ const saved=await m.submitSharedDecision(s,owner,dislike,()=>true,async()=>new Response(JSON.stringify({receipt:{operationId:dislike.operationId,shareId:dislike.shareId,sourceRevision:dislike.sourceRevision,decision:dislike.decision,personalItemId:null,postId:null,scheduledAt:null},replayed:false})));
  assert.equal(saved.status,'confirmed');assert.equal(m.readSharedJournal(s,owner).history.length,2);
 });
 test('malformed or mismatching success cannot clear pending; definite stale rejection is retained',async()=>{
@@ -47,4 +47,11 @@ test('access loss and unknown conflict keep exact intent recoverable',async()=>{
  assert.equal(m.readSharedJournal(s,owner).pending.length,1);
  await assert.rejects(m.retrySharedDecision(s,owner,input.operationId,()=>true,async()=>new Response(JSON.stringify({code:'UNEXPECTED_CONFLICT'}),{status:409})));
  assert.equal(m.readSharedJournal(s,owner).pending.length,1);
+});
+test('displayed actor mismatch cannot dispatch or discard an uncertain original intent',async()=>{
+ const m=await api(),s=new Storage();let calls=0;
+ await assert.rejects(m.submitSharedDecision(s,owner,{...input,expectedActorId:other},()=>true,async()=>{calls++;return new Response();}));
+ assert.equal(calls,0);assert.equal(s.length,0);
+ await assert.rejects(m.submitSharedDecision(s,owner,input,()=>true,async()=>new Response(JSON.stringify({code:'SHARED_FEED_ACTOR_CHANGED'}),{status:409})));
+ assert.deepEqual(m.readSharedJournal(s,owner).pending[0].input,input);assert.equal(m.readSharedJournal(s,other).pending.length,0);
 });
