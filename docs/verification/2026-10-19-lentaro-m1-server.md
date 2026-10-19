@@ -70,3 +70,37 @@ Known conflicts: `SHARED_FEED_OPERATION_CONFLICT` 409, `SHARED_FEED_ALREADY_DECI
 Uncertain/recoverable failures: `SHARED_FEED_OUTCOME_UNKNOWN` 502, `SHARED_FEED_CLEANUP_FAILED` 502, `SHARED_FEED_TIMEOUT` 504, `SHARED_FEED_FAILED` 502. Preserve the immutable operation and use result lookup/same-key retry. Existing account/slot/content/auth validation errors retain their existing response codes.
 
 Next: independent focused server review of the named source commit; integrate its result with the M1 UI candidate and exact-head CI. No push, merge, deploy, persistent migration or provider operation was performed by this server task.
+
+## Whole-M1 review correction: bind consent to the displayed actor
+
+Review found a P1 race on candidate `fc26d14fb0b454d578ff850fbc6fc60a46de635d`: an old tab displaying USER A could send its consent after another tab replaced the session cookie with USER B. Because the request identified only shared source and provider names, the server correctly authenticated B but incorrectly treated A's displayed intent as consent to B's accounts.
+
+Causal native RED, before the fix:
+
+```text
+node .superpowers/sdd/2026-10-19-lentaro-m1/run-node.mjs --experimental-strip-types --test --test-concurrency=1 --test-name-pattern="stale owner A" tests/shared-feed.integration.test.ts
+0 PASS / 2 FAIL; exit 1
+LIKE observed {posts:1, receipts:1, publications:2, copies:1}, expected all zero.
+DISLIKE observed {receipts:1}, expected zero.
+```
+
+Contract RED then confirmed the old schema rejected the expected actor field and still accepted an intent without one (2 FAIL / 1 PASS).
+
+Fix source commit: `46ad74db6a041122d4f0b440a6c5abfb1c60e540`. The new, not-yet-deployed API now requires `expectedActorId` (string length 1–200). It is compared with the authenticated, locked actor **before historical receipt lookup or copying**, and is also checked during uncertain-COMMIT reconciliation. It never selects the actor or grants another user's authority. The immutable request hash includes this precondition; receipt shape and database schema are unchanged. The existing `readJson` identity-override guard remains unchanged and permits this neutral comparison field.
+
+Mismatch returns `409 SHARED_FEED_ACTOR_CHANGED`, with no copied bytes, Post, publication, receipt, queue action or successful acknowledgement. Client handling must retain the pending exact intent and recover only in its original actor context. Missing precondition is 422. Matching context retains the existing approval/replay behavior.
+
+Fresh final verification for the correction:
+
+```text
+node .superpowers/sdd/2026-10-19-lentaro-m1/run-node.mjs --experimental-strip-types --test --test-concurrency=1 tests/shared-feed-contract.test.ts tests/shared-feed.integration.test.ts
+33 PASS / 0 FAIL / 0 SKIP; exit 0; duration 4895.2843 ms
+
+node .superpowers/sdd/2026-10-19-lentaro-m1/run-node.mjs node_modules/eslint/bin/eslint.js lib/contracts/shared-feed.ts lib/server/shared-feed.ts tests/shared-feed-contract.test.ts tests/shared-feed.integration.test.ts
+exit 0
+
+node .superpowers/sdd/2026-10-19-lentaro-m1/run-node.mjs node_modules/typescript/bin/tsc --noEmit
+exit 0
+```
+
+The 33 checks include both stale-cookie LIKE and DISLIKE, mismatch before a same-operation historical receipt, HTTP 409/422/matching-context 201 through the unchanged identity guard, and all existing atomicity/session/storage/queue/recovery cases. Only disposable PG55681 and loopback fixture media were used. No additional migration, full-suite rerun, provider call or deployment was performed for this correction. UI/journal integration and final whole-M1 review/CI belong to the coordinating task.
