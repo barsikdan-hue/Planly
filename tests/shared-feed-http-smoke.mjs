@@ -52,15 +52,17 @@ export async function runSharedFeedHttpSmoke(){
   await read(await api('/api/admin/shared-library/'+source.id,admin,'POST',{shared:false}),200);
   await read(await api('/api/library-items/'+source.id,admin,'PATCH',{...body,text:'Changed original',status:'READY'}),200);
   assert.deepEqual((await read(await decide(a,input),201)).receipt,receipt);assert.equal((await post(a,receipt.postId)).baseText,text);
-  const target=own.targets.find(target=>target.provider==='telegram');assert.ok(target.cancelApproval?.eligible);
-  const preview=target.cancelApproval,cancel={expectedPublicationId:preview.expectedPublicationId,expectedPublicationUpdatedAt:preview.expectedPublicationUpdatedAt,expectedTargetUpdatedAt:preview.expectedTargetUpdatedAt,expectedBindingRevision:preview.expectedBindingRevision};
-  await read(await fetch(`${f.base}/api/posts/${receipt.postId}/targets/${target.id}/cancel-approval`,{method:'POST',signal:AbortSignal.timeout(10000),headers:{cookie:a,'content-type':'application/json','X-Planly-Social-Connection':'1',origin:f.base},body:JSON.stringify(cancel)}),200);
-  const after=await post(a,receipt.postId);assert.ok(after.targets.find(row=>row.provider==='telegram').approvalCancelledAt);assert.equal(after.targets.find(row=>row.provider==='max').approvalCancelledAt,null);
+  // The special cancel-approval route is AUTH-history-only, not a general
+  // scheduled-post cancellation. The normal editor cancels by saving a draft.
+  assert.ok(own.targets.every(target=>target.cancelApproval.reason==='UNSUPPORTED_HISTORY'&&!target.cancelApproval.eligible));
+  const draft={title:own.title,baseText:own.baseText,status:'DRAFT',mediaIds:own.mediaIds,targets:own.targets.map(target=>({provider:target.provider,textOverride:target.textOverride,scheduledAt:null}))};
+  await read(await api('/api/posts/'+receipt.postId,a,'PATCH',draft),200);
+  const after=await post(a,receipt.postId);assert.equal(after.status,'DRAFT');assert.equal(after.baseText,text);assert.deepEqual(after.mediaIds,own.mediaIds);assert.ok(after.targets.every(target=>target.scheduledAt===null&&target.publication.status==='CANCELLED'));
   const rows=await db.select().from(publications).where(and(eq(publications.userId,ids[1]),eq(publications.postId,receipt.postId)));
-  assert.equal(rows.length,2);assert.ok(rows.every(row=>row.attemptCount===0&&row.providerRemoteId===null));
+  assert.equal(rows.length,2);assert.ok(rows.every(row=>row.status==='CANCELLED'&&row.attemptCount===0&&row.providerRemoteId===null));
   assert.equal((await db.select().from(sharedFeedDecisions).where(inArray(sharedFeedDecisions.userId,ids))).length,2);
   assert.equal((await db.select().from(libraryItems).where(eq(libraryItems.id,receipt.personalItemId)))[0].status,'USED');
-  console.log('PASS compiled Lentaro: ADMIN upload/create/share, independent A/B feed decisions, exact recovery, private media, calendar and per-network cancellation; provider IO 0');
+  console.log('PASS compiled Lentaro: ADMIN upload/create/share, independent A/B feed decisions, exact recovery, private media, calendar and pre-send draft cancellation; provider IO 0');
  }finally{await f.cleanup();}
 }
 await runSharedFeedHttpSmoke();

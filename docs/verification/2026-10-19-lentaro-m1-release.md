@@ -1,6 +1,6 @@
 # Lentaro M1 — bounded staging release package
 
-Status: source preparation; **not release authorization and not live acceptance**. Candidate is the immutable `codex/lentaro-m1` Draft PR head once its required checks/reviews pass. Resolve and record its full source SHA and self-host artifact/synthetic-merge SHA from that PR; never deploy a moving branch name. Main/#68 dependency and exact validation are recorded in PROJECT_STATE and the PR.
+Status: source candidate; **not release authorization and not live acceptance**. Candidate is the immutable [Draft PR #69](https://github.com/barsikdan-hue/Planly/pull/69) head once its required checks/reviews pass. Resolve and record its full source SHA and self-host artifact/synthetic-merge SHA from that PR; never deploy a moving branch name. Main/#68 dependency and exact validation are recorded in PROJECT_STATE and the PR.
 
 ## Existing scope versus missing release scope
 
@@ -9,6 +9,27 @@ Owner approved M1 source development, commit/push and Draft PR. The already rent
 Latest audited staging source `83a0350203d1d37ad0cbbb2e6d61934485b877e1`, PostgreSQL ledger 13 **rows**; no current inspection claimed here. Existing source migration files include 0012 shared library, 0013 USER connection tables, 0014 approval cancellation, 0015 B1 and new additive 0016 shared decisions. Do not infer applied migration names from row count or replay 0012. Read actual ledger/hash and compare with the exact candidate before proposing any persistent migration.
 
 A1: recorded same-VM archive checksums do not prove recovery. Earlier clone restore stopped at OCI identity mismatch. A later helper-only repair plus one isolated clone attempt was authorized in [#66](https://github.com/barsikdan-hue/Planly/issues/66#issuecomment-6234302277); a later result was not found in the inspected public chain. Locate that result/private receipt first. Do not blindly repeat the attempt or extend its grant to production data, off-VM keys/destinations, #64/#65, or schema changes.
+
+## Fresh bounded preflight — 19 October, 09:57 UTC
+
+[Read-only receipt](2026-10-19-lentaro-m1-preflight.md): existing pinned access, no writes/login/provider calls. Staging remains exact83a/image79c1878; five components running/restarts0. All13 applied ledger hashes/timestamps match0000–0012. The following four migrations are actually missing, rather than inferred from count:
+
+| File | SHA256 |
+|---|---|
+| 0013_gorgeous_iron_lad.sql | `1f29cb9c7f703d69110ca8c3380cff0bb69252d0b1739a2d70450edb186e4670` |
+| 0014_approval_cancellation.sql | `649c443272b60e441090444bd5515b61910cc437d6da1ef97ac6a0d2aa9dcaad` |
+| 0015_curvy_blockbuster.sql | `8d7861cdd268cc2b250ab9b884ae1cdcb1091fc5bce7f69074b8cd0d345d21c2` |
+| 0016_shared_feed_decisions.sql | `73d3be4ee02212aa0a82b8e3147ba14f80b52bafe0976c64c9db801ff12929e3` |
+
+Nonempty flags are **false** for `TELEGRAM_MINI_APP_URL`, `MAX_MINI_APP_URL`, `TELEGRAM_BOT_TOKEN`, `MAX_BOT_TOKEN`, `PLANLY_PUBLIC_ORIGIN` in both current web and worker. This proves missing staging setup, not failure of the owner's separately proven Telegram/MAX environment. No values were printed/retained. A source-only deployment cannot make new USER connections work there without private setup.
+
+Original A1 failed proof, helper and manifest remain unchanged in inspected operational paths. Later granted attempt outcome remains UNKNOWN, not proof its one attempt is unused. Keep the original grant; resolve its execution record before continuing any clone. No additional A1 authorization is requested by this package.
+
+## Private connection setup proposal
+
+Separate staging configuration approval must name the existing bots and private credential source; do not create new bots/services by default or copy secret values into reports. Proposed public origin is exactly `https://stage.lentaro.ru`. Telegram/MAX Mini App launch URLs must be the actual configured launch URLs of those existing bots, independently checked in their provider setup; inventing a URL is not readiness. Existing protected bot tokens may be set only via the approved private mechanism after their source/identity is established. Until then mark USER connection/setup acceptance UNKNOWN and display the existing SETUP_REQUIRED explanation.
+
+Provider setup inspection, bot/Mini App changes and any membership reads/sends require exact operations/accounts/counts. They are not bundled implicitly into deploying code or editing five env keys. The owner performs their native provider consent personally. These runtime prerequisites do not block source development/RC verification, but do block claiming the full live USER journey.
 
 ## Concrete external actions to authorize once the immutable candidate is green
 
