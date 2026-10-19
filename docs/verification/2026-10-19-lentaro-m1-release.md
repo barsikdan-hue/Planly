@@ -1,5 +1,7 @@
 # Lentaro M1 — bounded staging release package
 
+Latest recovery dependency: [actual unified A1 result](2026-10-19-lentaro-a1-unified-result.md) supersedes earlier pending/UNKNOWN inventory paragraphs below. Phase A has proven the enumeration defect; Phase C stopped on preparation FileNotFoundError/errno2, both dispatches consumed, recovery UNVERIFIED and server actions STOPPED. A locally prepared new continuation scope is not a grant. No M1 release can proceed yet.
+
 Status: source candidate; **not release authorization and not live acceptance**. Product candidate is `b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7` in [Draft PR #69](https://github.com/barsikdan-hue/Planly/pull/69), unmerged; required source review and CI39256264337/Self-host39256264393 are complete/SUCCESS. Tested synthetic merge `723a3ec5cfdc60af7d898227348d2e9a4c6f05fe` matches source tree `b35ddfe5f7e50025cb029aff5af6bbd7b642dc8b`. Resolve the actual deployment artifact/image digest and revalidate release-sensitive drift under the matching future grant; never deploy a moving branch name. Main/#68 dependency and exact validation are recorded in PROJECT_STATE and the PR. This documentation follow-up does not change the product candidate.
 
 ## Existing scope versus missing release scope
