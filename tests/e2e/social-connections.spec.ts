@@ -5,7 +5,7 @@ const origin='http://127.0.0.1:4318';
 const ticket='SYNTHETIC_BROWSER_ONLY_'.padEnd(43,'x');
 const unsafe='<img src="https://blocked.invalid/x" onerror="window.__xss=1">';
 function account(provider='telegram',state='verified-disabled',ready=true) {
- return {id:`fixture-${provider}`,provider,providerAccountId:state==='unverified'?null:'-55555',displayName:`Fixture ${provider}`,enabled:state==='enabled',connectionStatus:state==='unverified'?'DISCONNECTED':'CONNECTED',connection:{mode:'verified-user',ready,reason:ready?null:'SETUP_REQUIRED',state,accountHint:'Planly • 0123456789',bindingRevision:3,checkedAt:'2020-01-01T00:00:00.000Z',actions:ready?['begin',state==='enabled'?'pause':'enable','release']:[]}};
+ return {id:`fixture-${provider}`,provider,providerAccountId:state==='unverified'?null:'-55555',displayName:`Fixture ${provider}`,enabled:state==='enabled',connectionStatus:state==='unverified'?'DISCONNECTED':'CONNECTED',connection:{mode:'verified-user',ready,reason:ready?null:'SETUP_REQUIRED',state,accountHint:'Lentaro • 0123456789',bindingRevision:3,checkedAt:'2020-01-01T00:00:00.000Z',actions:ready?['begin',state==='enabled'?'pause':'enable','release']:[]}};
 }
 async function fixture(context:BrowserContext,page:Page) {
  const snapshot={profile:{id:'synthetic-user',email:'synthetic@example.invalid',displayName:'Synthetic User'},posts:[],media:[],libraryItems:[],socialAccounts:[account(),account('max','unverified',false)]};
@@ -35,7 +35,7 @@ async function fixture(context:BrowserContext,page:Page) {
    if(action==='proof')flags.provider=url.pathname.includes('/max/')?'MAX':'TELEGRAM';
    const provider=flags.provider;
    const consent={provider,humanName:unsafe,humanId:'4242',destinationName:unsafe,destinationId:'-55555',expiresAt:new Date(Date.now()+60000).toISOString()};
-   if(action==='proof'){expect(Object.keys(body)).toEqual(['initData']);return respond({...consent,accountHint:'Planly • 0123456789',ticket});}
+   if(action==='proof'){expect(Object.keys(body)).toEqual(['initData']);return respond({...consent,accountHint:'Lentaro • 0123456789',ticket});}
    expect(body).toEqual({ticket});expect(new URL(page.url()).hash).toBe('');
    const accountId=`fixture-${provider.toLowerCase()}`;
    return respond(action==='confirm'?{operationId:'synthetic-operation',accountId,provider,destinationId:'-55555',bindingRevision:3,state:'VERIFIED_DISABLED'}:{...consent,operationId:'synthetic-operation',accountId,planlyName:unsafe});
@@ -50,7 +50,7 @@ async function fixture(context:BrowserContext,page:Page) {
  }};
 }
 async function screenshot(page:Page,testInfo:TestInfo,label:string){const path=testInfo.outputPath(`${label}.png`);await page.screenshot({path,fullPage:true});await testInfo.attach(label,{path,contentType:'image/png'});}
-async function health(page:Page){expect(await page.title()).toContain('Planly');await expect(page.locator('vite-error-overlay,nextjs-portal')).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);}
+async function health(page:Page){const expectedBrand=new URL(page.url()).pathname.startsWith('/social-connections/')?'Lentaro':'Planly';expect(await page.title()).toContain(expectedBrand);await expect(page.locator('vite-error-overlay,nextjs-portal')).toHaveCount(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);}
 
 for(const width of [1366,390,320])test(`Settings verified lifecycle and release confirmation ${width}`,async({context,page},testInfo)=>{
  test.skip(testInfo.project.name==='mobile','Explicit viewports cover mobile once');
@@ -58,7 +58,7 @@ for(const width of [1366,390,320])test(`Settings verified lifecycle and release 
  await expect(page.getByRole('heading',{name:'Настройки',exact:true})).toBeVisible();
  const telegram=page.locator('.account-card').filter({has:page.getByRole('heading',{name:'Telegram',exact:true})});
  const max=page.locator('.account-card').filter({has:page.getByRole('heading',{name:'MAX',exact:true})});
- await expect(telegram).toContainText('Подтверждено · выключено');await expect(telegram).toContainText('Planly • 0123456789');
+ await expect(telegram).toContainText('Подтверждено · выключено');await expect(telegram).toContainText('Lentaro • 0123456789');
  await expect(max).toContainText('Администратору нужно настроить Mini App');await expect(max.getByRole('button',{name:'Подтвердить через Mini App'})).toBeDisabled();
  await health(page);await screenshot(page,testInfo,`settings-${width}`);
  await telegram.getByRole('switch').press('Space');await expect(telegram).toContainText('Включено');

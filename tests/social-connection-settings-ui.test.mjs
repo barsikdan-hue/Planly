@@ -9,7 +9,7 @@ const {Composer}=await import('../components/planner/composer.tsx');
 const originalToast={success:toast.success,error:toast.error};
 afterEach(()=>{cleanup();Object.assign(toast,originalToast);});
 const launchUrl=`https://t.me/test_bot?startapp=${'a'.repeat(43)}`;
-const account=(owner='owner',state='verified-disabled')=>({id:`${owner}-telegram`,provider:'telegram',providerAccountId:'-55555',displayName:'Channel',enabled:state==='enabled',connectionStatus:'CONNECTED',connection:{mode:'verified-user',ready:true,reason:null,state,accountHint:'Planly • 0123456789',bindingRevision:3,checkedAt:'2020-01-01T00:00:00.000Z',actions:state==='enabled'?['begin','pause','release']:['begin','enable','release']}});
+const account=(owner='owner',state='verified-disabled')=>({id:`${owner}-telegram`,provider:'telegram',providerAccountId:'-55555',displayName:'Channel',enabled:state==='enabled',connectionStatus:'CONNECTED',connection:{mode:'verified-user',ready:true,reason:null,state,accountHint:'Lentaro • 0123456789',bindingRevision:3,checkedAt:'2020-01-01T00:00:00.000Z',actions:state==='enabled'?['begin','pause','release']:['begin','enable','release']}});
 function messages(){const results=[];for(const kind of Object.keys(originalToast))toast[kind]=message=>results.push({kind,message});return results;}
 async function open(mutation){const value=fixture({scheduled:true,mutation});value.snapshot.socialAccounts=[account()];const redirects=[];window.location.assign=url=>redirects.push(url);await value.settle();await value.navigate('settings');return {value,redirects};}
 const props=value=>value.app.find('Settings').props;

@@ -33,7 +33,7 @@ test('USER unverified metadata is server authored and unavailable without setup;
  const a=await account();delete process.env.TELEGRAM_MINI_APP_URL;
  const rows=await listSocialAccounts(a.userId),m=rows.find(r=>r.id===a.id)!.connection;
  assert.equal(m?.mode,'verified-user');assert.equal(m?.ready,false);assert.equal(m?.state,'unverified');assert.equal(m?.reason,'SETUP_REQUIRED');assert.deepEqual(m?.actions,[]);
- assert.match(m?.accountHint??'',/^Planly • [a-f0-9]{10}$/);
+ assert.match(m?.accountHint??'',/^Lentaro • [a-f0-9]{10}$/);
  assert.deepEqual(Object.keys(rows.find(r=>r.provider==='vk')!).sort(),['connectionStatus','displayName','enabled','id','provider','providerAccountId']);assert.equal(calls,0);
 });
 for(const provider of ['TELEGRAM','MAX'] as const)test(`${provider} durable verified binding never expires at 30 seconds and private data never leaves projection`,async()=>{
