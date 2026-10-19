@@ -14,6 +14,7 @@ async function fixture(context:BrowserContext,page:Page) {
   if(url.origin!=='http://127.0.0.1:4318'){unexpected.push(url.origin);return route.abort();}
   if(!url.pathname.startsWith('/api/'))return route.continue();
   const respond=(body:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(request.method()==='GET' && url.pathname==='/api/library/batch-consent/preview' && url.search==='')return respond({eligible:false});
   if(request.method()==='GET' && url.pathname==='/api/bootstrap')return respond(snapshot);
   if(request.method()==='GET' && url.pathname==='/api/profile')return respond(snapshot.profile);
   if(request.method()==='GET' && url.pathname==='/api/admin/shared-library')return respond({error:'Forbidden'},403);
