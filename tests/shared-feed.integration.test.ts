@@ -21,7 +21,7 @@ const server=createServer(async(req,res)=>{
 function request(who=owner,method='POST'){return new Request('http://planly.test/api/shared-feed/decisions',{method,headers:{cookie:`planly_session=${token(who)}`}});}
 let shareId:string,revision:string;const mirrors:unknown[][]=[];
 const options={mirrorQueue:async(changes:unknown[])=>{assert.equal((await db.select().from(schema.posts)).length,1,'queue only after commit');mirrors.push(changes);}};
-function intent(decision='LIKE'){return {operationId:randomUUID(),shareId,sourceRevision:revision,decision,...(decision==='LIKE'?{approval:{providers:['telegram','max'],scheduledAt:'2030-01-01T10:00:00.000Z',inputMethod:'button'}}:{})};}
+function intent(decision='LIKE',expectedActorId=owner){return {expectedActorId,operationId:randomUUID(),shareId,sourceRevision:revision,decision,...(decision==='LIKE'?{approval:{providers:['telegram','max'],scheduledAt:'2030-01-01T10:00:00.000Z',inputMethod:'button'}}:{})};}
 async function decide(input=intent(),who=owner){return api.commitSharedFeedDecision(request(who),input,options);}
 const code=(value:string)=>(e:unknown)=>!!e&&typeof e==='object'&&'code'in e&&e.code===value;
 async function counts(){return {posts:(await db.select().from(schema.posts)).length,receipts:(await db.select().from(schema.sharedFeedDecisions)).length,publications:(await db.select().from(schema.publications)).length,copies:(await db.select().from(schema.libraryItems)).filter(x=>x.title==='Shared fixture'&&x.userId!==admin).length};}
@@ -41,13 +41,13 @@ test('one direct LIKE atomically copies bytes, creates personal Post, binding pu
  assert.equal((await db.select().from(schema.swipeDecisionReceipts)).length,1);for(const p of await db.select().from(schema.publications))assert.equal(p.socialBindingRevision,1);
  assert.equal((await api.listSharedFeed(request(owner,'GET'))).length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);
 });
-test('DISLIKE is private and writes no copy, Post, bytes or job; other USER remains independent',async()=>{await decide(intent('DISLIKE'));assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.equal(puts.length,0);assert.equal(mirrors.length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);await decide(intent('DISLIKE'),other);assert.equal((await counts()).receipts,2);});
-test('same operation concurrent replay is identical; changed payload and different key conflict',async()=>{const input=intent();const [a,b]=await Promise.all([decide(input),decide(input)]);assert.deepEqual(a.receipt,b.receipt);assert.equal(Number(a.replayed)+Number(b.replayed),1);await assert.rejects(decide({operationId:input.operationId,shareId:input.shareId,sourceRevision:input.sourceRevision,decision:'DISLIKE'}),code('SHARED_FEED_OPERATION_CONFLICT'));await assert.rejects(decide({...input,operationId:randomUUID()}),code('SHARED_FEED_ALREADY_DECIDED'));assert.equal((await counts()).posts,1);assert.equal(puts.length,1);});
+test('DISLIKE is private and writes no copy, Post, bytes or job; other USER remains independent',async()=>{await decide(intent('DISLIKE'));assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.equal(puts.length,0);assert.equal(mirrors.length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);await decide(intent('DISLIKE',other),other);assert.equal((await counts()).receipts,2);});
+test('same operation concurrent replay is identical; changed payload and different key conflict',async()=>{const input=intent();const [a,b]=await Promise.all([decide(input),decide(input)]);assert.deepEqual(a.receipt,b.receipt);assert.equal(Number(a.replayed)+Number(b.replayed),1);await assert.rejects(decide({expectedActorId:input.expectedActorId,operationId:input.operationId,shareId:input.shareId,sourceRevision:input.sourceRevision,decision:'DISLIKE'}),code('SHARED_FEED_OPERATION_CONFLICT'));await assert.rejects(decide({...input,operationId:randomUUID()}),code('SHARED_FEED_ALREADY_DECIDED'));assert.equal((await counts()).posts,1);assert.equal(puts.length,1);});
 test('different concurrent keys produce exactly one outcome',async()=>{const results=await Promise.allSettled([decide(),decide()]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal((await counts()).posts,1);assert.equal(puts.length,1);});
-test('stale revision and unshared opaque source fail before copy; historical replay survives source deletion',async()=>{await assert.rejects(decide({...intent(),sourceRevision:'2026-10-18T10:00:00.000Z'}),code('SHARED_FEED_SOURCE_STALE'));const input=intent(),saved=await decide(input);await db.delete(schema.libraryItems).where(eq(schema.libraryItems.id,'shared-source'));assert.deepEqual((await decide(input)).receipt,saved.receipt);await assert.rejects(decide(intent('DISLIKE'),other),code('SHARED_SOURCE_UNAVAILABLE'));assert.equal(puts.length,1);});
+test('stale revision and unshared opaque source fail before copy; historical replay survives source deletion',async()=>{await assert.rejects(decide({...intent(),sourceRevision:'2026-10-18T10:00:00.000Z'}),code('SHARED_FEED_SOURCE_STALE'));const input=intent(),saved=await decide(input);await db.delete(schema.libraryItems).where(eq(schema.libraryItems.id,'shared-source'));assert.deepEqual((await decide(input)).receipt,saved.receipt);await assert.rejects(decide(intent('DISLIKE',other),other),code('SHARED_SOURCE_UNAVAILABLE'));assert.equal(puts.length,1);});
 test('deleted personal Post or copy remains terminal and cannot resurrect from source',async()=>{const input=intent(),saved=await decide(input);await db.delete(schema.posts).where(eq(schema.posts.id,saved.receipt.postId));await assert.rejects(decide(input),code('SHARED_FEED_RESULT_DELETED'));await assert.rejects(api.readSharedFeedDecision(request(),input.operationId),code('SHARED_FEED_RESULT_DELETED'));await assert.rejects(decide(),code('SHARED_FEED_ALREADY_DECIDED'));assert.equal(puts.length,1);});
 test('operation lookup is private to owner, including ADMIN non-owner',async()=>{const saved=await decide();for(const who of [other,admin])await assert.rejects(api.readSharedFeedDecision(request(who),saved.receipt.operationId),code('SHARED_FEED_RESULT_NOT_FOUND'));});
-for(const who of [configured,admin])test(`individual approval rights retained for ${who}`,async()=>{await decide(intent(),who);assert.equal((await counts()).posts,1);});
+for(const who of [configured,admin])test(`individual approval rights retained for ${who}`,async()=>{await decide(intent('LIKE',who),who);assert.equal((await counts()).posts,1);});
 test('USER missing binding is denied atomically with storage cleanup',async()=>{await db.delete(schema.socialBindings).where(eq(schema.socialBindings.userId,owner));await assert.rejects(decide());assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0});assert.equal(mirrors.length,0);for(const key of puts)assert.equal(bytes.has(key),false);});
 test('disconnected account cannot silently publish now',async()=>{await db.update(schema.socialAccounts).set({enabled:false}).where(eq(schema.socialAccounts.userId,owner));await assert.rejects(decide());assert.equal((await counts()).posts,0);assert.equal(puts.length,0);});
 test('storage failure and checksum corruption roll back all rows and clean attempted writes',async()=>{failPut=true;await assert.rejects(decide(),code('SHARED_FEED_FAILED'));assert.equal((await counts()).copies,0);assert.deepEqual(deletes,puts);failPut=false;bytes.set('original',Buffer.from('corrupt'));await assert.rejects(decide(),code('SHARED_FEED_FAILED'));assert.equal((await counts()).receipts,0);});
@@ -90,7 +90,7 @@ test('native HTTP routes enforce real session, strict identity and CSRF, and own
  const response=await send(input);assert.equal(response.status,201);const saved=await response.json();assert.deepEqual(Object.keys(saved).sort(),['receipt','replayed']);const recovered=await get.GET(request(owner,'GET'),{params:Promise.resolve({operationId:input.operationId})});assert.equal(recovered.status,200);assert.deepEqual((await recovered.json()).receipt,saved.receipt);assert.equal((await get.GET(request(other,'GET'),{params:Promise.resolve({operationId:input.operationId})})).status,404);
 });
 test('two USER approvals create independent copies, media, Posts and bindings for the same shared revision',async()=>{
- const a=await decide();const b=await api.commitSharedFeedDecision(request(other),intent(),{mirrorQueue:async()=>undefined});
+ const a=await decide();const b=await api.commitSharedFeedDecision(request(other),intent('LIKE',other),{mirrorQueue:async()=>undefined});
  assert.notEqual(a.receipt.personalItemId,b.receipt.personalItemId);assert.notEqual(a.receipt.postId,b.receipt.postId);assert.equal((await counts()).posts,2);assert.equal((await counts()).publications,4);assert.equal(new Set(puts).size,2);
  for(const [who,result] of [[owner,a],[other,b]] as const){const [post]=await db.select().from(schema.posts).where(eq(schema.posts.id,result.receipt.postId));assert.equal(post.userId,who);const pubs=await db.select().from(schema.publications).where(eq(schema.publications.postId,post.id));assert.equal(pubs.length,2);for(const row of pubs){assert.equal(row.userId,who);assert.equal(row.socialBindingRevision,1);}}
 });
@@ -101,4 +101,27 @@ test('known pre-COMMIT failure rolls back rows and deletes only uncommitted copi
 });
 test('session expiry during copied-byte IO rolls back the whole consent',async()=>{
  onGet=async()=>{await db.update(schema.sessions).set({expiresAt:new Date('2020-01-01')}).where(eq(schema.sessions.userId,owner));};await assert.rejects(decide(),e=>e instanceof Error&&e.name==='UnauthorizedError');assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0});assert.deepEqual(deletes,puts);
+});
+for(const decision of ['LIKE','DISLIKE'])test(`stale owner A ${decision} intent with owner B cookie cannot mutate B or acknowledge A`,async()=>{
+ const ownerAIntent=intent(decision);
+ const outcome=await api.commitSharedFeedDecision(request(other),ownerAIntent,options).then((result:unknown)=>({result,error:undefined}),(error:unknown)=>({result:undefined,error}));
+ assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0},'a stale tab cannot use the replacement session to create another owner result');
+ assert.equal(outcome.result,undefined,'old owner journal must never receive a successful other-owner acknowledgement');
+ assert.ok(code('SHARED_FEED_ACTOR_CHANGED')(outcome.error));
+ assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+});
+test('actor precondition wins before historical same-operation replay',async()=>{
+ const inputA=intent('DISLIKE'),inputB={...inputA,expectedActorId:other};
+ await api.commitSharedFeedDecision(request(other),inputB,options);
+ await assert.rejects(api.commitSharedFeedDecision(request(other),inputA,options),code('SHARED_FEED_ACTOR_CHANGED'));
+ assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+});
+test('HTTP actor precondition permits matching context but rejects a switched cookie without receipt',async()=>{
+ const route=await import('../app/api/shared-feed/decisions/route.ts');
+ const inputA=intent('DISLIKE'),send=(body:unknown,who=other)=>route.POST(new Request('http://planly.test/api/shared-feed/decisions',{method:'POST',headers:{cookie:`planly_session=${token(who)}`,'content-type':'application/json'},body:JSON.stringify(body)}));
+ const mismatch=await send(inputA);assert.equal(mismatch.status,409);assert.equal((await mismatch.json()).code,'SHARED_FEED_ACTOR_CHANGED');
+ assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0});
+ const missing=structuredClone(inputA) as Partial<typeof inputA>;delete missing.expectedActorId;assert.equal((await send(missing)).status,422);
+ const matching=await send({...inputA,expectedActorId:other});assert.equal(matching.status,201);assert.equal((await matching.json()).receipt.operationId,inputA.operationId);
+ assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
 });

@@ -65,6 +65,9 @@ export async function commitSharedFeedDecision(request:Request,raw:unknown,optio
  let result:SharedFeedDecisionResult;
  try{
   result=await withSharedLibraryActor(request,async(tx,userId)=>{
+   // The displayed principal is a consent precondition, never an identity
+   // selector. A replacement cookie must not approve an old tab's intent.
+   if(input.expectedActorId!==userId)failure(409,'SHARED_FEED_ACTOR_CHANGED','Account changed; return to the account that reviewed this material');
    const historical=await readStored(tx,userId,input.operationId);
    if(historical){const saved=await replay(tx,userId,historical,inputHash);await recheckSharedLibraryActor(tx,request,userId);return saved;}
    const [decided]=await tx.select({id:sharedFeedDecisions.operationId}).from(sharedFeedDecisions).where(and(eq(sharedFeedDecisions.userId,userId),eq(sharedFeedDecisions.shareId,input.shareId),eq(sharedFeedDecisions.sourceRevision,new Date(input.sourceRevision))));
@@ -108,6 +111,7 @@ export async function commitSharedFeedDecision(request:Request,raw:unknown,optio
    // successful authoritative receipt read permits deletion of copied bytes.
    try{
     reconciled=await withSharedLibraryActor(request,async(tx,userId)=>{
+     if(input.expectedActorId!==userId)failure(409,'SHARED_FEED_ACTOR_CHANGED','Account changed; return to the account that reviewed this material');
      const stored=await readStored(tx,userId,input.operationId);
      if(!stored)return undefined;
      committed=true;
