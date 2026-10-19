@@ -1,6 +1,6 @@
 # Lentaro M1 — bounded staging release package
 
-Status: source candidate; **not release authorization and not live acceptance**. Candidate is the immutable [Draft PR #69](https://github.com/barsikdan-hue/Planly/pull/69) head once its required checks/reviews pass. Resolve and record its full source SHA and self-host artifact/synthetic-merge SHA from that PR; never deploy a moving branch name. Main/#68 dependency and exact validation are recorded in PROJECT_STATE and the PR.
+Status: source candidate; **not release authorization and not live acceptance**. Product candidate is `b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7` in [Draft PR #69](https://github.com/barsikdan-hue/Planly/pull/69), unmerged; required source review and CI39256264337/Self-host39256264393 are complete/SUCCESS. Tested synthetic merge `723a3ec5cfdc60af7d898227348d2e9a4c6f05fe` matches source tree `b35ddfe5f7e50025cb029aff5af6bbd7b642dc8b`. Resolve the actual deployment artifact/image digest and revalidate release-sensitive drift under the matching future grant; never deploy a moving branch name. Main/#68 dependency and exact validation are recorded in PROJECT_STATE and the PR. This documentation follow-up does not change the product candidate.
 
 ## Existing scope versus missing release scope
 
@@ -8,7 +8,7 @@ Owner approved M1 source development, commit/push and Draft PR. The already rent
 
 Latest audited staging source `83a0350203d1d37ad0cbbb2e6d61934485b877e1`, PostgreSQL ledger 13 **rows**; no current inspection claimed here. Existing source migration files include 0012 shared library, 0013 USER connection tables, 0014 approval cancellation, 0015 B1 and new additive 0016 shared decisions. Do not infer applied migration names from row count or replay 0012. Read actual ledger/hash and compare with the exact candidate before proposing any persistent migration.
 
-A1: recorded same-VM archive checksums do not prove recovery. Earlier clone restore stopped at OCI identity mismatch. A later helper-only repair plus one isolated clone attempt was authorized in [#66](https://github.com/barsikdan-hue/Planly/issues/66#issuecomment-6234302277); a later result was not found in the inspected public chain. Locate that result/private receipt first. Do not blindly repeat the attempt or extend its grant to production data, off-VM keys/destinations, #64/#65, or schema changes.
+A1: recorded same-VM archive checksums do not prove recovery. Earlier OCI mismatch and later preflight HOLD are distinct from the latest retained continuation FAIL_HOLD after isolated daemon creation. Latest cleanup is recorded PASS; the original perform exception was not retained, so ROOT_CAUSE_NOT_PROVEN. All consumed attempts remain consumed. The owner has PAUSED NEW A1 ATTEMPTS; the already prepared next diagnostic package and logger V4 are preserved, not authorized or executed. [Local retention verification](2026-10-19-lentaro-a1-v4-retention-check.md) does not prove recovery or repair the unknown cause. Do not replay any grant or extend it to production data, off-VM keys/destinations, #64/#65 or schema changes. Actual retained results and frozen private-package pins are indexed in the existing outside-Git M1 handoff.
 
 ## Fresh bounded preflight — 19 October, 09:57 UTC
 
@@ -23,7 +23,7 @@ A1: recorded same-VM archive checksums do not prove recovery. Earlier clone rest
 
 Nonempty flags are **false** for `TELEGRAM_MINI_APP_URL`, `MAX_MINI_APP_URL`, `TELEGRAM_BOT_TOKEN`, `MAX_BOT_TOKEN`, `PLANLY_PUBLIC_ORIGIN` in both current web and worker. This proves missing staging setup, not failure of the owner's separately proven Telegram/MAX environment. No values were printed/retained. A source-only deployment cannot make new USER connections work there without private setup.
 
-Original A1 failed proof, helper and manifest remain unchanged in inspected operational paths. Later granted attempt outcome remains UNKNOWN, not proof its one attempt is unused. Keep the original grant; resolve its execution record before continuing any clone. No additional A1 authorization is requested by this package.
+The preceding 09:57 preflight is a dated observation, not current runtime permission. Subsequent retained A1 results supersede its former unknown-outcome statements as described above. No successful restore is established. No additional A1 authorization is requested by this package; leave attempts paused until a separate direct owner instruction.
 
 ## Private connection setup proposal
 
@@ -34,7 +34,7 @@ Provider setup inspection, bot/Mini App changes and any membership reads/sends r
 ## Concrete external actions to authorize once the immutable candidate is green
 
 1. **Read-only preflight on existing VPS staging:** capture source/image identities, actual migration hashes/ledger, component health, scheduled/unknown outcomes and the single active sender for these data. Preserve private evidence without credentials/IP/user content in reports. Identify the rollback image and volume/backup identities privately.
-2. **Recovery gate:** attach the valid A1 clone-only restore receipt or resolve its exact existing grant with the owner. Confirm the chosen DB/media recovery point and restore compatibility before persistent changes. Missing independent/off-VM recovery remains explicit; do not pretend same-VM evidence covers total server loss.
+2. **Recovery gate — currently paused:** a valid restore PASS is still required. The frozen diagnostic package can only run after separate explicit one-run authorization; the present owner pause cannot be bypassed through this release package. A diagnostic failure or retained error code does not establish recovery. Confirm the chosen DB/media recovery point and restore compatibility before persistent changes. Missing independent/off-VM recovery remains explicit; do not pretend same-VM evidence covers total server loss.
 3. **Staging-only release and persistent migration grant:** name the actual candidate source/image SHA and the exact missing migration filenames/hashes discovered in step 1. Grant only those migrations and existing web/worker replacement, retaining PostgreSQL/Redis/MinIO volumes and secrets. Never create a new scheduler or leave two active senders. No Render/production/DNS/secret changes.
 4. **Bounded staging data grant:** load the three approved issue materials via existing ADMIN media upload → idempotent Library create → share, using the package journal. Confirm hashes/order/revision before sharing. A lost media-upload response requires checking that one asset; do not blindly upload again. No invitations to real colleagues or cleanup of existing content is included.
 5. **Browser acceptance using named test actors:** sign in, verify own connection state, shared feed/private choice, calendar/reload and cancellation. Define precisely whether temporary fixture actors/content may be created/deleted. Do not use or expose unrelated users' data.
