@@ -24,3 +24,17 @@ Recovery stores exact input before network, scopes keys to the owner and operati
 ## Candidate gates
 
 Final integrated native/typecheck/lint/canonical build/compiled HTTP/browser CI, Self-host and independent whole-M1 review remain required. Track exact source versus GitHub synthetic-merge runtime tree in the Draft PR; this report does not predict PASS. [Bounded release package](2026-10-19-lentaro-m1-release.md) holds separate staging/data/provider gates. Real external provider calls/sends during these checks: 0.
+
+
+## Whole-M1 review corrections
+
+Independent review of `fc26d14` found three causal gaps, not release acceptance:
+
+- A stale displayed A tab could POST/replay under a replacement B cookie, creating a B-owned operation because shared sources and provider names apply to both accounts. Native RED reproduced a B copy/Post/two publications/receipt for LIKE and a B receipt for DISLIKE. Required `expectedActorId` now travels in the exact persisted intent and is compared to the authenticated actor before replay/source work; mismatch409 preserves the original A pending journal. It never chooses authorization. Receipt/schema unchanged; server follow-up evidence records 33/33 GREEN.
+- Manual recovery ran outside SwipePlanner's normal success handler and retained the occupied next-slot preview. Browser RED approved the second card using the old minute. Optional slot revision now invalidates the preview after recovered LIKE, preserving selected settings.
+- Shared-feed acknowledgement refreshed posts/accounts but omitted copied private media/Library. With clock paused, browser RED opened the saved publication without its image. A coherent bootstrap refresh with library/media revision guards now updates all four collections.
+
+Initial GitHub CI `39232146947` on `fc26d14`: migration drift/apply, typecheck and lint PASS; native1682 PASS/1 FAIL. Sole failure: content `loading-journal-template.json` expected2154 bytes, Linux checkout2092 after Git line-ending conversion. Independent Git-blob inspection identified four normalized review/evidence files. `.gitattributes` had been added after their first staging; scoped renormalization now stores original reviewed bytes. Both worktree and actual Git index are tested (2/2 PASS), without changing payloads or approving different evidence. Initial Self-host `39232146853` SUCCESS, live job skipped; this does not cover subsequent corrections. A new source requires fresh CI/Self-host, not rerun-to-green on an unchanged tree.
+
+
+Correction verification: focused browser cases8/8 GREEN, complete current shared-feed spec28/28 GREEN, one worker/retries0, fresh Vite build (~53s). Client recovery7/7 and editorial worktree/Git-index integrity2/2 PASS. Test-file ESLint and diff-check PASS. Root viewed actual desktop/320px full-text/private-image captures under external `artifacts/lentaro-m1/2026-10-19/browser`: long text wraps and the last line/actions are readable; decoded private image is visible immediately in the saved sheet with polling paused. The blue image is explicitly a synthetic fixture, not a real editorial cover. Actual editorial images have separate independent visual QA.

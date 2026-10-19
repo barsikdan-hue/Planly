@@ -26,7 +26,7 @@ Runtime rows reuse dated evidence from the completed 19 October audit, not a new
 - B source ready (`1c0d7df`), independent review in progress: durable source/revision/intent receipt and atomic private copy/Post/publications through existing storage/scheduler paths. B1 USER-only guard unchanged.
 - C source ready (`8539381`): ready-content navigation, onboarding, Lentaro labels, owner-fenced exact-intent recovery. Six local recovery checks, navigation, TypeScript/scoped lint and 20 isolated desktop/mobile browser cases passed; final integrated CI pending.
 - D: three real texts/images independently factual/editorial/visual READY for exact frozen revision. Portable package committed (`628f422`), ACCEPTED_LOCAL 3/3, integrity 112/112 plus cross-platform byte check; no runtime upload.
-- E: focused server review, integrated checks/CI/self-host and final M1 review still required.
+- E: Draft [PR #69](https://github.com/barsikdan-hue/Planly/pull/69) is open against main, depends on unmerged #68. Initial server review PASS. Whole-M1 review found a cross-tab displayed-actor mismatch and two UI refresh gaps; causal regressions reproduced and corrections passed 33 server / 28 browser cases; corrected-source focused review pending. Initial Self-host passed; initial CI found one exact-byte content packaging failure, corrected without changing reviewed content. Fresh final-source CI/review remain required.
 - F: no M1 deployment. Prepare exact rollout/rollback and owner testing handoff after E.
 
 ## Release constraints and next action
