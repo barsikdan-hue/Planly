@@ -1,0 +1,22 @@
+{
+  "actor": "m1_editorial author context",
+  "independent": false,
+  "viewed_on": "2026-10-19",
+  "view_method": "view_image of every actual final JPEG (12) and built-in generation result of every original (3)",
+  "portrait_count": 3,
+  "square_count": 3,
+  "mobile270_count": 3,
+  "mobile360_count": 3,
+  "findings": [
+    "No AI labels, headings or watermarks in raster",
+    "Square uses contain with side padding; key/leash/tape preserved",
+    "No documentary property or park photo claim; caption in every full text",
+    "L02 tape markings are decorative; no measured dimensions inferred"
+  ],
+  "text_safe_area": "72px rule for meaningful inscriptions not applicable: no meaningful raster text",
+  "limits": [
+    "Fileview only, no physical phone or audience test",
+    "No full WCAG audit",
+    "Generated interior perspective does not prove dimensions or real availability"
+  ]
+}

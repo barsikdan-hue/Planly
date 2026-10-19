@@ -1,0 +1,31 @@
+{
+  "model": "L01, conditional one period, no actual city rates",
+  "currency": "RUB",
+  "assumptions": {
+    "owner_pays": true,
+    "cleaning_per_completed_stay": 2000,
+    "stays_b": 2,
+    "extra_guest_charge": 0,
+    "stays_a": 10,
+    "nights": 20,
+    "other_costs": "NOT_CALCULATED",
+    "night_price": 4000
+  },
+  "formulas": {
+    "cleaning_b": "2*2000",
+    "revenue": "20*4000",
+    "difference": "76000-60000",
+    "remainder_b": "80000-4000",
+    "cleaning_a": "10*2000",
+    "remainder_a": "80000-20000"
+  },
+  "results": {
+    "cleaning_b": 4000,
+    "revenue": 80000,
+    "difference": 16000,
+    "remainder_b": 76000,
+    "cleaning_a": 20000,
+    "remainder_a": 60000
+  },
+  "meaning": "Contribution after cleaning only, not net profit, yield or market estimate"
+}

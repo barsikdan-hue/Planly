@@ -1,0 +1,136 @@
+{
+  "ledger_version": 1,
+  "batch_id": "lentaro-m1-pilot-2026-10-19",
+  "editorial_revision": 1,
+  "accepted_at_utc": "2026-10-19T09:38:17.9856446Z",
+  "decision_role": "chief-editor",
+  "decision_actor": "author context /root/m1_editorial consolidating independent reports, not an independent reviewer",
+  "original_reviewed_snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "status": "ACCEPTED_LOCAL",
+  "counts": {
+    "target": 3,
+    "accepted_local": 3,
+    "needs_revision": 0,
+    "blocked_or_unknown": 0,
+    "not_started": 0,
+    "texts": 3,
+    "primary_images": 3,
+    "imported": 0,
+    "published": 0
+  },
+  "exact_scope": "Local educational editorial content and viewed images for L01/L02/L03 r1 in declared neutral-agent Telegram/MAX preparation context; no object offer or promised financial/legal outcome.",
+  "independent_review_reports": [
+    {
+      "path": "reviews/factcheck-r1.json",
+      "sha256": "507b74e1afe0e305d7d0fec40b40417bd8e193b6658022ebca43bad86794d90b"
+    },
+    {
+      "path": "reviews/critic-r1.json",
+      "sha256": "0ccf676fcf4f3ea146aceddd755ba95d395bd140efaf30ee5958ccb2411adffa"
+    },
+    {
+      "path": "reviews/critic-r1.md",
+      "sha256": "2b42405360b79a1082c9d7938e23d73167a4a790cbbd13ae1d2df2dfdb184642"
+    }
+  ],
+  "material_bindings": [
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "verdict": "ACCEPTED_LOCAL",
+      "text_path": "materials/L01-r1.txt",
+      "text_sha256": "5124851952a9bd875523918b8408757268cc568594e21c8e84b0b7cf3559ac75",
+      "utf16_length": 781,
+      "ordered_assets": [
+        {
+          "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-portrait",
+          "path": "assets/final/L01-r1-portrait.jpg",
+          "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+          "mime_type": "image/jpeg",
+          "width": 1080,
+          "height": 1350,
+          "bytes": 501422,
+          "variant": "portrait",
+          "source_path": "assets/originals/L01-r1.png",
+          "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+        }
+      ],
+      "schedule_eligibility": "NOT_EVALUATED"
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "verdict": "ACCEPTED_LOCAL",
+      "text_path": "materials/L02-r1.txt",
+      "text_sha256": "9a191117461c2fe4deb94e8afdc0cfa98e45b321abaaac52c55abfc4e8fee809",
+      "utf16_length": 883,
+      "ordered_assets": [
+        {
+          "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-portrait",
+          "path": "assets/final/L02-r1-portrait.jpg",
+          "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+          "mime_type": "image/jpeg",
+          "width": 1080,
+          "height": 1350,
+          "bytes": 443175,
+          "variant": "portrait",
+          "source_path": "assets/originals/L02-r1.png",
+          "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+        }
+      ],
+      "schedule_eligibility": "NOT_EVALUATED"
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "verdict": "ACCEPTED_LOCAL",
+      "text_path": "materials/L03-r1.txt",
+      "text_sha256": "9345f177eee84e1bb8b4acb8cf996fe64b6d668efb05fdabc08e381ce30f0678",
+      "utf16_length": 855,
+      "ordered_assets": [
+        {
+          "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-portrait",
+          "path": "assets/final/L03-r1-portrait.jpg",
+          "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+          "mime_type": "image/jpeg",
+          "width": 1080,
+          "height": 1350,
+          "bytes": 539212,
+          "variant": "portrait",
+          "source_path": "assets/originals/L03-r1.png",
+          "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+        }
+      ],
+      "schedule_eligibility": "NOT_EVALUATED"
+    }
+  ],
+  "original_full_package_checks": {
+    "path": "qa/package-integrity.json",
+    "sha256": "ba0cebad7bea24605fe12cdc50b6124f32b3ca4d4cde039988ea70c6739efb87",
+    "pass": true,
+    "checks": 76,
+    "scope": "Historical authoring package before README status update; no provider proof"
+  },
+  "reviewed_document_archives": [
+    {
+      "original_path": "README.md",
+      "reviewed_sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "archive_path": "evidence/README-reviewed-r1.md",
+      "reason": "Status-only post-review documentation update; snapshot/text/images unchanged"
+    }
+  ],
+  "rights_scope": "Generated conceptual images with disclosed tool, prompts and no third-party image inputs. General output allocation terms checked; no promise of exclusive copyright, account-specific agreement applicability or non-infringement.",
+  "roles_actually_executed": [
+    "chief-editor, journalist and art-director in author context",
+    "fact-checker in independent /root/m1_editorial_factcheck context",
+    "critic in separate independent review context recorded in report"
+  ],
+  "roles_not_claimed": "No invented execution of remaining newsroom roles; no new training or exams. Publication-specific legal qualification has not been performed.",
+  "remaining_gates": [
+    "No data release authorized by this editorial acceptance. ADMIN import/share into a named environment needs its exact release/data gate.",
+    "Before later use reopen the current Dendrarium rule; changed source/placement/account/purpose/date must trigger appropriate review.",
+    "Actual account/channel permissions, publishing law/advertising qualification and provider rendering/delivery remain NOT_EVALUATED.",
+    "Unknown media upload outcome must be reconciled; no automatic reupload. Library retry retains same fixed key and canonical payload."
+  ],
+  "invalidation": "Any text, caption, alt, image or substantial context change requires a new revision and affected independent review; this ledger does not grant merge/deploy/import/scheduling/publication."
+}

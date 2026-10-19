@@ -1,0 +1,140 @@
+{
+  "package": "lentaro-m1-pilot-2026-10-19",
+  "files": [
+    {
+      "path": "acceptance-ledger.json",
+      "sha256": "52d999cdb5cfe9a45dbc51317d6ba7c2793052b94e7c4a8aa1d39c8a32351ce4",
+      "bytes": 6270
+    },
+    {
+      "path": "api-package.json",
+      "sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4",
+      "bytes": 7769
+    },
+    {
+      "path": "assets-manifest.json",
+      "sha256": "5f030e234d1c8b8629d74be580229304ac3ab7d80aede2ad645905005a4106d0",
+      "bytes": 1628
+    },
+    {
+      "path": "loading-journal-template.json",
+      "sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d",
+      "bytes": 2154
+    },
+    {
+      "path": "LOADING.md",
+      "sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9",
+      "bytes": 5185
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "ab3553e67b03d988ae00572364c81ed23e7df67ab6a376d00d150d609214fd7c",
+      "bytes": 6850
+    },
+    {
+      "path": "README.md",
+      "sha256": "b366bdc2834b7cccbe62fbfda31aecc946eb3384a59cf69af8c567ca49995e9b",
+      "bytes": 3720
+    },
+    {
+      "path": "review-context.portable.json",
+      "sha256": "052ea3c97cc78f261c9278c6da3f2f3529c1ea87aaa2a53bf93eb948ec188ae4",
+      "bytes": 4068
+    },
+    {
+      "path": "snapshot.portable.json",
+      "sha256": "ad6f928e9e1bedabfa92d861c3faf67d6206b3dfc740c093c8f4dbf49a5eef5e",
+      "bytes": 24701
+    },
+    {
+      "path": "source-proof.json",
+      "sha256": "ddaeae268d8ca1cbf921dc1b8ff7964853ad6fd985250d2c354628eb401bbeba",
+      "bytes": 10738
+    },
+    {
+      "path": "verify-bundle.ps1",
+      "sha256": "d000db8cebea2cc0740b7e61ddb16f940716f6307b63160a66e2d5306ee7456e",
+      "bytes": 4879
+    },
+    {
+      "path": "assets/final/L01-r1-portrait.jpg",
+      "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+      "bytes": 501422
+    },
+    {
+      "path": "assets/final/L02-r1-portrait.jpg",
+      "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+      "bytes": 443175
+    },
+    {
+      "path": "assets/final/L03-r1-portrait.jpg",
+      "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+      "bytes": 539212
+    },
+    {
+      "path": "evidence/calculations.json",
+      "sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c",
+      "bytes": 782
+    },
+    {
+      "path": "evidence/claims.json",
+      "sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b",
+      "bytes": 1919
+    },
+    {
+      "path": "evidence/README-reviewed-r1.md",
+      "sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "bytes": 6961
+    },
+    {
+      "path": "evidence/sources.json",
+      "sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0",
+      "bytes": 2377
+    },
+    {
+      "path": "materials/L01-r1.txt",
+      "sha256": "5124851952a9bd875523918b8408757268cc568594e21c8e84b0b7cf3559ac75",
+      "bytes": 1376
+    },
+    {
+      "path": "materials/L02-r1.txt",
+      "sha256": "9a191117461c2fe4deb94e8afdc0cfa98e45b321abaaac52c55abfc4e8fee809",
+      "bytes": 1618
+    },
+    {
+      "path": "materials/L03-r1.txt",
+      "sha256": "9345f177eee84e1bb8b4acb8cf996fe64b6d668efb05fdabc08e381ce30f0678",
+      "bytes": 1445
+    },
+    {
+      "path": "qa/package-integrity.json",
+      "sha256": "ba0cebad7bea24605fe12cdc50b6124f32b3ca4d4cde039988ea70c6739efb87",
+      "bytes": 307
+    },
+    {
+      "path": "qa/technical-self-check.json",
+      "sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8",
+      "bytes": 2560
+    },
+    {
+      "path": "qa/visual-self-review.json",
+      "sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f",
+      "bytes": 914
+    },
+    {
+      "path": "reviews/critic-r1.json",
+      "sha256": "0ccf676fcf4f3ea146aceddd755ba95d395bd140efaf30ee5958ccb2411adffa",
+      "bytes": 22927
+    },
+    {
+      "path": "reviews/critic-r1.md",
+      "sha256": "2b42405360b79a1082c9d7938e23d73167a4a790cbbd13ae1d2df2dfdb184642",
+      "bytes": 18973
+    },
+    {
+      "path": "reviews/factcheck-r1.json",
+      "sha256": "507b74e1afe0e305d7d0fec40b40417bd8e193b6658022ebca43bad86794d90b",
+      "bytes": 29566
+    }
+  ]
+}

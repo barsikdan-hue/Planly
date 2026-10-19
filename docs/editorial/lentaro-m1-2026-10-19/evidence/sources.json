@@ -1,0 +1,55 @@
+[
+  {
+    "source_id": "SNP-RULES",
+    "publisher": "ФГБУ Сочинский национальный парк",
+    "url": "https://npsochi.ru/rules/informatsionnye-materialy-o-poseshchenii-dendrologicheskogo-parka-federalnogo-znacheniya-dendrariy-t/",
+    "document_date": "2025-03-12: protocol 2-Д p8 stated in preamble; actual web publication date NOT_GIVEN",
+    "accessed_on": "2026-10-19",
+    "exact_access_time": "NOT_RECORDED",
+    "actually_opened": true,
+    "locator": "Section 3, clause 3.6; preamble and 1.7 checked",
+    "relevant_content_paraphrase": "Published visitor rules prohibit entering the Dendrarium with animals, including dogs, cats and birds. Site states rules may change.",
+    "applies_to": "Ordinary household pet, Dendrarium only. No interpretation of assistance-animal rights, no claim about all Sochi parks.",
+    "recheck": "Before each intended publication/visit; rules can change under clause 1.7",
+    "dependent_claim_ids": [
+      "L03-C1"
+    ],
+    "dependent_materials": [
+      "L03-r1"
+    ]
+  },
+  {
+    "source_id": "CALC-L01",
+    "publisher": "Local reproducible conditional arithmetic",
+    "url": null,
+    "document_date": "2026-10-19",
+    "accessed_on": "2026-10-19",
+    "locator": "evidence/calculations.json",
+    "actually_opened": true,
+    "applies_to": "Only stated hypothetical inputs; not real rent, occupancy, tax or return forecast",
+    "dependent_claim_ids": [
+      "L01-C1",
+      "L01-C2"
+    ],
+    "dependent_materials": [
+      "L01-r1"
+    ]
+  },
+  {
+    "source_id": "OPENAI-TERMS",
+    "publisher": "OpenAI",
+    "url": "https://openai.com/policies/terms-of-use/",
+    "document_date": "2026-01-01 effective and published",
+    "accessed_on": "2026-10-19",
+    "exact_access_time": "NOT_RECORDED",
+    "actually_opened": true,
+    "locator": "Content: Your content, Ownership of content, Similarity of content; Using our Services",
+    "relevant_content_paraphrase": "Between user and OpenAI, output assigned to user to extent permitted by law. User responsible for rights; output may not be unique. Terms require appropriate evaluation before sharing.",
+    "applies_to": "General service terms only. Actual account agreement not inspected; no assertion of exclusive copyright or blanket legal clearance",
+    "dependent_materials": [
+      "L01-r1",
+      "L02-r1",
+      "L03-r1"
+    ]
+  }
+]

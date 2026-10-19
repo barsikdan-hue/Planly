@@ -1,0 +1,71 @@
+[
+  {
+    "material_id": "L01",
+    "revision": 1,
+    "origin": "Adapted and substantially condensed from issue02 N01 r1 (2026-10-12), with platform claim removed and new visual. Not a newly discovered case.",
+    "origin_file": "artifacts/planly-ai-editorial/v3-issue-02-2026-10-12/FIVE_POSTS.md",
+    "origin_file_sha256": "6c6406b0b0362b61ac8575dceab6c3fa8e52a25ab4694bb8eb8a2055d80140d2",
+    "image_origin": {
+      "tool": "Built-in image_gen.imagegen",
+      "generated_on": "2026-10-19",
+      "original_tool_file": "EXTERNAL_GENERATOR_OUTPUT/exec-fa5aae60-6e4a-4d94-8b97-5a540c986568.png",
+      "portable_original": "assets/originals/L01-r1.png",
+      "original_sha256": "d2382ac999a8c78c7d3738776153c4935d159a78171d4e7a27ba3852999182cb",
+      "original_dimensions": [
+        1122,
+        1402
+      ],
+      "prompt": "Use case: illustration-story. Create ONE finished editorial real-estate illustration, portrait 4:5, for a Russian agent's educational post about how frequent rental guest turnovers affect costs. Premium restrained editorial cut-paper and gouache style, warm ivory, charcoal, muted terracotta and sage. Still life: two small identical rental apartment doorways side by side; one quiet doorway has one key, the other has a discreet stack of multiple keys and folded cleaning cloths. Clear conceptual contrast, not a chart, not literal financial proof. Spacious calm composition centered so a square crop retains all important subjects. No real property, no people, no brands, no logos. Absolutely no text, numbers, letters, AI labels, signatures or watermarks. Do not show money, rates or profitability promises.",
+      "input_images": [],
+      "rights_basis": "OpenAI terms checked 2026-10-19: output assigned between user and OpenAI subject to applicable law; no third-party input images, named artist imitation, identifiable people or brands requested. This is not a guarantee of copyright protection, exclusivity or non-infringement."
+    },
+    "alt": "Два условных интерьера за дверями; один ключ сопоставлен со связкой ключей и бельём.",
+    "image_caption": "Концептуальная иллюстрация создана с ИИ; не фото объекта."
+  },
+  {
+    "material_id": "L02",
+    "revision": 1,
+    "origin": "Original editorial method and text created for this pilot; hypothetical viewing exercise, no personal client or property case.",
+    "origin_file": null,
+    "origin_file_sha256": null,
+    "image_origin": {
+      "tool": "Built-in image_gen.imagegen",
+      "generated_on": "2026-10-19",
+      "original_tool_file": "EXTERNAL_GENERATOR_OUTPUT/exec-694e3c2b-35bc-4d4a-a71d-49e41fc75733.png",
+      "portable_original": "assets/originals/L02-r1.png",
+      "original_sha256": "e7812cbbbb21e82ec0f4d2c1b0c40f67e8671224baf8da773abf70580a3f70e8",
+      "original_dimensions": [
+        1122,
+        1402
+      ],
+      "prompt": "Use case: illustration-story. Create ONE finished editorial illustration for a Russian real-estate post about testing apartment space using your own furniture, portrait 4:5. Premium restrained editorial cut-paper and gouache style, warm ivory, charcoal, muted terracotta and sage. A believable small empty room viewed slightly from above, a single simple bed frame, a wardrobe, and a measuring tape carefully laid on the floor marking the free route between furniture. Show intuitive actual physical fit, no impossible perspective, no blueprints or charts. Entire important scene within central square-safe area. No real property or identifiable location, no people, no brands. Absolutely no text, numbers, letters, AI labels, signatures or watermark. Do not show building demolition or structural changes.",
+      "input_images": [],
+      "rights_basis": "OpenAI terms checked 2026-10-19: output assigned between user and OpenAI subject to applicable law; no third-party input images, named artist imitation, identifiable people or brands requested. This is not a guarantee of copyright protection, exclusivity or non-infringement."
+    },
+    "alt": "Условная спальня с кроватью, шкафом и измерительной лентой в проходе; размеры не утверждаются.",
+    "image_caption": "Концептуальная иллюстрация создана с ИИ; не фото объекта."
+  },
+  {
+    "material_id": "L03",
+    "revision": 1,
+    "origin": "Adapted angle from issue02 N04, completely rewritten compact copy; official rule re-opened on 2026-10-19; new visual, no historical QA reused.",
+    "origin_file": "artifacts/planly-ai-editorial/v3-issue-02-2026-10-12/FIVE_POSTS.md",
+    "origin_file_sha256": "6c6406b0b0362b61ac8575dceab6c3fa8e52a25ab4694bb8eb8a2055d80140d2",
+    "image_origin": {
+      "tool": "Built-in image_gen.imagegen",
+      "generated_on": "2026-10-19",
+      "original_tool_file": "EXTERNAL_GENERATOR_OUTPUT/exec-45adaea7-875f-41b2-b1be-0aa0631c9110.png",
+      "portable_original": "assets/originals/L03-r1.png",
+      "original_sha256": "396a91a80a8bc151c649a3f2b9611d72ee0e44cd6eba6fedd66d9aee29b353b2",
+      "original_dimensions": [
+        1122,
+        1402
+      ],
+      "prompt": "Use case: illustration-story. Create ONE finished editorial conceptual illustration for a Russian real-estate post about checking whether nearby green space works for daily dog walks, portrait 4:5. Premium restrained cut-paper and gouache style, warm ivory, charcoal, muted terracotta and sage matching a refined housing magazine. A modest apartment doorway, a dog leash hanging on a hook, and through an ordinary open doorway a quiet branching sidewalk: one branch approaches an abstract fenced ornamental garden, the other continues along a public street with trees. Suggest the choice without depicting access permissions. No person, no dog inside the ornamental garden. Not an actual place, not a real map, no recognizable Sochi landmarks, not documentary photo. Important subjects centered within square-safe area. Absolutely no text, numbers, letters, road signs, logos, AI labels, signatures or watermark.",
+      "input_images": [],
+      "rights_basis": "OpenAI terms checked 2026-10-19: output assigned between user and OpenAI subject to applicable law; no third-party input images, named artist imitation, identifiable people or brands requested. This is not a guarantee of copyright protection, exclusivity or non-infringement."
+    },
+    "alt": "Поводок у условной двери, дорожка вдоль ограждённого сада; это не карта и не изображение Дендрария.",
+    "image_caption": "Концептуальная иллюстрация создана с ИИ; не фото объекта."
+  }
+]

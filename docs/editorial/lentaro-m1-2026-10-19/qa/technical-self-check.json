@@ -1,0 +1,134 @@
+{
+  "scope": "Local file existence, exact dimensions, bytes, UTF16 length, digest; no independent content QA and no provider proof",
+  "checks": [
+    {
+      "name": "L01-text-length",
+      "pass": true,
+      "actual": 781
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L01-r1-portrait",
+      "pass": true,
+      "actual": [
+        1080,
+        1350,
+        501422
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L01-r1-square",
+      "pass": true,
+      "actual": [
+        1080,
+        1080,
+        346968
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L01-r1-mobile270",
+      "pass": true,
+      "actual": [
+        270,
+        338,
+        36855
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L01-r1-mobile360",
+      "pass": true,
+      "actual": [
+        360,
+        450,
+        62016
+      ]
+    },
+    {
+      "name": "L02-text-length",
+      "pass": true,
+      "actual": 883
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L02-r1-portrait",
+      "pass": true,
+      "actual": [
+        1080,
+        1350,
+        443175
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L02-r1-square",
+      "pass": true,
+      "actual": [
+        1080,
+        1080,
+        309943
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L02-r1-mobile270",
+      "pass": true,
+      "actual": [
+        270,
+        338,
+        34580
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L02-r1-mobile360",
+      "pass": true,
+      "actual": [
+        360,
+        450,
+        59088
+      ]
+    },
+    {
+      "name": "L03-text-length",
+      "pass": true,
+      "actual": 855
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L03-r1-portrait",
+      "pass": true,
+      "actual": [
+        1080,
+        1350,
+        539212
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L03-r1-square",
+      "pass": true,
+      "actual": [
+        1080,
+        1080,
+        383888
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L03-r1-mobile270",
+      "pass": true,
+      "actual": [
+        270,
+        338,
+        46249
+      ]
+    },
+    {
+      "name": "lentaro-m1-pilot-2026-10-19-L03-r1-mobile360",
+      "pass": true,
+      "actual": [
+        360,
+        450,
+        77629
+      ]
+    }
+  ],
+  "pass": true,
+  "text_count": 3,
+  "primary_image_count": 3,
+  "derivative_image_count": 12,
+  "original_image_count": 3,
+  "snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56"
+}

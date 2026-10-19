@@ -1,0 +1,111 @@
+{
+  "package_version": 1,
+  "batch_id": "lentaro-m1-pilot-2026-10-19",
+  "source_head": "6cf369bff8b284f8b3c166ce2dfa531e9f449ea0",
+  "execution": "NOT_RUN",
+  "placeholder_policy": "Replace $mediaId:Lxx with confirmed response id; replace $libraryItemId only with confirmed create response id. Never send unresolved placeholders.",
+  "items": [
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "creation_key": "898fe845-faa9-45b0-b69b-6dc58c91162c",
+      "media_upload": {
+        "method": "POST",
+        "path": "/api/media",
+        "form_field": "file",
+        "local_path": "assets/final/L01-r1-portrait.jpg",
+        "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+        "expected_response_field": "id"
+      },
+      "library_create": {
+        "method": "POST",
+        "path": "/api/library-items",
+        "headers": {
+          "Idempotency-Key": "898fe845-faa9-45b0-b69b-6dc58c91162c"
+        },
+        "body": {
+          "text": "20 ночей — два разных остатка\n\nВ прогнозе посуточной аренды попросите рядом с занятыми ночами показать число заездов.\n\nУсловная модель: ночь — 4 000 ₽, уборка после каждого заезда — 2 000 ₽. Её оплачивает владелец, отдельно с гостей деньги не берёт. Десять броней по две ночи и две брони по десять дают одинаковую выручку — 80 000 ₽.\n\nНо десять уборок стоят 20 000 ₽, а две — 4 000 ₽. После только этого расхода остаются 60 000 и 76 000 ₽. Разница — 16 000 ₽.\n\nЭто не чистая прибыль и не цены рынка: комиссии, налоги, коммунальные платежи и другие расходы здесь не посчитаны. Длинная бронь тоже не гарантирована и может потребовать скидки.\n\nСравнивайте не только заполненный календарь, но и расходы на каждую смену гостей.\n\nКонцептуальная иллюстрация создана с ИИ; не фото объекта.",
+          "mediaIds": [
+            "$mediaId:L01"
+          ],
+          "title": "20 ночей — два разных остатка"
+        }
+      },
+      "admin_share": {
+        "method": "POST",
+        "path": "/api/admin/shared-library/$libraryItemId",
+        "body": {
+          "shared": true
+        }
+      }
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "creation_key": "3a26e6f9-8766-483d-9e7e-7b7ccb1af355",
+      "media_upload": {
+        "method": "POST",
+        "path": "/api/media",
+        "form_field": "file",
+        "local_path": "assets/final/L02-r1-portrait.jpg",
+        "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+        "expected_response_field": "id"
+      },
+      "library_create": {
+        "method": "POST",
+        "path": "/api/library-items",
+        "headers": {
+          "Idempotency-Key": "3a26e6f9-8766-483d-9e7e-7b7ccb1af355"
+        },
+        "body": {
+          "text": "Поместилась кровать. А вы?\n\nНа плане спальни легко разместить прямоугольник с подписью «кровать». Проверьте другой сценарий: вы проснулись, открыли шкаф и прошли к окну.\n\nВозьмите на показ размеры своей мебели. Измерьте комнату, дверные проёмы и выступы. С разрешения собственника отметьте на полу габариты кровати и шкафа бумажными листами или лентой, которая не повредит покрытие.\n\nЗатем проверьте открывание дверей и ящиков. Где вы стоите, когда достаёте одежду? Остаётся ли удобный лично вам проход? Не подставляйте универсальную «норму комфорта» вместо своего сценария.\n\nЭтот тест помогает проверить расстановку. Он не подтверждает возможность перепланировки, конструктивную безопасность или точность площади в документах.\n\nНа следующий показ возьмите не только вопросы, но и размеры трёх самых важных предметов мебели.\n\nКонцептуальная иллюстрация создана с ИИ; не фото объекта.",
+          "mediaIds": [
+            "$mediaId:L02"
+          ],
+          "title": "Поместилась кровать. А вы?"
+        }
+      },
+      "admin_share": {
+        "method": "POST",
+        "path": "/api/admin/shared-library/$libraryItemId",
+        "body": {
+          "shared": true
+        }
+      }
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "creation_key": "ce18c85d-93fa-4d58-a250-25ab73b38bca",
+      "media_upload": {
+        "method": "POST",
+        "path": "/api/media",
+        "form_field": "file",
+        "local_path": "assets/final/L03-r1-portrait.jpg",
+        "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+        "expected_response_field": "id"
+      },
+      "library_create": {
+        "method": "POST",
+        "path": "/api/library-items",
+        "headers": {
+          "Idempotency-Key": "ce18c85d-93fa-4d58-a250-25ab73b38bca"
+        },
+        "body": {
+          "text": "Парк рядом. А с собакой куда?\n\nПри выборе квартиры в Сочи проверьте не только зелёное пятно на карте, но и свой ежедневный маршрут с питомцем.\n\nНапример, в опубликованных правилах «Дендрария» пункт 3.6 запрещает посещение с животными. Этот пример — об обычном домашнем питомце; специальные права сопровождающих животных здесь не разбираются. Правила проверены 19.10.2026; перед посещением откройте их снова.\n\nДо решения о квартире пройдите от подъезда предполагаемый маршрут с собакой: где разрешён проход, есть ли переходы и удобно ли вам возвращаться вечером. Близость парка сама по себе этого не подтверждает. Маршрут конкретного дома здесь не обследован.\n\nИсточник: https://npsochi.ru/rules/informatsionnye-materialy-o-poseshchenii-dendrologicheskogo-parka-federalnogo-znacheniya-dendrariy-t/\n\nКонцептуальная иллюстрация создана с ИИ; не фото объекта.",
+          "mediaIds": [
+            "$mediaId:L03"
+          ],
+          "title": "Парк рядом. А с собакой куда?"
+        }
+      },
+      "admin_share": {
+        "method": "POST",
+        "path": "/api/admin/shared-library/$libraryItemId",
+        "body": {
+          "shared": true
+        }
+      }
+    }
+  ]
+}

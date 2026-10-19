@@ -1,0 +1,13 @@
+{
+  "pass": true,
+  "checks": 112,
+  "failures": [],
+  "scope": "Compact local bundle integrity and exact review bindings only",
+  "accepted_local": 3,
+  "primary_images": 3,
+  "texts": 3,
+  "original_reviewed_snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "portable_snapshot_sha256": "ad6f928e9e1bedabfa92d861c3faf67d6206b3dfc740c093c8f4dbf49a5eef5e",
+  "schedule_eligibility": "NOT_EVALUATED",
+  "api_writes": "NOT_RUN"
+}
