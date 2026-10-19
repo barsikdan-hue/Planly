@@ -1,0 +1,2 @@
+# Frozen editorial evidence and payloads must preserve exact bytes on Windows/Linux.
+docs/editorial/lentaro-m1-2026-10-19/** -text
