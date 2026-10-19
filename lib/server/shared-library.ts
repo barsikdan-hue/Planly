@@ -10,7 +10,7 @@ import { withAdmin, type AuthTransaction } from './auth/admin.ts';
 import { getObjectStorage, readMediaObjectBytes } from './storage.ts';
 import { apiError, json } from './http.ts';
 
-class SharedLibraryError extends Error {
+export class SharedLibraryError extends Error {
   readonly status: number;
   readonly code: string;
   constructor(status: number, code: string, message: string) {super(message);this.status=status;this.code=code;}
@@ -23,7 +23,7 @@ export function sharedLibraryApiError(error: unknown) {
 
 // User lifecycle first. Never lock the source administrator's user row: native
 // source deletion takes that lock before the source and must remain acyclic.
-async function withActor<T>(request: Request, work: (tx: AuthTransaction, userId: string)=>Promise<T>): Promise<T> {
+export async function withSharedLibraryActor<T>(request: Request, work: (tx: AuthTransaction, userId: string)=>Promise<T>): Promise<T> {
   const actor = await requireApiOwner(request);
   return getDb().transaction(async tx=>{
     const [user] = await tx.select().from(users).where(eq(users.id,actor.id)).for('update');
@@ -35,6 +35,19 @@ async function withActor<T>(request: Request, work: (tx: AuthTransaction, userId
     if(!session) throw new UnauthorizedError();
     return work(tx,user.id);
   });
+}
+const withActor=withSharedLibraryActor;
+
+// The shared feed calls this after storage/row waits, then retains the session
+// lock through COMMIT so logout cannot slip between the last check and commit.
+export async function recheckSharedLibraryActor(tx:AuthTransaction,request:Request,userId:string,lock=true):Promise<void>{
+  const [user]=await tx.select().from(users).where(eq(users.id,userId));
+  if(!user?.authInitialized || user.accessState!=='ACTIVE')throw new UnauthorizedError();
+  const query=tx.select().from(sessions).where(and(eq(sessions.userId,userId),
+    eq(sessions.tokenHash,sessionTokenHash(requestCookie(request,SESSION_COOKIE_NAME)??'')),
+    eq(sessions.sessionVersion,user.sessionVersion)));
+  const [session]=await (lock?query.for('share'):query);
+  if(!session || session.expiresAt.getTime()<=Date.now())throw new UnauthorizedError();
 }
 type Source = typeof libraryItems.$inferSelect;
 type Asset = typeof mediaAssets.$inferSelect;
@@ -55,6 +68,45 @@ async function loadMedia(tx: AuthTransaction, sources: Source[]): Promise<Map<st
     ordered.push(asset);
   }
   return bySource;
+}
+
+export async function lockSharedLibrarySource(tx:AuthTransaction,shareId:string):Promise<Source>{
+  const [initial]=await tx.select().from(sharedLibraryItems).where(eq(sharedLibraryItems.id,shareId));
+  if(!initial)unavailable();
+  const [source]=await lockSources(tx,[initial.sourceId]);
+  const [share]=await tx.select().from(sharedLibraryItems).where(eq(sharedLibraryItems.id,shareId));
+  if(!share || !source || source.status!=='READY' || share.sourceId!==source.id)unavailable();
+  return source;
+}
+
+// Internal transaction primitive shared by the original public copy endpoint
+// and direct feed consent. Caller owns transaction, receipt and safe cleanup.
+export async function copySharedLibrarySources(tx:AuthTransaction,userId:string,sources:Source[],destinations:string[],startStorageDeadline:()=>AbortSignal):Promise<LibraryItemDto[]>{
+  const media=await loadMedia(tx,sources),items:LibraryItemDto[]=[];
+  const attachments=[...media.values()].flat();
+  if(attachments.length>20 || attachments.reduce((sum,asset)=>sum+asset.byteSize,0)>100*1024*1024)
+    throw new SharedLibraryError(422,'SHARED_COPY_LIMIT_EXCEEDED','Copy at most 20 media files and 100 MiB per operation');
+  const storageDeadline=startStorageDeadline();
+  for(const source of sources){
+    const id=randomUUID(),now=new Date(),mediaIds:string[]=[];
+    await tx.insert(libraryItems).values({id,userId,title:source.title,bodyText:source.bodyText,status:'READY',createdAt:now,updatedAt:now});
+    for(const asset of media.get(source.id)!){
+      storageDeadline.throwIfAborted();
+      const bytes=await readMediaObjectBytes(asset.storageKey,asset.byteSize,storageDeadline);
+      if(createHash('sha256').update(bytes).digest('hex')!==asset.checksum)throw new Error('Media checksum mismatch');
+      const mediaId=randomUUID(),ownerPrefix=createHash('sha256').update(userId).digest('hex').slice(0,16);
+      const storageKey=`users/${ownerPrefix}/${randomUUID()}`;
+      storageDeadline.throwIfAborted();
+      destinations.push(storageKey);
+      await getObjectStorage().put(storageKey,bytes,asset.mimeType,storageDeadline);
+      storageDeadline.throwIfAborted();
+      await tx.insert(mediaAssets).values({...asset,id:mediaId,userId,storageKey,createdAt:now,updatedAt:now});
+      await tx.insert(libraryItemMedia).values({libraryItemId:id,mediaId,position:mediaIds.length});mediaIds.push(mediaId);
+    }
+    items.push({id,title:source.title,text:source.bodyText,status:'READY',mediaIds,sourcePostId:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
+  }
+  storageDeadline.throwIfAborted();
+  return items;
 }
 
 export async function listSharedLibrary(request: Request): Promise<SharedLibraryItemDto[]> {
@@ -109,34 +161,7 @@ export async function copySharedLibrary(request: Request, raw: unknown, operatio
       const shares=await tx.select().from(sharedLibraryItems).where(inArray(sharedLibraryItems.id,input.ids));
       if(shares.length!==input.ids.length || sources.length!==input.ids.length || sources.some(s=>s.status!=='READY'))unavailable();
       const sourceById=new Map(sources.map(s=>[s.id,s])),shareById=new Map(shares.map(s=>[s.id,s]));
-      const media=await loadMedia(tx,sources),items:LibraryItemDto[]=[];
-      // Count attachment occurrences, including assets reused by several sources.
-      // Receipt replay stays first; admission is atomic and precedes any storage I/O.
-      const attachments=[...media.values()].flat();
-      if(attachments.length>20 || attachments.reduce((sum,asset)=>sum+asset.byteSize,0)>100*1024*1024)
-        throw new SharedLibraryError(422,'SHARED_COPY_LIMIT_EXCEEDED','Copy at most 20 media files and 100 MiB per operation');
-      storageDeadline=AbortSignal.timeout(60_000);
-      for(const selectedId of input.ids){
-        const source=sourceById.get(shareById.get(selectedId)!.sourceId)!;
-        const id=randomUUID(),now=new Date(),mediaIds:string[]=[];
-        await tx.insert(libraryItems).values({id,userId,title:source.title,bodyText:source.bodyText,status:'READY',createdAt:now,updatedAt:now});
-        for(const asset of media.get(source.id)!){
-          storageDeadline.throwIfAborted();
-          const bytes=await readMediaObjectBytes(asset.storageKey,asset.byteSize,storageDeadline);
-          if(createHash('sha256').update(bytes).digest('hex')!==asset.checksum)throw new Error('Media checksum mismatch');
-          const mediaId=randomUUID(),ownerPrefix=createHash('sha256').update(userId).digest('hex').slice(0,16);
-          const storageKey=`users/${ownerPrefix}/${randomUUID()}`;
-          // Register BEFORE PUT: an interrupted response can follow a successful write.
-          storageDeadline.throwIfAborted();
-          destinations.push(storageKey);
-          await getObjectStorage().put(storageKey,bytes,asset.mimeType,storageDeadline);
-          storageDeadline.throwIfAborted();
-          await tx.insert(mediaAssets).values({...asset,id:mediaId,userId,storageKey,createdAt:now,updatedAt:now});
-          await tx.insert(libraryItemMedia).values({libraryItemId:id,mediaId,position:mediaIds.length});mediaIds.push(mediaId);
-        }
-        items.push({id,title:source.title,text:source.bodyText,status:'READY',mediaIds,sourcePostId:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
-      }
-      storageDeadline.throwIfAborted();
+      const items=await copySharedLibrarySources(tx,userId,input.ids.map(id=>sourceById.get(shareById.get(id)!.sourceId)!),destinations,()=>storageDeadline=AbortSignal.timeout(60_000));
       await tx.insert(sharedLibraryCopyReceipts).values({userId,operationId:key,inputHash,items});
       preparedItems=items;
       return items;

@@ -415,3 +415,22 @@ export const swipeCurrentFeedback = pgTable('swipe_current_feedback', {
   sourceId: text('source_id').notNull(),
   operationId: uuid('operation_id').notNull(),
 },table=>[primaryKey({columns:[table.userId,table.sourceId]})]);
+
+// Source and result IDs intentionally have no cascading foreign keys: deletion
+// remains a terminal historical result, never permission to create it again.
+export const sharedFeedDecisions=pgTable('shared_feed_decisions',{
+ userId:text('user_id').notNull().references(()=>users.id,{onDelete:'cascade'}),
+ operationId:uuid('operation_id').notNull(),
+ inputHash:text('input_hash').notNull(),
+ shareId:uuid('share_id').notNull(),
+ sourceRevision:timestamp('source_revision',{withTimezone:true,mode:'date'}).notNull(),
+ decision:text('decision').$type<'LIKE'|'DISLIKE'>().notNull(),
+ personalItemId:text('personal_item_id'),
+ postId:text('post_id'),
+ scheduledAt:timestamp('scheduled_at',{withTimezone:true,mode:'date'}),
+ createdAt:timestamp('created_at',{withTimezone:true,mode:'date'}).notNull().defaultNow(),
+},table=>[
+ primaryKey({columns:[table.userId,table.operationId]}),
+ uniqueIndex('shared_feed_owner_source_revision_uq').on(table.userId,table.shareId,table.sourceRevision),
+ check('shared_feed_result_shape',sql`(${table.decision}='DISLIKE' AND ${table.personalItemId} IS NULL AND ${table.postId} IS NULL AND ${table.scheduledAt} IS NULL) OR (${table.decision}='LIKE' AND ${table.personalItemId} IS NOT NULL AND ${table.postId} IS NOT NULL AND ${table.scheduledAt} IS NOT NULL)`),
+]);
