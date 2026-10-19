@@ -8,7 +8,16 @@ import {posts,publications,libraryBatchConsentOperations} from '../../db/schema.
 import type {LibraryBatchCommitResult} from '../../lib/contracts/library-batch.ts';
 
 type Runtime=Awaited<ReturnType<typeof startLibraryBatchRuntime>>;
-const test=base.extend<{runtime:Runtime}>({runtime:async({},provide)=>{const f=await startLibraryBatchRuntime();try{await provide(f);}finally{await f.cleanup();}}});
+const test=base.extend<{runtime:Runtime}>({runtime:async({browser},provide)=>{
+ const context=browser.contexts()[0],started=performance.now();
+ let contextClosed=context?!browser.contexts().includes(context):null;context?.on('close',()=>{contextClosed=true;});
+ const cleanupPhase=async<T,>(label:string,work:()=>Promise<T>):Promise<T>=>{
+  const state=()=>({contextClosed,pageCount:context?.pages().length??0});
+  console.log(JSON.stringify({diagnostic:'library-batch-cleanup',label,event:'BEGIN',elapsedMs:Math.round(performance.now()-started),...state()}));
+  let returned=false;try{const result=await work();returned=true;return result;}finally{console.log(JSON.stringify({diagnostic:'library-batch-cleanup',label,event:'END',elapsedMs:Math.round(performance.now()-started),returned,...state()}));}
+ };
+ const f=await startLibraryBatchRuntime({cleanupPhase});try{await provide(f);}finally{await f.cleanup();}
+}});
 // Automatic auth/signed-URL artifacts are forbidden; explicit images follow login.
 test.use({trace:'off',screenshot:'off',video:'off'});
 async function content(page:Page){await expect(page.locator('.profile-button')).toContainText('Shared fixture 1');await page.evaluate(()=>{window.location.hash='content';});await expect(page.getByRole('heading',{name:'Библиотека',exact:true})).toBeVisible();}
