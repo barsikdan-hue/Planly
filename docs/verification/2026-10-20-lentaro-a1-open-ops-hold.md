@@ -30,7 +30,7 @@ Independent actual-result review `e887cc4a41661aebdefe40dc2828b2a1a202c4bdb77295
 Local pre-dispatch note: an operator-only package-table parser initially rejected CRLF before any grant/latch/SSH was created. Only parser newline handling was corrected; approved bytes/pins stayed unchanged. The actual run then used the exact frozen payload above. That local parsing failure does not explain server ENOENT.
 
 
-## Minimum next-evidence package — local readiness only
+## Minimum next-evidence package — historical pre-approval readiness
 
 One passive OPS-chain observation is now concretely prepared, with no new actual grant/latch/streams/receipt. Fixed four aliases ROOT/OPT/STAGING/OPS; held read-only/no-follow/no-atime directory opens and metadata only, no enumeration/content/proc/Docker/server write/repair/restore. The first missing component is returned with exact alias/index/errno, and no deeper read. Unsafe/symlink/access/drift/close error stops with preserved primary evidence. This addresses the proven diagnostic coverage gap without claiming a filesystem cause/fix or retrying restore.
 
@@ -41,3 +41,11 @@ One passive OPS-chain observation is now concretely prepared, with no new actual
 - Independent final review `A1-ops-path-read-review.md`: `76bc6a407c2d43f309e26a8debc15517fc7cb079e2759e6f69c696c4c19a757a`, LOCAL_PASSIVE_OPS_PATH_READ_READINESS_PASS/zero substantive findings.
 
 13/13 author focused mocks under optimize1; coordinator13/13 (0.076s), independent13/13 (0.097s),3 compiles each. Pins/closed projection/first-missing each ancestor/unsafe symlink/drift/close-error preservation/invalid or missing grant zero dispatch/optimize1 no-source-exec/one fake-child timeout no replay are verified locally. No full M1 tests, real new grant or server action. Runtime/recovery remain UNVERIFIED. ONE new direct passive-only permission is required because5363's one SSH already completed; do not reuse its authority or interpret this readiness as authorization.
+
+## Subsequent correction — local causal proof and current boundary
+
+The preceding readiness/unknown statements are dated history. Owner subsequently approved passivef9; run0b97 observed all four safe existing directories in ONE SSH/exit0, with no writes/body/proc/Docker/restore; that grant is consumed. This observation alone did not explain5363.
+
+The subsequent byte-exact reconstruction of actual5363 payload SHA863057ea proves its cause: frozen6787 `build_payload` uses `str(helper.OPS)` on WindowsPath, generating backslashes; Linux open_ops splits it as ONE malformed basename under root, where payload31 returns ENOENT2. A mock using the actual frozen function and header reproduced that flow. Earlier comparison of source literals missed runtime serialization. This **supersedes ROOT_CAUSE_NOT_PROVEN for5363 only**; older49 subprocess/recovery cause remains unproven and recoveryUNVERIFIED.
+
+New transport v2 uses `.as_posix()` for the identical approved Linux target and retains safe path context/primary exception through close. Frozen old transport/helper/core/history remain unchanged. Exact causal proofe2666cc0, proposal75e08d7f, transport29da3ed6 and independent review7ccacf0a (14/14 focused delta plus independent14/14/four compiles) are documented in [actual observation and continuation evidence](2026-10-20-lentaro-a1-ops-path-observation.md). ONE new cohesive direct owner decision is required; new actual grant/latch/outputs are absent. No repair/extra server action occurred. M1b7 retains its source/CI evidence and is NOT_DEPLOYED.
