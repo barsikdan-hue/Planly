@@ -189,3 +189,7 @@ The envelope binds future recovery PASS/release grant/source pins/image/private 
 The next owner decision remains ONE separately reviewed A1 diagnostic continuation, not release. Only after complete restore PASS can the single release proposal bind the produced evidence and named private USER/destination inputs plus all nine stages above. Never treat either local component or green source CI as a deployed working site.
 
 Independent controlled-envelope review found one final-boundary expiry race during async verification. Causal delayed-verification RED reached tick after expiry; minimal post-await grant/exclusion validation now stops with GRANT_WINDOW/zero ticks. Final17/17 focused and syntax checks PASS. Previous frozen component is preserved; no runtime/product change.
+
+## Recovery gate update — 20 October 2026
+
+Owner-approved diagnostic continuationde500/run44233725 used exactly one SSH and stopped PREARCHIVE_HOLD at retained-storecontainers UID/GID/mode/emptiness composite199. No archive/originalrestore/daemon occurred, no server action afterHOLD, and its permission is consumed. Current restoration remains UNVERIFIED; the next proposed observation is passive directory metadata only, not release. See [actual result](2026-10-20-lentaro-a1-prearchive-hold.md). Productb7 and existing CI/Self-host/local release component reviews remain unchanged; no full M1 rerun, secret/provider operation, merge or deploy.
