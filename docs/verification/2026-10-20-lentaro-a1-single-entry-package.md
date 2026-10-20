@@ -1,6 +1,6 @@
 # A1 — cohesive exact-entry reconciliation and diagnostic recovery candidate
 
-2026-10-20. LOCAL_EXECUTABLE_FROZEN / NO_SERVER_AUTHORITY. This preparation follows the completed passive metadata read; it repeats neither that read nor the original audit/full M1 tests. Actual recovery remains UNVERIFIED; M1 b7c331e remains NOT_DEPLOYED.
+2026-10-20. READINESS SNAPSHOT, subsequently APPROVED_AND_CONSUMED / OPEN_OPS_HOLD / NO_CURRENT_SERVER_AUTHORITY. [Actual run5363](2026-10-20-lentaro-a1-open-ops-hold.md) stopped before helper entry; the readiness evidence below is historical local scope, not successful runtime. This preparation follows the completed passive metadata read; it repeats neither that read nor the original audit/full M1 tests. Actual recovery remains UNVERIFIED; M1 b7c331e remains NOT_DEPLOYED.
 
 ## Basis and scope
 

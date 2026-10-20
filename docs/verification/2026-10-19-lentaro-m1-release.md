@@ -196,3 +196,6 @@ Owner-approved diagnostic continuationde500/run44233725 used exactly one SSH and
 
 
 Recovery gate update20Oct: passive348e observed one retained-store entry, ownership/current stateUNKNOWN. One consolidated local reconciliation/old83a diagnostic-restore package3ef1b768 is independently readiness-reviewed528ea09c (33 focused checks); no server grant/attempt yet. [Exact evidence](2026-10-20-lentaro-a1-single-entry-package.md). It explicitly includes unchanged original read-only working baseline checks, conditional stopped-owned clone cleanup and same-session diagnostics. M1 release is still blocked by complete recovery acceptance, with actual delivery image/runtime/user acceptance unverified. Reuse this existing release scope and productb7 results; do not start a new audit/full M1 test cycle.
+
+
+Latest recovery gate20Oct: owner approved cohesive3ef; actual run5363 stopped OPEN_OPS with FileNotFoundError/errno2 at payload31 before helper installation/entry or any restore. Its single SSH permission is consumed; no further server action. [Exact evidence/limits](2026-10-20-lentaro-a1-open-ops-hold.md). ExactmissingOPS ancestor remainsUNKNOWN, so local minimal passive path-metadata preparation precedes any repair/restore proposal. This supersedes earlier next-action wording above; full recovery and the later unified M1 release gate remain required.
