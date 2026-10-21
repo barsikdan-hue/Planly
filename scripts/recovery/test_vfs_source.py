@@ -95,6 +95,24 @@ class LinuxSource(unittest.TestCase):
                 with self.assertRaises(self.m.Incomplete):
                     source.recheck()
 
+    def test_repeated_inventory_does_not_share_a_consumed_directory_offset(self):
+        with self.fixture() as (root, fd, identity, config, leaf, layer):
+            with self.m.source_root(fd, identity, config, lambda: None) as source:
+                first = source.workload(time.monotonic() + 2, 10)
+                second = source.workload(time.monotonic() + 2, 10)
+                self.assertEqual(first['entries'], 2)
+                self.assertEqual(second['entries'], 2)
+                self.assertEqual(second['logicalRegularBytes'], 12)
+
+    def test_a_closed_source_cannot_adopt_reused_fd_numbers_from_a_new_context(self):
+        with self.fixture() as (root, fd, identity, config, leaf, layer):
+            with self.m.source_root(fd, identity, config, lambda: None) as old:
+                old.recheck()
+            with self.m.source_root(fd, identity, config, lambda: None) as current:
+                current.recheck()
+                with self.assertRaises(self.m.Incomplete):
+                    old.recheck()
+
     def test_corrupt_config_parent_or_escaping_cache_identity_is_refused(self):
         for problem in ('config', 'parent', 'cache'):
             with self.subTest(problem=problem), self.fixture() as (root, fd, identity, config, leaf, layer):
