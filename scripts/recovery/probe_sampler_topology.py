@@ -69,11 +69,15 @@ class SamplerTopology(unittest.TestCase):
 class ActualWorker(unittest.TestCase):
     def test_probe_rejects_unsupported_host_architecture_before_descriptor_duplication(self):
         import time
+        import resource_observation as resources
         import test_owned_capability
         from owned_worker import OwnedWorker
         module = test_owned_capability.load()
         sources = {name: Path(__file__).with_name(name + '.py').read_bytes() for name in ('copy_observation', 'fd_pin')}
-        code = module.build_probe(sources, os.getpid(), 1, 4, (1, 2),
+        fd = os.open('/proc/self/exe', os.O_RDONLY | os.O_CLOEXEC)
+        identity = os.fstat(fd)
+        start = resources.parse_stat(Path('/proc/self/stat').read_text())['start']
+        code = module.build_probe(sources, os.getpid(), start, fd, (identity.st_dev, identity.st_ino),
                                   '/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d')
         # Only this disposable child gets an injected uname boundary fixture.
         code = code.replace('pidfd=duplicate=None', "os.uname=lambda:types.SimpleNamespace(machine='aarch64')\npidfd=duplicate=None", 1)
@@ -85,6 +89,7 @@ class ActualWorker(unittest.TestCase):
             self.assertEqual(worker.close(), 'PASS')
         finally:
             worker.close()
+            os.close(fd)
 
     def test_adapter_probe_failure_prevents_original_perform_and_keeps_received_output(self):
         import test_recovery_adapter
