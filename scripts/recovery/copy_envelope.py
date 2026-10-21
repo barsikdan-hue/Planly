@@ -15,10 +15,10 @@ from node_observation import NodeObservation
 from resource_observation import IO_KEYS, BLOCK_KEYS
 
 ENTRY_BOUNDS = dict(READY=4096, SAMPLES=32768, OBSERVER_STDERR=65536, PROBE_STDOUT=4096, PROBE_STDERR=65536)
-BINDING_KEYS = {'scope', 'runId', 'authorizationId', 'grantSha256', 'copyCapsSha256', 'diagnosticSourcesSha256'}
+BINDING_KEYS = {'scope', 'runId', 'authorizationId', 'grantSha256', 'copyCapsSha256', 'diagnosticSourcesSha256', 'priorEvidenceSha256', 'priorEvidenceBytes'}
 COPY_KEYS = {'status', 'rootCause', 'probeStatus', 'probeCleanup', 'observerCleanup', 'commandCleanup', 'profileStatus',
              'requestStart', 'requestDeadline', 'commandObservedEnd', 'windowExpired', 'missingSlots', 'lateSlots',
-             'afterCommandSlots', 'holdRequired', 'daemonPid', 'daemonStart', 'failures', 'failuresTruncated'}
+             'afterCommandSlots', 'holdRequired', 'daemonPid', 'daemonStart', 'failures', 'failuresTruncated', 'priorPreservation'}
 
 
 def need(value, code):
@@ -67,7 +67,8 @@ def binding_check(value):
     need(all(type(value[key]) is str and re.fullmatch(uuid, value[key]) for key in ('runId', 'authorizationId'))
          and value['runId'] != value['authorizationId'], 'ENVELOPE_RUN_BINDING')
     need(all(type(value[key]) is str and re.fullmatch('[a-f0-9]{64}', value[key])
-             for key in ('grantSha256', 'copyCapsSha256', 'diagnosticSourcesSha256')), 'ENVELOPE_SOURCE_PINS')
+             for key in ('grantSha256', 'copyCapsSha256', 'diagnosticSourcesSha256', 'priorEvidenceSha256')), 'ENVELOPE_SOURCE_PINS')
+    need(type(value['priorEvidenceBytes']) is int and 0 < value['priorEvidenceBytes'] <= 131072, 'PRIOR_EVIDENCE_BOUND')
 
 
 def pack(legacy, receipt, entries, binding):
@@ -201,13 +202,29 @@ def _receipt(value, entries, binding, legacy):
     need(type(legacy) is dict and type(legacy.get('safeObservation')) is dict, 'LEGACY_REPLY_REQUIRED')
     result = legacy['safeObservation']
     need(result.get('status') in {'HOLD', 'A1_ISOLATED_RESTORE_PASS'}, 'LEGACY_TERMINAL_STATE')
+    prior = value['priorPreservation']
+    need(type(prior) is dict and set(prior) == {'status', 'attempts', 'passes', 'verifiedBytes', 'requestedBytes', 'manifestSha256'}
+         and prior['status'] in {'NOT_REACHED', 'PARTIAL', 'VERIFIED', 'INCOMPLETE'}
+         and all(uint(prior[key]) for key in ('attempts', 'passes', 'verifiedBytes', 'requestedBytes'))
+         and prior['manifestSha256'] == binding['priorEvidenceSha256'], 'CLOSED_PRIOR_PRESERVATION')
+    total = binding['priorEvidenceBytes']
+    need(prior['passes'] <= prior['attempts'] <= 2 and prior['passes'] * total <= prior['verifiedBytes'] <= prior['attempts'] * total
+         and prior['verifiedBytes'] <= prior['requestedBytes'] <= 262144, 'PRIOR_PRESERVATION_BOUND')
+    if prior['status'] == 'NOT_REACHED':
+        need(prior['attempts'] == prior['passes'] == prior['verifiedBytes'] == prior['requestedBytes'] == 0, 'PRIOR_NOT_REACHED')
+    if prior['status'] == 'PARTIAL':
+        need(prior['attempts'] == prior['passes'] == 1 and prior['verifiedBytes'] == total, 'PRIOR_PARTIAL_BINDING')
+    if prior['status'] == 'VERIFIED':
+        need(prior['attempts'] == prior['passes'] == 2 and prior['verifiedBytes'] == 2 * total, 'PRIOR_VERIFIED_BINDING')
+    if prior['status'] == 'INCOMPLETE':
+        need(value['holdRequired'] and result['status'] == 'HOLD', 'PRIOR_PRESERVATION_HOLD')
     unknown = any(value[key] == 'UNKNOWN' for key in ('probeCleanup', 'observerCleanup', 'commandCleanup'))
     need(not unknown or (value['holdRequired'] and result.get('status') == 'HOLD' and result.get('cleanup') in {'UNKNOWN', 'HOLD'}), 'OBSERVER_UNKNOWN_CLEANUP_BINDING')
     need(not value['holdRequired'] or result['status'] == 'HOLD', 'COPY_HOLD_BINDING')
     if result['status'] == 'A1_ISOLATED_RESTORE_PASS':
         need(value['probeStatus'] == 'CAPABILITY_OBSERVED' and all(value[key] == 'PASS' for key in ('probeCleanup', 'observerCleanup', 'commandCleanup'))
              and value['status'] in {'NOT_OBSERVED', 'OBSERVED_UNTIL_COMMAND_END', 'COMPLETE_WINDOW'}
-             and value['profileStatus'] in {'SKIPPED_FAST', 'COMPLETE'}, 'COPY_ACCEPTANCE_BINDING')
+             and value['profileStatus'] in {'SKIPPED_FAST', 'COMPLETE'} and prior['status'] == 'VERIFIED', 'COPY_ACCEPTANCE_BINDING')
     if value['status'] in {'INCOMPLETE', 'NOT_REACHED'}:
         need(result['status'] == 'HOLD' and (value['status'] != 'INCOMPLETE' or value['holdRequired']), 'INCOMPLETE_COPY_HOLD')
         return  # opaque bounded failure prefixes were integrity-checked already

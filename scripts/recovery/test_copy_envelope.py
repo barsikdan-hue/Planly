@@ -21,13 +21,15 @@ def load():
 def fixture():
     binding = dict(scope='ONE_M1_F17_OWNED_COPY_DIAGNOSTIC', runId='65f401ba-1c86-4c39-b7b7-a1d0fb23d71d',
                    authorizationId='b5911546-3d26-49a2-8a8a-dc1511287b26', grantSha256='a' * 64,
-                   copyCapsSha256='b' * 64, diagnosticSourcesSha256='c' * 64)
+                   copyCapsSha256='b' * 64, diagnosticSourcesSha256='c' * 64, priorEvidenceSha256='d' * 64, priorEvidenceBytes=89827)
     receipt = dict(status='NOT_OBSERVED', rootCause='NOT_PROVEN', probeStatus='CAPABILITY_OBSERVED', probeCleanup='PASS',
                    observerCleanup='PASS', commandCleanup='PASS', profileStatus='SKIPPED_FAST',
                    requestStart=10.0, requestDeadline=70.0, commandObservedEnd=11.0, windowExpired=False,
                    missingSlots=[1], lateSlots=[], afterCommandSlots=[], holdRequired=False,
                    daemonPid=42, daemonStart=123)
     receipt.update(failures=[], failuresTruncated=False)
+    receipt['priorPreservation'] = dict(status='VERIFIED', attempts=2, passes=2, verifiedBytes=179654,
+                                      requestedBytes=179680, manifestSha256=binding['priorEvidenceSha256'])
     workload = dict(complete=True, entries=0, directories=1, regularFiles=0, symlinks=0, otherEntries=0,
                     logicalRegularBytes=0, entryAllocatedBytes=0)
     entries = dict(READY=(json.dumps(dict(kind='READY', runId=binding['runId'], workload=workload, rootCause='NOT_PROVEN')) + '\n').encode(),
@@ -38,6 +40,16 @@ def fixture():
 
 
 class Protocol(unittest.TestCase):
+    def test_restore_success_requires_both_bounded_prior_preservation_passes(self):
+        m = load()
+        binding, receipt, entries, legacy = fixture()
+        for state in [dict(receipt['priorPreservation'], status='PARTIAL', passes=1, attempts=1, verifiedBytes=89827),
+                      dict(receipt['priorPreservation'], manifestSha256='0' * 64),
+                      dict(receipt['priorPreservation'], requestedBytes=262145)]:
+            value = m.pack(legacy, dict(receipt, priorPreservation=state), entries, binding)
+            with self.subTest(state=state), self.assertRaises(m.Incomplete):
+                m.validate(m.canonical(value), binding, lambda _: None)
+
     def test_fast_no_observation_is_explicit_and_all_provenance_and_bytes_are_bound(self):
         m = load()
         self.assertTrue(callable(getattr(m, 'pack', None)), 'Closed integrated envelope is missing')

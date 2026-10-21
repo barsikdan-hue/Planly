@@ -222,7 +222,7 @@ class RunState:
         return dict(READY=self.ready_raw[:4096], SAMPLES=self.runtime_stdout[:32768], OBSERVER_STDERR=self.runtime_stderr[:65536],
                     PROBE_STDOUT=self.probe_stdout[:4096], PROBE_STDERR=self.probe_stderr[:65536])
 
-    def safe(self, profile_status='NOT_REACHED'):
+    def safe(self, profile_status='NOT_REACHED', prior_preservation=None):
         node = self.node
         status = node.observation_status if node is not None else 'INCOMPLETE' if self.hold_required else 'NOT_REACHED'
         cleanup = self.runtime_cleanup
@@ -233,4 +233,4 @@ class RunState:
                     missingSlots=node.missing_slots if node else [], lateSlots=node.late_slots if node else [],
                     afterCommandSlots=node.after_command_slots if node else [], holdRequired=bool(self.hold_required),
                     daemonPid=self.daemon_pid, daemonStart=self.daemon_start,
-                    failures=list(self.failures), failuresTruncated=self.failures_truncated)
+                    failures=list(self.failures), failuresTruncated=self.failures_truncated, priorPreservation=prior_preservation)
