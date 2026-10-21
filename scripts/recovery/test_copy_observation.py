@@ -143,7 +143,8 @@ class LinuxCopyTests(unittest.TestCase):
                 self.assertEqual(os.copy_file_range(src.fileno(), dst.fileno(), 4096), 4096)
                 after = m.observe(pid, start, src.fileno(), dst.fileno(), owner)
                 result = m.compare(before, after, window, window + 60)
-                self.assertEqual(result['status'], 'PAIR_OFFSETS_ADVANCED')
+                self.assertEqual(result['status'], 'PAIR_OFFSETS_ADVANCED',
+                                 repr(dict(before=before, after=after, window=window, result=result)))
                 self.assertEqual(result['offsetDeltaBytes'], 4096)
 
 
