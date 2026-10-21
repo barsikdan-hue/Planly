@@ -1,0 +1,39 @@
+# M1 — owned copy diagnostics integration
+
+> **For agentic workers:** Use superpowers:executing-plans (Owner selected Native), task by task, with test-driven-development and verification-before-completion.
+
+**Goal:** Prepare request-attributed copy observations without weakening existing recovery gates.
+**Architecture:** Prove stable open-file identity first, then add an independently bounded observation worker and a closed retained diagnostic envelope around frozen recovery logic. A failed prerequisite is NO_GO, never a silent fallback.
+**Tech stack:** Existing Python3/Linux procfs/pidfds; no packages, host-policy changes or new services.
+**Spec:** Approved M1 contract v2§3 and M2 commercial specification§10, plus the local feasibility report2026-10-21-lentaro-copy-observation.md.
+
+Internal Native work under approved M1 contract v2§3 (ordinary local design/source/test decisions do not require repeated approvals). Entry b9951e2; PR72 contains the standalone observer, not a dispatchable package. Owner21Oct confirmed continuing that work. No new server authority is granted.
+
+## Contract and approach
+
+Prepare one coherent diagnostic package for a possible future, separately approved full isolated recovery. Preserve the original60s Node-create deadline, strict image/config equality, existing isolation, first-failure retention and STOP/no-retry behavior. Never infer cause from a stack, unchanged offsets, generic process I/O or CI success. Do not alter executed frozen helpers or fabricate new permission.
+
+The existing pathname/FD-number observer cannot establish continuous open-file identity. Prefer Linux pidfd_getfd to retain two open-file descriptions, then read only their metadata via the observer's own fdinfo/fstat. No read/write/seek/ioctl/flags change on retained data descriptors; only their bounded eventual close. Duplicating descriptors can delay release of an already closed/unlinked file: retain at most one pair and release it immediately at operation end. The security check is PTRACE_MODE_ATTACH_REALCREDS, even though this does not ptrace-attach or signal the process. Availability is a prerequisite, not permission to relax host policy. No fallback to a weaker pathname claim.
+
+Alternatives rejected: offset sampling alone cannot observe work inside a long syscall or prove FD continuity; eBPF/ptrace tracing would add unverified host capabilities and a larger privileged surface; increasing timeout/changing driver is a speculative fix.
+
+## Tasks and acceptance
+
+Task1 file map: add `scripts/recovery/fd_pin.py` (inert import, guarded owned-process FD duplication/context cleanup) and `scripts/recovery/test_fd_pin.py` (portable input refusal plus real Linux owned-child close/reopen tests). Existing copy-observation workflow already discovers all `test_*.py`; no application entry point imports these helpers.
+
+Task1 steps:
+
+- [ ] Write tests, run locally and on Linux, and inspect expected missing-feature RED.
+- [ ] Implement the smallest guarded pin-pair context; no data reads/writes/seeks on pinned descriptors.
+- [ ] Run the complete standalone suite and inspect real Linux child FD lifecycle, observation side effects, ownership refusal and failure cleanup.
+- [ ] Commit/push evidence; decide PASS or NO_GO before task2.
+
+1. Prove pinned-descriptor feasibility against a single own Linux child using only synthetic temporary files. RED → implementation → GREEN. Exercise original FD close/reopen on the same inode; held descriptor must preserve the old open-file description and observation must not change the child's offset. Detect dead/reused process, missing pidfd/symbol/permission and release every duplicate on failure. Linux capability failure is a recorded NO_GO, not a skip or a reason to install/change privileges. Do not proceed to task2 without real Linux proof.
+2. After task1 PASS, integrate a bounded observation worker with request-start/sample/deadline brackets, exact daemon pidfd/start identity, source-image and uniquely introduced destination-layer binding, aggregate source workload and simultaneous owned-task/process/device metrics. Every incomplete/ambiguous field is explicit; never substitute zero. Samples cannot extend Node create beyond60s. Tests must reproduce slow sampling, FD reuse, child finish/races and failed cleanup. If source/request attribution or independent interruption cannot be proved, stop this integration as NOT_READY.
+3. After task2 PASS, adapt fresh namespaces around the frozen recovery logic and the retained-before-validation transport. New explicit closed schema, bounds, source hashes, prior-consumed evidence and one-use latch; never reuse a consumed grant. Preserve bounded raw first failure before parsing and encrypted local retention. Independent whole-package Critic, exact-head isolated Linux CI and public safe manifest before proposing one exact external scope. Runtime acceptance, merge/deploy/migration/provider operations remain separate.
+
+## Validation and limits
+
+Whole standalone component suite: `python -B -m unittest discover -s scripts/recovery -p 'test_*.py' -v`; dedicated Ubuntu CI is Linux authority. Existing unchanged M1 application tests/build are not repeated. No Docker/SSH/server/config/provider/mail/payment actions in task1. Tasks2/3 use synthetic fixtures until independently reviewed and explicitly authorized for a named host/source/operation count. Source-readiness must not be reported as recovery PASS.
+
+Primary interface references checked21Oct: [pidfd_getfd man-pages source](https://kernel.googlesource.com/pub/scm/docs/man-pages/man-pages/+/master/man/man2/pidfd_getfd.2), [GNU availability](https://www.gnu.org/software/gnulib/manual/html_node/pidfd_005fgetfd.html), [procfs metadata](https://www.kernel.org/doc/html/v6.8/filesystems/proc.html). Exact VPS support remains NOT_VERIFIED.
