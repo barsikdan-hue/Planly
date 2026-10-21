@@ -151,7 +151,11 @@ class RunState:
         runner.daemon_owned()
         with profile.held_socket(runner) as recheck:
             recheck()
-            raw = runner.docker('version', '--format', '{{json .Server}}', timeout=3).stdout
+            need(time.time() < self.gate['expiresAtEpoch'], 'FRESH_BUILD_OWNER_WINDOW_EXPIRED')
+            # This one separately gated read is outside frozen docker()'s
+            # closed recovery command set. Keep that dispatcher unchanged.
+            raw = runner.run(['docker', '--host', 'unix://' + str(runner.socket),
+                              'version', '--format', '{{json .Server}}'], timeout=3).stdout
             need(type(raw) is bytes and len(raw) <= 16384, 'FRESH_BUILD_REPLY_BOUND')
             version = parsed(raw)
             need(type(version) is dict and version.get('Version') == '29.9.1' and version.get('GitCommit') == 'b26fb77'

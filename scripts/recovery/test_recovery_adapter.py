@@ -111,31 +111,50 @@ class Adapter(unittest.TestCase):
             events.append('SOCKET_BOUND'); yield lambda: events.append('SOCKET_RECHECK')
         runner = types.SimpleNamespace(daemon=types.SimpleNamespace(pid=42), daemon_start='123',
                                        runtime=PurePosixPath('/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d'),
+                                       socket=PurePosixPath('/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d/docker.sock'),
                                        run_id='65f401ba-1c86-4c39-b7b7-a1d0fb23d71d', store_root=PurePosixPath('/tmp/synthetic-owned-store'),
                                        reuse_plan={'nativeConfigByService': {'app': 'sha256:' + 'a' * 64}},
                                        env={'SYNTHETIC_SECRET': 'NEVER_COPY_INTO_OBSERVER'}, daemon_owned=lambda: events.append('OWNED'))
         version = {'Version': '29.9.1', 'GitCommit': 'unknown', 'Os': 'linux', 'Arch': 'amd64'}
-        def docker(*args, **kwargs):
-            self.assertEqual(args, ('version', '--format', '{{json .Server}}'))
+        def native(args, **kwargs):
+            self.assertEqual(args, ['docker', '--host', 'unix://' + str(runner.socket),
+                                    'version', '--format', '{{json .Server}}'])
             self.assertEqual(kwargs, {'timeout': 3})
             events.append('VERSION_READ')
             return types.SimpleNamespace(stdout=json.dumps(version).encode())
-        runner.docker = docker
-        state = m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2), {})
+        def frozen_docker(*args, **kwargs):
+            # Actual frozen Restore.docker admits this closed command set.
+            # Version reads have a separate diagnostic gate, never this path.
+            if not args or args[0] not in {'info', 'image', 'inspect', 'create', 'start', 'exec', 'logs', 'rm', 'kill', 'ps'}:
+                raise RuntimeError('REUSE_COMMAND_SCOPE')
+            self.fail('Diagnostic read entered the frozen command dispatcher')
+        runner.docker, runner.run = frozen_docker, native
+        def fresh_state(expiry=float('inf')):
+            return m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2, expiresAtEpoch=expiry), {})
+        state = fresh_state()
         profile = types.SimpleNamespace(held_socket=socket)
         with self.assertRaises(Incomplete):
             state.config_for(runner, profile)
         self.assertEqual(events.count('VERSION_READ'), 1)
         version['GitCommit'] = 'b26fb77'
-        state = m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2), {})
+        state = fresh_state()
         config = state.config_for(runner, profile)
         self.assertNotIn('env', config)
         self.assertNotIn('NEVER_COPY_INTO_OBSERVER', repr(config))
         self.assertEqual(config['daemonPid'], 42)
         self.assertEqual(config['nativeConfigId'], runner.reuse_plan['nativeConfigByService']['app'])
         version['Arch'] = '386'
-        state = m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2), {})
+        state = fresh_state()
         with self.assertRaises(Incomplete):
+            state.config_for(runner, profile)
+        reads = events.count('VERSION_READ')
+        with self.assertRaisesRegex(Incomplete, 'FRESH_BUILD_OWNER_WINDOW_EXPIRED'):
+            fresh_state(0).config_for(runner, profile)
+        self.assertEqual(events.count('VERSION_READ'), reads)
+        state = fresh_state()
+        version['Arch'] = 'amd64'
+        state.config_for(runner, profile)
+        with self.assertRaisesRegex(Incomplete, 'ONE_FRESH_OWNED_BUILD_READ'):
             state.config_for(runner, profile)
 
 
