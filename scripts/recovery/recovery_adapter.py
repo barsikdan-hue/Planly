@@ -20,14 +20,17 @@ from owned_worker import OwnedWorker
 from sampler_worker import MODULES, build_code, validate_config
 
 
-def install(profile, state):
+def install(profile, state, *, prechecked=False):
     original = profile.install_profile
     def wrapped(parts, evidence, pstate):
         original(parts, evidence, pstate)
         cls = parts.candidate.Restore
         perform0, cleanup0 = cls.perform, cls.cleanup
         def perform(runner):
-            state.preflight(runner, pstate, profile)
+            if prechecked:
+                need(state.probe_status == 'CAPABILITY_OBSERVED' and state.probe_cleanup == 'PASS', 'PRE_ARCHIVE_CAPABILITY_REQUIRED')
+            else:
+                state.preflight(runner, pstate, profile)
             return perform0(runner)
         def cleanup(runner):
             if not state.cleanup_known():

@@ -21,6 +21,24 @@ def load():
 
 
 class Adapter(unittest.TestCase):
+    def test_prechecked_mode_cannot_run_original_perform_without_successfully_reaped_probe(self):
+        m = load(); events = []
+        class Restore:
+            def perform(self): events.append('ORIGINAL')
+            def cleanup(self): pass
+        state = types.SimpleNamespace(probe_status='NOT_REACHED', probe_cleanup='NOT_STARTED',
+                                      preflight=lambda *_: self.fail('Probe must run before archiving'),
+                                      cleanup_known=lambda: True, node_wait=lambda *_: None)
+        profile = types.SimpleNamespace(Hold=Incomplete, install_profile=lambda *_: None)
+        m.install(profile, state, prechecked=True)
+        profile.install_profile(types.SimpleNamespace(candidate=types.SimpleNamespace(Restore=Restore)), None,
+                                types.SimpleNamespace(fail=lambda _: None))
+        with self.assertRaises(Incomplete): Restore().perform()
+        self.assertEqual(events, [])
+        state.probe_status, state.probe_cleanup = 'CAPABILITY_OBSERVED', 'PASS'
+        Restore().perform()
+        self.assertEqual(events, ['ORIGINAL'])
+
     def test_startup_uncertainty_is_attributed_to_the_probe_and_keeps_received_prefix(self):
         m = load()
         state = m.RunState({}, {})
