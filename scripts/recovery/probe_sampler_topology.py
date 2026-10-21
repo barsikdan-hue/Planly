@@ -67,6 +67,49 @@ class SamplerTopology(unittest.TestCase):
 
 
 class ActualWorker(unittest.TestCase):
+    def test_adapter_probe_failure_prevents_original_perform_and_keeps_received_output(self):
+        import test_recovery_adapter
+        import types
+        module = test_recovery_adapter.load()
+        self.assertTrue(callable(getattr(module, 'RunState', None)), 'Frozen-boundary run state is missing')
+        sources = {name: Path(__file__).with_name(name + '.py').read_bytes() for name in ('copy_observation', 'fd_pin')}
+        run = '65f401ba-1c86-4c39-b7b7-a1d0fb23d71d'
+        for denied in (False, True):
+            with self.subTest(denied=denied):
+                raw = dict(sources)
+                if denied:
+                    # Injectable syscall boundary fixture, never a policy change.
+                    raw['fd_pin'] += b'\ndef _duplicate(pidfd, target_fd):\n raise PermissionError(1,"SYNTHETIC_DENIAL")\n'
+                state = module.RunState(dict(runId=run), raw)
+                calls, errors = [], []
+                class Restore:
+                    runtime = Path('/run/planly-a1-reuse-' + run)
+                    run_id = run
+                    def __init__(self):
+                        self.known_processes = {}
+                    def perform(self):
+                        calls.append('ORIGINAL_PERFORM')
+                    def cleanup(self):
+                        pass
+                profile = types.SimpleNamespace(Hold=module.Incomplete, install_profile=lambda *_: None)
+                module.install(profile, state)
+                profile.install_profile(types.SimpleNamespace(candidate=types.SimpleNamespace(Restore=Restore)), None,
+                                        types.SimpleNamespace(fail=errors.append))
+                if denied:
+                    with self.assertRaises(module.Incomplete):
+                        Restore().perform()
+                    self.assertEqual(calls, [])
+                    self.assertEqual(state.probe_status, 'INCOMPLETE')
+                    self.assertIn(b'NO_GO', state.probe_stdout)
+                    self.assertTrue(state.hold_required)
+                else:
+                    Restore().perform()
+                    self.assertEqual(calls, ['ORIGINAL_PERFORM'])
+                    self.assertEqual(state.probe_status, 'CAPABILITY_OBSERVED')
+                    self.assertFalse(state.hold_required)
+                self.assertEqual(state.probe_cleanup, 'PASS')
+                self.assertTrue(state.cleanup_known())
+
     def test_probe_checks_child_to_parent_permission_without_reading_file_data(self):
         import time
         import resource_observation as resources
