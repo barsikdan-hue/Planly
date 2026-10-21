@@ -67,6 +67,30 @@ class SamplerTopology(unittest.TestCase):
 
 
 class ActualWorker(unittest.TestCase):
+    def test_probe_checks_child_to_parent_permission_without_reading_file_data(self):
+        import time
+        import resource_observation as resources
+        import test_owned_capability
+        from owned_worker import OwnedWorker
+        module = test_owned_capability.load()
+        self.assertTrue(callable(getattr(module, 'build_probe', None)), 'Owned preflight capability probe is missing')
+        fd = os.open('/proc/self/exe', os.O_RDONLY | os.O_CLOEXEC)
+        worker = None
+        try:
+            identity = os.fstat(fd)
+            start = resources.parse_stat(Path('/proc/self/stat').read_text())['start']
+            sources = {name: Path(__file__).with_name(name + '.py').read_bytes() for name in ('copy_observation', 'fd_pin')}
+            worker = OwnedWorker(module.build_probe(sources, os.getpid(), start, fd, (identity.st_dev, identity.st_ino),
+                                                  '/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d'))
+            row = json.loads(worker.read_line(time.monotonic() + 3))
+            self.assertEqual(row, {'status': 'CAPABILITY_OBSERVED', 'fileDataReads': 0, 'duplicateAttempts': 1})
+            self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), 0)
+            self.assertEqual(worker.close(), 'PASS')
+        finally:
+            if worker is not None:
+                worker.close()
+            os.close(fd)
+
     def test_isolated_packaged_sampler_reads_only_owned_fixture_and_finishes(self):
         from owned_worker import OwnedWorker
         import resource_observation as resources
