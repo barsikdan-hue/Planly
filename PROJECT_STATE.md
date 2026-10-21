@@ -12,6 +12,8 @@ Owner commercial design decision,21Oct: seller=self-employed RF;1000RUB/calendar
 
 Owner approved [contract v2](docs/superpowers/specs/LENTARO_WORKING_VERSION_CONTRACT_v2_2026-10-19.md), ordinary A–F development, local proved recovery-tool corrections, commit/push and Draft PR. Merge, runtime release/migration, secrets/infra/DNS and real provider operations require their exact distinct gates. Use existing VPS; no Render recreation/new paid hosting. A consumed scope/automatic continuation cannot authorize another SSH.
 
+Native local feasibility21Oct: [Draft PR72](https://github.com/barsikdan-hue/Planly/pull/72) adds an isolated copy-FD metadata observer/comparison, not a restore runner. Source859da37: Linux CI7/7/no skips; Windows6 PASS/one Linux skip; independent Critic0 Critical/Important, one extreme-numeric-input Minor deferred. [Evidence and limits](docs/verification/2026-10-21-lentaro-copy-observation.md). Status COMPONENT_VERIFIED / NOT_DISPATCHABLE: offsets alone cannot observe work inside one long syscall or prove request attribution. No new SSH/restore; M1 recovery still UNVERIFIED, M2 product implementation NOT_STARTED.
+
 | Object | Established identity and limits |
 |---|---|
 | Product | b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7, codex/lentaro-m1, [Draft PR69](https://github.com/barsikdan-hue/Planly/pull/69), unmerged |

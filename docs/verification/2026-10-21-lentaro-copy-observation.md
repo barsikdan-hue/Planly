@@ -12,9 +12,13 @@ The observer never selects a PID, discovers a daemon, reads file contents, sends
 
 ## Verification
 
-Meaningful RED: comparison/parser tests failed because their implementation was absent; after minimal implementation,5/5 passed. The metadata-observer fixture then failed because observe was absent; after implementation, Windows6/6 passed with one explicit Linux-only skip. The dedicated GitHub workflow runs the whole isolated Python component suite and a real copy_file_range/real procfs test using only its own process and temporary files. Exact-HEAD Linux outcome belongs in the PR/Actions evidence; no Linux PASS is inferred from Windows.
+Meaningful RED: comparison/parser tests failed because their implementation was absent; after minimal implementation,5/5 passed. The metadata-observer fixture then failed because observe was absent; after implementation, Windows6/6 passed with one explicit Linux-only skip. The dedicated GitHub workflow runs the whole isolated Python component suite and a real copy_file_range/real procfs test using only its own process and temporary files.
 
-The Linux test measures two snapshots between controlled copy calls. It does not reproduce the VPS failure, prove observation during one long syscall, or validate a Docker integration. Existing M1 application source/build/tests are unchanged and were not repeated.
+Exact source859da3713a84af3e52efd78e26f21e5e53a1d1a8: [push CI39550108148](https://github.com/barsikdan-hue/Planly/actions/runs/39550108148) and [PR CI39550112479](https://github.com/barsikdan-hue/Planly/actions/runs/39550112479) SUCCESS. Parent directly inspected job119057111173 log:7 tests,0 skips,OK, including real Linux copy/procfs. This is a tiny synthetic component test, not M1 application CI or VPS acceptance. Checkout@v4 emitted a Node20 deprecation warning while GitHub forced its execution on Node24; no test failed.
+
+One fresh independent Critic reviewed all four original changed files at4e7cbb5…859da37: no Critical/Important findings. One Minor deferred: extremely large synthetic integers can raise OverflowError/ValueError instead of conservative result/Incomplete; real procfs counters do not have those sizes. The component remains NOT_DISPATCHABLE. Later evidence/state-only additions were self-reviewed by the parent; a second independent review is not claimed.
+
+The Linux test measures two snapshots between controlled copy calls. It does not reproduce the VPS failure, prove observation during one long syscall, or validate a Docker integration. Upstream Linux [copy_file_range syscall implementation](https://code.googlesource.com/linux/torvalds/linux/+/1e2f2d31997a9496f99e2b43255d6a48b06fbcc2/fs/read_write.c) updates file positions after vfs_copy_file_range returns. Therefore unchanged offsets cannot rule out work inside that call. This is a feasibility limit of the proposed measurement, not a verified fact about the VPS kernel build. Existing M1 application source/build/tests are unchanged and were not repeated.
 
 ## Feasibility decision and remaining gate
 
