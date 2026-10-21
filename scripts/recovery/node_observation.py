@@ -21,6 +21,41 @@ class NodeObservation:
         self.raw, self.stderr, self.stdout, self.command_stderr = b'', b'', b'', b''
         self.cleanup, self.command_cleanup, self.hold_required = 'NOT_STARTED', 'NOT_STARTED', False
         self.secondary, self.profile_status = [], 'NOT_REACHED'
+        self.request_start = self.request_deadline = self.command_observed_end = None
+        self.window_expired, self.observation_status = False, 'NOT_REACHED'
+        self.missing_slots, self.late_slots, self.after_command_slots = [], [], []
+
+    def completeness(self, rows):
+        if self.request_start is None:
+            return
+        offsets = (0, 20, 40, 45, 50, 55, 58)
+        duration = self.request_deadline - self.request_start
+        due = [self.request_start + duration * (offset / 60) for offset in offsets]
+        cutoff = min(self.request_deadline, self.command_observed_end)
+        expected = set(range(1, 8)) if self.window_expired else {i for i, when in enumerate(due, 1) if when < cutoff}
+        valid = set()
+        for row in rows:
+            index = row['index']
+            begin, end = row.get('start'), row.get('end')
+            if (not all(type(value) in (int, float) and math.isfinite(value) for value in (begin, end))
+                    or not due[index - 1] <= begin <= end <= self.request_deadline
+                    or (index < 7 and end >= due[index])):
+                self.late_slots.append(index)
+            elif end > cutoff:
+                self.after_command_slots.append(index)
+            else:
+                valid.add(index)
+        self.missing_slots = sorted(expected - valid)
+        # A command observed finished before the second scheduled point may
+        # finish before the first snapshot. Explicitly unobserved is allowed;
+        # cleanup alone can never satisfy a full/partial diagnostic window.
+        fast = not self.window_expired and cutoff < due[1]
+        if self.late_slots or (self.missing_slots and not fast):
+            self.observation_status = 'INCOMPLETE'
+            self.fail('SAMPLE_WINDOW_INCOMPLETE')
+        else:
+            self.observation_status = ('COMPLETE_WINDOW' if self.window_expired else
+                                       'OBSERVED_UNTIL_COMMAND_END' if valid else 'NOT_OBSERVED')
 
     def fail(self, code):
         self.hold_required = True
@@ -52,6 +87,7 @@ class NodeObservation:
             self.fail('SAMPLER_STREAM_INCOMPLETE')
         try:
             lines = self.raw.splitlines(keepends=True)
+            rows = []
             if len(lines) > 7:
                 raise Incomplete('SAMPLE_COUNT_BOUND')
             for index, raw in enumerate(lines, 1):
@@ -61,7 +97,10 @@ class NodeObservation:
                 if (type(value) is not dict or value.get('kind') != 'SAMPLE'
                         or value.get('runId') != self.run_id or value.get('index') != index):
                     raise Incomplete('SAMPLE_SEQUENCE_INCOMPLETE')
+                rows.append(value)
+            self.completeness(rows)
         except (ValueError, UnicodeError, Incomplete):
+            self.observation_status = 'INCOMPLETE'
             self.fail('SAMPLER_PROTOCOL_INCOMPLETE')
 
     def wait(self, args, data, env, profile, *, timeout=60):
@@ -76,6 +115,7 @@ class NodeObservation:
                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             start = time.monotonic()
             deadline = start + timeout
+            self.request_start, self.request_deadline = start, deadline
             try:
                 message = dict(kind='START', runId=self.run_id, start=start, deadline=deadline)
                 self.worker.send(json.dumps(message, separators=(',', ':'), allow_nan=False).encode('ascii') + b'\n', min(deadline, start + .25))
@@ -88,6 +128,7 @@ class NodeObservation:
                 if remaining > 0:
                     try:
                         out, err = self.child.communicate(input=data if first else None, timeout=remaining)
+                        self.command_observed_end = time.monotonic()
                         self.stdout, self.command_stderr = out[:32768], err[:32768]
                         if len(out) > 32768 or len(err) > 32768:
                             self.fail('PRIMARY_STREAM_BOUND')
@@ -113,6 +154,7 @@ class NodeObservation:
             raise subprocess.TimeoutExpired(args, timeout, output=latest_out[:32768], stderr=latest_err[:32768])
         except BaseException as primary:
             if isinstance(primary, subprocess.TimeoutExpired):
+                self.window_expired = True
                 primary.timeout = timeout
                 self.stdout = primary.output if type(primary.output) is bytes else b''
                 self.command_stderr = primary.stderr if type(primary.stderr) is bytes else b''
@@ -127,4 +169,6 @@ class NodeObservation:
                     self.fail('COMMAND_CLEANUP_UNKNOWN')
             raise
         finally:
+            if self.command_observed_end is None:
+                self.command_observed_end = time.monotonic()
             self.finish()
