@@ -21,3 +21,23 @@ jobs:
           persist-credentials: false
       - name: Test metadata observation using only owned temporary files
         run: python3 -m unittest discover -s scripts/recovery -p 'test_*.py' -v
+      - name: Characterize the unexplained copy comparison failure
+        if: always()
+        run: |
+          python3 -B - <<'PY'
+          import sys, unittest
+          sys.path.insert(0, 'scripts/recovery')
+          from test_copy_observation import LinuxCopyTests
+          failed = 0
+          # A fixed diagnostic dataset, not retry-until-green: any failure
+          # makes this step fail; every failed case retains its measurements.
+          for index in range(100):
+              result = unittest.TestResult()
+              LinuxCopyTests('test_real_nil_offset_copy_advances_the_observed_pair').run(result)
+              cases = result.failures + result.errors
+              failed += len(cases) + len(result.skipped)
+              for _, detail in cases:
+                  print(f'CASE {index}: {detail}', flush=True)
+          print(f'Characterization: 100 cases, {failed} failures/skips', flush=True)
+          raise SystemExit(1 if failed else 0)
+          PY
