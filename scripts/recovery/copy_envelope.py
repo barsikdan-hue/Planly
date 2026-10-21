@@ -195,7 +195,7 @@ def _receipt(value, entries, binding, legacy):
         need(type(row) is dict and set(row) in ({'class', 'code', 'phase'}, {'class', 'code', 'phase', 'errno'})
              and row['class'] in {'Incomplete', 'Hold', 'OSError', 'PermissionError', 'FileNotFoundError', 'FileExistsError',
                                   'ProcessLookupError', 'TimeoutError', 'TimeoutExpired', 'ValueError', 'TypeError', 'KeyError', 'SyntaxError', 'MemoryError', 'UNKNOWN'}
-             and row['phase'] in {'PROBE', 'PREPARE', 'PROFILE', 'NODE', 'CLEANUP', 'PRESERVATION'}
+             and row['phase'] in {'PROBE', 'PREPARE', 'PROFILE', 'NODE', 'CLEANUP', 'PRESERVATION', 'PERSIST'}
              and type(row['code']) is str and re.fullmatch('[A-Z0-9_]{1,100}', row['code']), 'CLOSED_COPY_FAILURE')
         if 'errno' in row:
             need(type(row['errno']) is int and 0 <= row['errno'] <= 65535, 'COPY_FAILURE_ERRNO')

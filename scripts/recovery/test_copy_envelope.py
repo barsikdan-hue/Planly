@@ -83,6 +83,7 @@ class Protocol(unittest.TestCase):
         self.assertTrue(callable(getattr(m, 'pack', None)), 'Closed integrated envelope is missing')
         binding, receipt, entries, legacy = fixture()
         receipt.update(status='INCOMPLETE', holdRequired=True, observerCleanup='UNKNOWN')
+        receipt['failures'] = [{'class': 'OSError', 'code': 'UNKNOWN', 'errno': 28, 'phase': 'PERSIST'}]
         legacy['safeObservation'].update(status='HOLD', cleanup='UNKNOWN')
         entries.update(SAMPLES=b'MALFORMED_PARTIAL', OBSERVER_STDERR=b'AVAILABLE_FAILURE\n')
         value = m.pack(legacy, receipt, entries, binding)
