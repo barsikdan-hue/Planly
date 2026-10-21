@@ -8,6 +8,7 @@ to its outer result. This module alone is NOT a recovery entry point.
 import os
 from pathlib import Path
 import subprocess
+import re
 import time
 
 from copy_observation import Incomplete, process_start
@@ -49,6 +50,23 @@ class RunState:
         self.workers = []
         self.probe_count = self.node_count = self.version_reads = 0
         self.node, self.daemon_pid, self.daemon_start = None, None, None
+        self.failures, self.failures_truncated = [], False
+
+    def note(self, error, phase):
+        self.hold_required = True
+        known = (OSError, PermissionError, FileNotFoundError, FileExistsError, ProcessLookupError,
+                 TimeoutError, subprocess.TimeoutExpired, ValueError, TypeError, KeyError, SyntaxError, MemoryError)
+        label = type(error).__name__ if type(error) in known or type(error) is Incomplete else 'Hold' if type(error).__name__ == 'Hold' else 'UNKNOWN'
+        value = {'class': label, 'code': 'UNKNOWN', 'phase': phase}
+        if label in {'Hold', 'Incomplete'} and error.args and type(error.args[0]) is str and re.fullmatch('[A-Z0-9_]{1,100}', error.args[0]):
+            value['code'] = error.args[0]
+        if isinstance(error, OSError) and type(error.errno) is int and 0 <= error.errno <= 65535:
+            value['errno'] = error.errno
+        if value not in self.failures:
+            if len(self.failures) < 8:
+                self.failures.append(value)
+            else:
+                self.failures_truncated = True
 
     def cleanup_known(self):
         return (not self.constructor_cleanup_unknown and self.probe_cleanup != 'UNKNOWN'
@@ -61,6 +79,12 @@ class RunState:
             worker = OwnedWorker(code)
         except BaseException as error:
             self.constructor_cleanup_unknown |= bool(getattr(error, '_owned_observer_cleanup_unknown', False))
+            if getattr(error, '_owned_observer_cleanup_unknown', False):
+                if role == 'probe':
+                    self.probe_cleanup = 'UNKNOWN'
+                else:
+                    self.runtime_cleanup = 'UNKNOWN'
+            self.note(error, 'PROBE' if role == 'probe' else 'PREPARE')
             out, err = getattr(error, 'available_stdout', b''), getattr(error, 'available_stderr', b'')
             if role == 'probe':
                 self.probe_stdout, self.probe_stderr = out[:4096], err[:65536]
@@ -114,6 +138,7 @@ class RunState:
                     self.probe_cleanup = 'UNKNOWN'
         if primary is not None:
             self.probe_status, self.hold_required = 'INCOMPLETE', True
+            self.note(primary, 'PROBE')
             pstate.fail(primary)
             raise profile.Hold('PROFILE_DIAGNOSTIC_INCOMPLETE') from primary
 
@@ -163,13 +188,14 @@ class RunState:
                     pstate.raw = getattr(error, '_profile_available', b'')[:4194304]
                     pstate.truncated = type(error) is profile.Hold and error.args == ('PROFILE_BODY_BOUND',)
                     pstate.fail(error)
+                    self.note(error, 'PROFILE')
                     raise
             # EXACT frozen fetch_profile supplies its own3s bound; never use an
             # arbitrary callback here. Actual Node deadline is the default60.
             return self.node.wait(args, data, runner.env, fetch)
         except BaseException as error:
             if self.node is None:
-                self.hold_required = True
+                self.note(error, 'PREPARE')
                 pstate.fail(error)
             raise
         finally:
@@ -185,8 +211,10 @@ class RunState:
                 if self.node.profile_status == 'SKIPPED_FAST':
                     pstate.status = 'SKIPPED_FAST'
                 self.hold_required |= self.node.hold_required
+                for code in self.node.secondary:
+                    self.note(Incomplete(code), 'NODE')
             if not self.cleanup_known():
-                self.hold_required = True
+                self.note(Incomplete('OWNED_OBSERVER_CLEANUP_UNKNOWN'), 'CLEANUP')
             if self.hold_required:
                 pstate.fail(profile.Hold('PROFILE_DIAGNOSTIC_INCOMPLETE'))
 
@@ -197,11 +225,12 @@ class RunState:
     def safe(self, profile_status='NOT_REACHED'):
         node = self.node
         status = node.observation_status if node is not None else 'INCOMPLETE' if self.hold_required else 'NOT_REACHED'
-        cleanup = 'UNKNOWN' if self.constructor_cleanup_unknown else self.runtime_cleanup
+        cleanup = self.runtime_cleanup
         return dict(status=status, rootCause='NOT_PROVEN', probeStatus=self.probe_status, probeCleanup=self.probe_cleanup,
                     observerCleanup=cleanup, commandCleanup=node.command_cleanup if node else 'NOT_STARTED', profileStatus=profile_status,
                     requestStart=node.request_start if node else None, requestDeadline=node.request_deadline if node else None,
                     commandObservedEnd=node.command_observed_end if node else None, windowExpired=node.window_expired if node else False,
                     missingSlots=node.missing_slots if node else [], lateSlots=node.late_slots if node else [],
                     afterCommandSlots=node.after_command_slots if node else [], holdRequired=bool(self.hold_required),
-                    daemonPid=self.daemon_pid, daemonStart=self.daemon_start)
+                    daemonPid=self.daemon_pid, daemonStart=self.daemon_start,
+                    failures=list(self.failures), failuresTruncated=self.failures_truncated)

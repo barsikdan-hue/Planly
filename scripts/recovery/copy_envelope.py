@@ -18,7 +18,7 @@ ENTRY_BOUNDS = dict(READY=4096, SAMPLES=32768, OBSERVER_STDERR=65536, PROBE_STDO
 BINDING_KEYS = {'scope', 'runId', 'authorizationId', 'grantSha256', 'copyCapsSha256', 'diagnosticSourcesSha256'}
 COPY_KEYS = {'status', 'rootCause', 'probeStatus', 'probeCleanup', 'observerCleanup', 'commandCleanup', 'profileStatus',
              'requestStart', 'requestDeadline', 'commandObservedEnd', 'windowExpired', 'missingSlots', 'lateSlots',
-             'afterCommandSlots', 'holdRequired', 'daemonPid', 'daemonStart'}
+             'afterCommandSlots', 'holdRequired', 'daemonPid', 'daemonStart', 'failures', 'failuresTruncated'}
 
 
 def need(value, code):
@@ -188,6 +188,16 @@ def _receipt(value, entries, binding, legacy):
         row = value[key]
         need(type(row) is list and len(row) <= 7 and all(type(item) is int and 1 <= item <= 7 for item in row)
              and row == sorted(set(row)), 'COPY_RECEIPT_SLOT_BOUND')
+    need(type(value['failures']) is list and len(value['failures']) <= 8 and type(value['failuresTruncated']) is bool
+         and (not value['failures'] and not value['failuresTruncated'] or value['holdRequired']), 'CLOSED_COPY_FAILURES')
+    for row in value['failures']:
+        need(type(row) is dict and set(row) in ({'class', 'code', 'phase'}, {'class', 'code', 'phase', 'errno'})
+             and row['class'] in {'Incomplete', 'Hold', 'OSError', 'PermissionError', 'FileNotFoundError', 'FileExistsError',
+                                  'ProcessLookupError', 'TimeoutError', 'TimeoutExpired', 'ValueError', 'TypeError', 'KeyError', 'SyntaxError', 'MemoryError', 'UNKNOWN'}
+             and row['phase'] in {'PROBE', 'PREPARE', 'PROFILE', 'NODE', 'CLEANUP', 'PRESERVATION'}
+             and type(row['code']) is str and re.fullmatch('[A-Z0-9_]{1,100}', row['code']), 'CLOSED_COPY_FAILURE')
+        if 'errno' in row:
+            need(type(row['errno']) is int and 0 <= row['errno'] <= 65535, 'COPY_FAILURE_ERRNO')
     need(type(legacy) is dict and type(legacy.get('safeObservation')) is dict, 'LEGACY_REPLY_REQUIRED')
     result = legacy['safeObservation']
     need(result.get('status') in {'HOLD', 'A1_ISOLATED_RESTORE_PASS'}, 'LEGACY_TERMINAL_STATE')
