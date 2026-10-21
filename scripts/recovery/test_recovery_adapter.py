@@ -96,7 +96,7 @@ class Adapter(unittest.TestCase):
                                        run_id='65f401ba-1c86-4c39-b7b7-a1d0fb23d71d', store_root=PurePosixPath('/tmp/synthetic-owned-store'),
                                        reuse_plan={'nativeConfigByService': {'app': 'sha256:' + 'a' * 64}},
                                        env={'SYNTHETIC_SECRET': 'NEVER_COPY_INTO_OBSERVER'}, daemon_owned=lambda: events.append('OWNED'))
-        version = {'Version': '29.9.1', 'GitCommit': 'unknown'}
+        version = {'Version': '29.9.1', 'GitCommit': 'unknown', 'Os': 'linux', 'Arch': 'amd64'}
         def docker(*args, **kwargs):
             self.assertEqual(args, ('version', '--format', '{{json .Server}}'))
             self.assertEqual(kwargs, {'timeout': 3})
@@ -115,6 +115,10 @@ class Adapter(unittest.TestCase):
         self.assertNotIn('NEVER_COPY_INTO_OBSERVER', repr(config))
         self.assertEqual(config['daemonPid'], 42)
         self.assertEqual(config['nativeConfigId'], runner.reuse_plan['nativeConfigByService']['app'])
+        version['Arch'] = '386'
+        state = m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2), {})
+        with self.assertRaises(Incomplete):
+            state.config_for(runner, profile)
 
 
 if __name__ == '__main__':

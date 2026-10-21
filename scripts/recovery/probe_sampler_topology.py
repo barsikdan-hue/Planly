@@ -67,6 +67,25 @@ class SamplerTopology(unittest.TestCase):
 
 
 class ActualWorker(unittest.TestCase):
+    def test_probe_rejects_unsupported_host_architecture_before_descriptor_duplication(self):
+        import time
+        import test_owned_capability
+        from owned_worker import OwnedWorker
+        module = test_owned_capability.load()
+        sources = {name: Path(__file__).with_name(name + '.py').read_bytes() for name in ('copy_observation', 'fd_pin')}
+        code = module.build_probe(sources, os.getpid(), 1, 4, (1, 2),
+                                  '/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d')
+        # Only this disposable child gets an injected uname boundary fixture.
+        code = code.replace('pidfd=duplicate=None', "os.uname=lambda:types.SimpleNamespace(machine='aarch64')\npidfd=duplicate=None", 1)
+        worker = OwnedWorker(code)
+        try:
+            row = json.loads(worker.read_line(time.monotonic() + 3))
+            self.assertEqual(row['status'], 'NO_GO')
+            self.assertEqual(row['duplicateAttempts'], 0)
+            self.assertEqual(worker.close(), 'PASS')
+        finally:
+            worker.close()
+
     def test_adapter_probe_failure_prevents_original_perform_and_keeps_received_output(self):
         import test_recovery_adapter
         import types
