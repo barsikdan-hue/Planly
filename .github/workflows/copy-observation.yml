@@ -21,6 +21,9 @@ jobs:
           persist-credentials: false
       - name: Test metadata observation using only owned temporary files
         run: python3 -m unittest discover -s scripts/recovery -p 'test_*.py' -v
+      - name: Prove sibling observer topology using only ephemeral own root fixtures
+        if: always()
+        run: sudo -n -- python3 -B -m unittest discover -s scripts/recovery -p 'probe_sampler_topology.py' -v
       - name: Characterize the unexplained copy comparison failure
         if: always()
         run: |
