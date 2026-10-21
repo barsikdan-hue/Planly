@@ -4,9 +4,23 @@ Updated 2026-10-21. Draft PR [73](https://github.com/barsikdan-hue/Planly/pull/7
 
 ## Current decision
 
-SOURCE_PREPARED / AWAITING_EXACT_EXTERNAL_GATE. All earlier SSH/restore permissions remain CONSUMED_STOP. No new grant, run/window or dispatch latch has been prepared. Server actions in this source-preparation scope: zero.
+SOURCE_PREPARED / ONE_APPROVED_DISPATCH_CONSUMED_HOLD. Source preparation itself had zero server actions. The subsequent exact Owner approval was consumed by the single execution recorded below; it does not permit another SSH or cleanup. Full recovery remains UNVERIFIED.
 
 The retained f17 evidence establishes a Node Docker-create timeout after 60 seconds and a 45-second profile in VFS layer copying. It does not establish why copying exceeded the deadline. ROOT_CAUSE_NOT_PROVEN → NO FIX: no timeout increase, driver change or image-equality bypass.
+
+## Actual approved execution — 21 October
+
+Owner call_6b384ab211cc4588bb2ea0819e177124 approved the exact proposal6f8e18babb1b and confirmed no competing maintenance. A repeated confirmation referred to this same single execution, not another attempt. New run **68a0aac9-8e4d-48f4-af14-112e1c34417b**, authorization668b14ac-f162-49cf-b285-28441aa01c24; one SSH, exit1; zero original restore invocations. Grant5376a779f838… and payload964775B/SHA0c778b712085… bind the approved source unchanged.
+
+Result **SEALED_HOLD / VALID / CONSUMED_STOP**. Original native error: Hold / **CURRENT_STORE_NOT_EMPTY**, phase ABSENCE. The fixed isolated recovery-store `containers` directory was observed nonempty (`persistedEmpty=false`, last complete read CONTAINERS/SCANDIR_NEXT). The frozen source `a1_posttermination_proc_nlink.py:239–251`, Native.empty, reads the first directory entry and refuses when it exists; `a1_c5_posttermination_absence.py:228–233`, Native.setup_absence, invokes this before either ready pass/original restore. This proves the stop condition, not the identity, number, ownership or origin of the remaining entries.
+
+Capability probe, source scan, Node command/profile/copy sampling and both current-f17 preservation passes were NOT_REACHED. No new recovery daemon, adoption, pre-entry rm, daemon signals or config-body reads (all reported counters0). The complete absence/ready process was not finished; cleanup and current runtime health remain UNKNOWN. No destructive remedy or permission weakening follows from the nonempty-directory fact.
+
+Both received streams were retained before validation: stdout4967B/SHAa7c21708e24219d786b8c780f087bba14dc017beebb234f22fa296c8898a4991, stderr0; CurrentUser DPAPI ciphertext5222B/SHA57ecfa6983d890b3b34f2a1f54f8a2cbdae073d41a477814debcb70866b1f2f9. RAM-only unseal and closed-envelope revalidation passed **25/25 scoped integrity checks** across grant/proposal/source/preparation/latch/receipt/ciphertext/streams, with no plaintext raw file. This proves retention and the reported pre-entry HOLD, not recovery PASS. No additional SSH, retry, deployment, provider or payment action occurred.
+
+Safe actual `A1-owned-copy-result.json`:4918B/SHA256 **3e042d81a4e454435dc6bae7c2e9c644d6e9712b9db1c839a2cd214714d97f60**. Private grants/receipt/ciphertext and raw envelope remain excluded from Git. The safe source manifest is the immutable pre-approval snapshot; its absent-grant/zero-server-action fields are dated preparation evidence, superseded only by this actual execution record.
+
+Next evidence needed: identify the remaining isolated-store entries and establish ownership against retained recovery records through a separately scoped read-only operation. This consumed run does not authorize that read, rm, starting a cleanup daemon or another restore. The cause of the earlier Node timeout remains NOT_PROVEN.
 
 ## What the package adds
 
@@ -56,6 +70,8 @@ Deferred Minor, carried from the earlier component review: extremely large synth
 Source preparation is not a deploy, recovery acceptance, root-cause proof or independent off-VM backup. Existing recovery logic still owns its separately bounded daemon/clones and cleanup; observer-only signal limits must not be described as limits for the whole frozen recovery.
 
 Before a possible new dispatch, the complete reviewed package, exact host/source/hash bindings, one SSH/at most one original isolated recovery, no competing maintenance, retention limits and STOP rules must receive one explicit Owner authorization. Only then may a fresh window/identities/grant/latch be prepared. Any failed prerequisite is NO_GO; unknown cleanup is STOP; no automatic retry, adoption, foreign signals or working-data changes.
+
+The specific proposal below was subsequently approved and consumed by run68a0 above. This paragraph preserves the original source-preparation boundary; it is not a new approval request or reusable permission.
 
 Concrete local proposal: `A1-owned-copy-approval.md`, 11173 bytes, SHA256 **6f8e18babb1ba4eca07c4bd5c22435da61298ae430a8d358b5028c0a1c4b8bb6**. It binds safe manifest SHA256 **72b36a6c5f91f7a65799ea70d4deab49f0792eedb61fd8e4ace4c166367a0b5e** and the corrected helper/transport hashes. Proposal preparation is not authorization. The exact external gate derives from AGENTS.md distinct Owner gates and the approved contract; it is not an inferred per-document skill approval.
 
