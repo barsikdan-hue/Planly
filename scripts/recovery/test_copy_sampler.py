@@ -99,6 +99,15 @@ class LinuxSampler(unittest.TestCase):
                         self.assertEqual(second['copy']['targetContinuity'], 'NOT_ESTABLISHED')
                         self.assertEqual(second['rootCause'], 'NOT_PROVEN')
                         self.assertLessEqual(len(m.packet(second)), 4096)
+                        import copy_envelope
+                        import test_copy_envelope
+                        binding, receipt, entries, legacy = test_copy_envelope.fixture()
+                        receipt.update(status='OBSERVED_UNTIL_COMMAND_END', requestStart=begin, requestDeadline=end,
+                                       commandObservedEnd=time.monotonic(), missingSlots=[], daemonPid=child.pid, daemonStart=start)
+                        first.update(kind='SAMPLE', runId=binding['runId'])
+                        entries['SAMPLES'] = json.dumps(first).encode() + b'\n'
+                        value = copy_envelope.pack(legacy, receipt, entries, binding)
+                        copy_envelope.validate(copy_envelope.canonical(value), binding, lambda _: None)
                         self.assertIsNone(sampler.pair)
                         held = sampler.graph.nodes['a' * 64 + '-init'][0]
                     with self.assertRaises(OSError):

@@ -126,6 +126,20 @@ class ActualWorker(unittest.TestCase):
                 self.assertTrue(all(row['copy'] == {'status': 'NOT_OBSERVED'} for row in frames), frames)
                 self.assertTrue(all(begin <= row['start'] <= row['end'] <= begin + 3 for row in frames))
                 self.assertEqual(worker.close(), 'PASS')
+                # Serialization fixture: the actual daemon here is our copier,
+                # and the declared completed command window is synthetic.
+                import copy_envelope
+                import test_copy_envelope
+                binding, receipt, entries, legacy = test_copy_envelope.fixture()
+                binding['runId'] = config['runId']
+                receipt.update(status='COMPLETE_WINDOW', requestStart=begin, requestDeadline=begin + 3,
+                               commandObservedEnd=begin + 3, windowExpired=True, missingSlots=[],
+                               daemonPid=child.pid, daemonStart=start, profileStatus='COMPLETE')
+                entries['READY'] = json.dumps(ready).encode() + b'\n'
+                entries['SAMPLES'] = b''.join(json.dumps(row).encode() + b'\n' for row in frames)
+                legacy['safeObservation']['status'] = 'HOLD'
+                value = copy_envelope.pack(legacy, receipt, entries, binding)
+                copy_envelope.validate(copy_envelope.canonical(value), binding, lambda _: None)
                 self.assertIsNone(child.poll(), 'Observer must not signal its sibling fixture daemon')
             finally:
                 if worker is not None:
