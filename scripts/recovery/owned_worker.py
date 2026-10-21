@@ -50,6 +50,15 @@ class OwnedWorker:
                     self.process.wait(timeout=1)
                 except BaseException:
                     error._owned_observer_cleanup_unknown = True
+                try:
+                    for stream in (self.process.stdout, self.process.stderr):
+                        os.set_blocking(stream.fileno(), False)
+                    self.readers = [self.process.stdout, self.process.stderr]
+                    self.drain_available()
+                except BaseException:
+                    error._owned_observer_capture_unknown = True
+                error.available_stdout, error.available_stderr = self.stdout, self.stderr
+                error.owned_observer_pid = self.process.pid
                 for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
                     if stream is not None:
                         stream.close()
@@ -92,6 +101,19 @@ class OwnedWorker:
         for stream in ready:
             self._take(stream)
         return bool(writable)
+
+    def drain_available(self):
+        """Keep a bounded prefix already in our pipes; never wait for a packet."""
+        if self.closed:
+            raise Incomplete('OBSERVER_CLOSED')
+        for _ in range(4):
+            ready, _, _ = select.select(self.readers, [], [], 0)
+            if not ready:
+                break
+            for stream in ready:
+                self._take(stream)
+        if self.stream_error:
+            raise Incomplete(self.stream_error)
 
     def read_line(self, deadline):
         while True:
