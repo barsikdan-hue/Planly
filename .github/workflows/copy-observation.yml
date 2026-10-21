@@ -1,0 +1,23 @@
+name: Copy observation feasibility
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/recovery/**'
+      - '.github/workflows/copy-observation.yml'
+  push:
+    branches: ['codex/lentaro-m1-copy-observation']
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test metadata observation using only owned temporary files
+        run: python3 -m unittest discover -s scripts/recovery -p 'test_*.py' -v
