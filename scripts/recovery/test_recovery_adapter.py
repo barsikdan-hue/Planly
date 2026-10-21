@@ -2,7 +2,7 @@
 import contextlib
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import types
 import unittest
 
@@ -61,8 +61,8 @@ class Adapter(unittest.TestCase):
         def socket(_):
             events.append('SOCKET_BOUND'); yield lambda: events.append('SOCKET_RECHECK')
         runner = types.SimpleNamespace(daemon=types.SimpleNamespace(pid=42), daemon_start='123',
-                                       runtime=Path('/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d'),
-                                       run_id='65f401ba-1c86-4c39-b7b7-a1d0fb23d71d', store_root=Path('/tmp/synthetic-owned-store'),
+                                       runtime=PurePosixPath('/run/planly-a1-reuse-65f401ba-1c86-4c39-b7b7-a1d0fb23d71d'),
+                                       run_id='65f401ba-1c86-4c39-b7b7-a1d0fb23d71d', store_root=PurePosixPath('/tmp/synthetic-owned-store'),
                                        reuse_plan={'nativeConfigByService': {'app': 'sha256:' + 'a' * 64}},
                                        env={'SYNTHETIC_SECRET': 'NEVER_COPY_INTO_OBSERVER'}, daemon_owned=lambda: events.append('OWNED'))
         version = {'Version': '29.9.1', 'GitCommit': 'unknown'}
@@ -78,6 +78,7 @@ class Adapter(unittest.TestCase):
             state.config_for(runner, profile)
         self.assertEqual(events.count('VERSION_READ'), 1)
         version['GitCommit'] = 'b26fb77'
+        state = m.RunState(dict(runId=runner.run_id, storeDevice=1, storeInode=2), {})
         config = state.config_for(runner, profile)
         self.assertNotIn('env', config)
         self.assertNotIn('NEVER_COPY_INTO_OBSERVER', repr(config))
