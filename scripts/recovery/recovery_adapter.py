@@ -151,7 +151,8 @@ class RunState:
             raw = runner.docker('version', '--format', '{{json .Server}}', timeout=3).stdout
             need(type(raw) is bytes and len(raw) <= 16384, 'FRESH_BUILD_REPLY_BOUND')
             version = parsed(raw)
-            need(type(version) is dict and version.get('Version') == '29.9.1' and version.get('GitCommit') == 'b26fb77', 'REVIEWED_DAEMON_MODEL_MISMATCH')
+            need(type(version) is dict and version.get('Version') == '29.9.1' and version.get('GitCommit') == 'b26fb77'
+                 and version.get('Os') == 'linux' and version.get('Arch') == 'amd64', 'REVIEWED_DAEMON_MODEL_MISMATCH')
             recheck()
         runner.daemon_owned()
         config = dict(schema=1, runId=runner.run_id, daemonPid=runner.daemon.pid, daemonStart=int(runner.daemon_start),

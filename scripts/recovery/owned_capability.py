@@ -33,6 +33,7 @@ pidfd=duplicate=None
 result={'status':'NO_GO','fileDataReads':0,'duplicateAttempts':0}
 try:
  if os.geteuid()!=0:raise copy_observation.Incomplete('ROOT_PROBE_REQUIRED')
+ if os.uname().machine!='x86_64':raise copy_observation.Incomplete('REVIEWED_SYSCALL_ARCH_REQUIRED')
  pidfd=os.pidfd_open(PARENT)
  def check():
   if os.getppid()!=PARENT or fd_pin._target(pidfd)!=PARENT or select.select([pidfd],[],[],0)[0]:
