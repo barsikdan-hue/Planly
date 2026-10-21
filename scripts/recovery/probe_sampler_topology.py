@@ -8,6 +8,8 @@ import sys
 import unittest
 
 import test_fd_pin
+import test_vfs_source
+import test_sampler_worker
 
 OBSERVER = r'''
 import json,os,sys
@@ -62,6 +64,51 @@ class SamplerTopology(unittest.TestCase):
                 if observer.poll() is None:
                     observer.kill()  # only our retained fixture Popen observer
                 observer.communicate(timeout=5)
+
+
+class ActualWorker(unittest.TestCase):
+    def test_isolated_packaged_sampler_reads_only_owned_fixture_and_finishes(self):
+        from owned_worker import OwnedWorker
+        import resource_observation as resources
+        import time
+        module = test_sampler_worker.load()
+        self.assertTrue(callable(getattr(module, 'build_code', None)), 'Actual sampler worker bootstrap is missing')
+        fixture = test_vfs_source.LinuxSource()
+        with fixture.fixture() as (root, fd, identity, config_id, leaf, layer):
+            target = root / 'unused-target'
+            target.write_bytes(b'x' * 12)
+            config = test_sampler_worker.config()
+            child = subprocess.Popen([sys.executable, '-B', '-c', test_fd_pin.CHILD,
+                                      str(leaf / 'payload'), str(target), '--data-root=' + str(root),
+                                      '--exec-root=' + config['runtimeRoot'] + '/docker-exec'],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     text=True, bufsize=1)
+            worker = None
+            try:
+                self.assertTrue(select.select([child.stdout], [], [], 5)[0])
+                child.stdout.readline()
+                start = resources.parse_stat(Path('/proc', str(child.pid), 'stat').read_text())['start']
+                config.update(daemonPid=child.pid, daemonStart=start, storePath=str(root),
+                              storeDevice=identity[0], storeInode=identity[1], nativeConfigId=config_id)
+                sources = {name: Path(__file__).with_name(name + '.py').read_bytes() for name in module.MODULES}
+                worker = OwnedWorker(module.build_code(sources, config))
+                ready = json.loads(worker.read_line(time.monotonic() + 5))
+                self.assertEqual(ready['kind'], 'READY', (ready, worker.stderr))
+                self.assertEqual(ready['workload']['logicalRegularBytes'], 12)
+                begin = time.monotonic()
+                worker.send(json.dumps(dict(kind='START', runId=config['runId'], start=begin, deadline=begin + 3)).encode() + b'\n', begin + 3)
+                frames = [json.loads(worker.read_line(begin + 4)) for _ in range(7)]
+                self.assertEqual([row['index'] for row in frames], list(range(1, 8)))
+                self.assertTrue(all(row['copy'] == {'status': 'NOT_OBSERVED'} for row in frames), frames)
+                self.assertTrue(all(begin <= row['start'] <= row['end'] <= begin + 3 for row in frames))
+                self.assertEqual(worker.close(), 'PASS')
+                self.assertIsNone(child.poll(), 'Observer must not signal its sibling fixture daemon')
+            finally:
+                if worker is not None:
+                    worker.close()
+                if child.poll() is None:
+                    child.stdin.write('quit\n'); child.stdin.flush()
+                child.communicate(timeout=5)
 
 
 if __name__ == '__main__':
