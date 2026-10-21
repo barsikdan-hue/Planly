@@ -2,6 +2,8 @@
 
 Status21Oct2026: PLAN_APPROVED / NATIVE_SELECTED; product implementation NOT_STARTED, pending M1 acceptance.
 
+Later21Oct standing Owner instruction in the same chat authorizes all necessary actions until the agreed SaaS is ready; see AGENTS.md/PROJECT_STATE.md. It supersedes repeated approval STOPs below within that objective. Preserve technical prerequisites, privacy/data and factual human/provider/merchant acceptance; do not replay consumed grants or invent missing credentials. Native and approved commercial rules remain unchanged.
+
 **Approved spec:** [Commercial design](../specs/2026-10-21-lentaro-m2-commercial-design.md), approved by Owner at c541555. Planning base is that commit; source paths were checked against its M1 tree. No production/runtime acceptance is inferred.
 
 ## Order and independent deliverables
