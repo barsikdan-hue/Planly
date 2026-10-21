@@ -50,6 +50,15 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result['status'], 'NO_OFFSET_ADVANCE_OBSERVED')
         self.assertEqual(result['rootCause'], 'NOT_PROVEN')
 
+    def test_exact_sixty_second_deadline_is_not_refused_by_float_subtraction_rounding(self):
+        # Literal retained CI measurements: subtracting the constructed deadline
+        # rounds to 60.00000000000001 although it is exactly start + 60.
+        window = 29.420998671
+        before = sample(29.421049977, 29.421260117, 1024)
+        after = sample(29.421289262, 29.42147151, 5120)
+        self.assertEqual(self.compare(before, after, window, window + 60)['status'], 'PAIR_OFFSETS_ADVANCED')
+        self.assertEqual(self.compare(before, after, window, window + 60.000001)['status'], 'INCONCLUSIVE')
+
     def test_fd_reuse_new_process_file_shrink_or_disagreeing_offsets_are_inconclusive(self):
         for key, value in [('pid', 43), ('processStart', 124),
                            ('destination.inode', 102), ('source.device', 2),
