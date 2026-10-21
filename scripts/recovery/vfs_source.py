@@ -94,6 +94,7 @@ class BoundSource:
             raise Incomplete('EXACT_NATIVE_ROOTFS_LAYERS')
         layerdb = self.directories(self.root_fd, ('image', 'vfs', 'layerdb', 'sha256'))
         roots = self.directories(self.root_fd, ('vfs', 'dir'))
+        self.roots_fd = roots
         parent = None
         for diff in diffs:
             chain = diff if parent is None else 'sha256:' + hashlib.sha256((parent + ' ' + diff).encode('ascii')).hexdigest()
