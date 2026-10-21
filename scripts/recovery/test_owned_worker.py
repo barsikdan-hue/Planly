@@ -5,6 +5,7 @@ import sys
 import time
 import types
 import unittest
+from unittest.mock import patch
 
 
 def load():
@@ -72,6 +73,25 @@ class LinuxWorker(unittest.TestCase):
             self.assertEqual(worker.read_line(time.monotonic() + 2), b'fixture-only\n')
         finally:
             self.assertEqual(worker.close(.1), 'PASS')
+
+    def test_exit_between_poll_and_pidfd_metadata_is_reaped_without_identity_fallback(self):
+        # Model the actual kernel race with our own child: pidfd becomes
+        # readable after poll but before its Pid metadata is inspected.
+        worker = self.m.OwnedWorker("import time; print('READY',flush=True); time.sleep(30)")
+        worker.read_line(time.monotonic() + 2)
+        original_target = self.m._target
+        def exiting(pidfd):
+            import select
+            worker.process.terminate()  # only our fixture's retained Popen child
+            self.assertTrue(select.select([pidfd], [], [], 2)[0])
+            return original_target(pidfd)
+        try:
+            with patch.object(self.m, '_target', side_effect=exiting):
+                self.assertEqual(worker.close(.1), 'PASS')
+        finally:
+            worker.process.wait(timeout=2)
+            if not worker.closed:
+                worker.close(.1)
 
 
 if __name__ == '__main__':
