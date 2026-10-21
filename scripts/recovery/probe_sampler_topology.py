@@ -7,7 +7,7 @@ import subprocess
 import sys
 import unittest
 
-from test_fd_pin import LinuxPinTests
+import test_fd_pin
 
 OBSERVER = r'''
 import json,os,sys
@@ -36,7 +36,7 @@ class SamplerTopology(unittest.TestCase):
     def test_root_observer_sibling_pins_only_our_copier_child_and_reads_syscall_metadata(self):
         self.assertEqual(sys.platform, 'linux', 'Explicit Linux root fixture required')
         self.assertEqual(os.geteuid(), 0, 'Explicit ephemeral CI root fixture required')
-        fixture = LinuxPinTests('test_pin_retains_open_description_across_same_inode_close_reopen_without_changing_offsets')
+        fixture = test_fd_pin.LinuxPinTests('test_pin_retains_open_description_across_same_inode_close_reopen_without_changing_offsets')
         fixture.setUp()
         with fixture.fixture() as (copier, pidfd, fds, owner, command):
             self.assertEqual(command('move'), [5, 5])
