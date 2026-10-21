@@ -35,6 +35,7 @@ def _object(pairs):
 
 class BoundSource:
     def __init__(self, store_fd, expected, owner, handles):
+        self.closed = False
         self.owner, self.handles, self.edges, self.files = owner, handles, [], []
         self.root_fd = os.dup(store_fd)
         handles.append(self.root_fd)
@@ -110,6 +111,8 @@ class BoundSource:
         self.recheck()
 
     def recheck(self):
+        if self.closed:
+            raise Incomplete('SOURCE_CONTEXT_CLOSED')
         self.owner()
         if _identity(os.fstat(self.root_fd)) != self.root_identity:
             raise Incomplete('STORE_IDENTITY_DRIFT')
@@ -177,7 +180,7 @@ def source_root(store_fd, store_identity, config_id, verify_owner):
         raise Incomplete('EXPLICIT_SOURCE_IDENTITIES_REQUIRED')
     if sys.platform != 'linux':
         raise Incomplete('LINUX_VFS_METADATA_REQUIRED')
-    handles = []
+    handles, source = [], None
     try:
         verify_owner()
         source = BoundSource(store_fd, store_identity, verify_owner, handles)
@@ -185,6 +188,8 @@ def source_root(store_fd, store_identity, config_id, verify_owner):
         yield source
     finally:
         primary, closing = sys.exc_info()[1], None
+        if source is not None:
+            source.closed = True
         for fd in reversed(handles):
             try:
                 os.close(fd)
