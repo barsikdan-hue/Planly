@@ -23,10 +23,10 @@ Task1 file map: add `scripts/recovery/fd_pin.py` (inert import, guarded owned-pr
 
 Task1 steps:
 
-- [ ] Write tests, run locally and on Linux, and inspect expected missing-feature RED.
-- [ ] Implement the smallest guarded pin-pair context; no data reads/writes/seeks on pinned descriptors.
-- [ ] Run the complete standalone suite and inspect real Linux child FD lifecycle, observation side effects, ownership refusal and failure cleanup.
-- [ ] Commit/push evidence; decide PASS or NO_GO before task2.
+- [x] Write tests, run locally and on Linux, and inspect expected missing-feature RED.
+- [x] Implement the smallest guarded pin-pair context; no data reads/writes/seeks on pinned descriptors.
+- [x] Run the complete standalone suite and inspect real Linux child FD lifecycle, observation side effects, ownership refusal and failure cleanup.
+- [x] Commit/push evidence; decide PASS or NO_GO before task2.
 
 Task2 first file map: add `scripts/recovery/owned_worker.py` and `test_owned_worker.py`. `OwnedWorker(code)` starts exactly one isolated Python child with closed inherited FDs and minimal environment. `read_line(deadline)` and `send(message,deadline)` use nonblocking private pipes and absolute monotonic deadlines; stdout prefix256KiB/line16KiB/stderr64KiB/message16KiB are fixed caps. `close(grace)` signals only its retained pidfd child, TERM once then KILL once, each wait at most1s, recording cleanup uncertainty; this is observer cleanup outside the unchanged Node command deadline, never permission to signal a daemon or a foreign process. Failed/partial IPC remains available before validation. No general dispatch entry point.
 
@@ -43,6 +43,8 @@ Task2 graph file map: `layer_binding.py`/`test_layer_binding.py` implement bound
 3. After task2 PASS, adapt fresh namespaces around the frozen recovery logic and the retained-before-validation transport. New explicit closed schema, bounds, source hashes, prior-consumed evidence and one-use latch; never reuse a consumed grant. Preserve bounded raw first failure before parsing and encrypted local retention. Independent whole-package Critic, exact-head isolated Linux CI and public safe manifest before proposing one exact external scope. Runtime acceptance, merge/deploy/migration/provider operations remain separate.
 
 ## Validation and limits
+
+Source tasks1–3 prepared on integration branch: public Linux66/66 + root5/5 + fixed100case characterization0fail; affected private Windows19/19 after one whole-package Critic correction pass. Private full Linux recovery remains UNVERIFIED. See the [final source/evidence report](../../verification/2026-10-21-lentaro-owned-copy-diagnostics.md) and safe manifest for exact source/test/review bindings. No new external grant or runtime action is implied by completing source preparation.
 
 Whole standalone component suite: `python -B -m unittest discover -s scripts/recovery -p 'test_*.py' -v`; dedicated Ubuntu CI is Linux authority. Existing unchanged M1 application tests/build are not repeated. No Docker/SSH/server/config/provider/mail/payment actions in task1. Tasks2/3 use synthetic fixtures until independently reviewed and explicitly authorized for a named host/source/operation count. Source-readiness must not be reported as recovery PASS.
 
