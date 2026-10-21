@@ -27,6 +27,7 @@ def fixture():
                    requestStart=10.0, requestDeadline=70.0, commandObservedEnd=11.0, windowExpired=False,
                    missingSlots=[1], lateSlots=[], afterCommandSlots=[], holdRequired=False,
                    daemonPid=42, daemonStart=123)
+    receipt.update(failures=[], failuresTruncated=False)
     workload = dict(complete=True, entries=0, directories=1, regularFiles=0, symlinks=0, otherEntries=0,
                     logicalRegularBytes=0, entryAllocatedBytes=0)
     entries = dict(READY=(json.dumps(dict(kind='READY', runId=binding['runId'], workload=workload, rootCause='NOT_PROVEN')) + '\n').encode(),

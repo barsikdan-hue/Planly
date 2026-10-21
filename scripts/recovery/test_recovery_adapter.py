@@ -5,6 +5,7 @@ import json
 from pathlib import Path, PurePosixPath
 import types
 import unittest
+from unittest import mock
 
 from copy_observation import Incomplete
 
@@ -20,6 +21,36 @@ def load():
 
 
 class Adapter(unittest.TestCase):
+    def test_startup_uncertainty_is_attributed_to_the_probe_and_keeps_received_prefix(self):
+        m = load()
+        state = m.RunState({}, {})
+        error = OSError(24, 'SYNTHETIC_NATIVE_FAILURE')
+        error._owned_observer_cleanup_unknown = True
+        error.available_stdout, error.available_stderr = b'AVAILABLE_OUT', b'AVAILABLE_ERR'
+        with mock.patch.object(m, 'OwnedWorker', side_effect=error), self.assertRaises(OSError):
+            state.worker('synthetic-fixture-code', None, 'probe')
+        value = state.safe()
+        self.assertEqual(value['probeCleanup'], 'UNKNOWN')
+        self.assertEqual(value['observerCleanup'], 'NOT_STARTED')
+        self.assertFalse(state.cleanup_known())
+        self.assertEqual(state.probe_stdout, b'AVAILABLE_OUT')
+        self.assertEqual(state.probe_stderr, b'AVAILABLE_ERR')
+
+    def test_first_native_errno_is_retained_without_exception_text_and_failure_list_is_bounded(self):
+        m = load()
+        state = m.RunState({}, {})
+        self.assertTrue(callable(getattr(state, 'note', None)), 'Closed native failure receipt is missing')
+        state.note(OSError(24, 'SYNTHETIC_SECRET_NEVER_EXPORT'), 'PREPARE')
+        state.note(Incomplete('OWNED_CAPABILITY_PROBE_NO_GO'), 'PROBE')
+        for index in range(10):
+            state.note(Incomplete('TEST_' + str(index)), 'NODE')
+        value = state.safe()
+        self.assertEqual(value['failures'][0], {'class': 'OSError', 'phase': 'PREPARE', 'code': 'UNKNOWN', 'errno': 24})
+        self.assertEqual(value['failures'][1]['code'], 'OWNED_CAPABILITY_PROBE_NO_GO')
+        self.assertEqual(len(value['failures']), 8)
+        self.assertTrue(value['failuresTruncated'] and value['holdRequired'])
+        self.assertNotIn('SYNTHETIC_SECRET_NEVER_EXPORT', repr(value))
+
     def test_probe_precedes_original_perform_and_unknown_cleanup_cannot_enter_frozen_cleanup(self):
         m = load()
         self.assertTrue(callable(getattr(m, 'install', None)), 'Frozen-boundary adapter is missing')
