@@ -93,6 +93,36 @@ class LinuxWorker(unittest.TestCase):
             if not worker.closed:
                 worker.close(.1)
 
+    def test_nonblocking_drain_retains_available_packets_without_waiting_for_a_new_one(self):
+        import select
+        worker = self.m.OwnedWorker("import sys,time; sys.stdout.write('x'*8000); sys.stdout.flush(); print('READY',file=sys.stderr,flush=True); time.sleep(30)")
+        try:
+            self.assertTrue(select.select([worker.process.stderr], [], [], 2)[0])
+            self.assertTrue(callable(getattr(worker, 'drain_available', None)), 'Nonblocking packet drain is missing')
+            started = time.monotonic()
+            worker.drain_available()
+            self.assertEqual(len(worker.stdout), 8000)
+            self.assertEqual(worker.stderr, b'READY\n')
+            worker.drain_available()
+            self.assertLess(time.monotonic() - started, 1.5)
+        finally:
+            self.assertEqual(worker.close(.1), 'PASS')
+
+    def test_native_startup_failure_keeps_available_stderr_before_pipes_are_closed(self):
+        import select
+        native_spawn = self.m.subprocess.Popen
+        children = []
+        def spawn(*args, **kwargs):
+            child = native_spawn(*args, **kwargs)
+            children.append(child)
+            self.assertTrue(select.select([child.stderr], [], [], 2)[0])
+            return child
+        with patch.object(self.m.subprocess, 'Popen', side_effect=spawn), patch.object(self.m.os, 'pidfd_open', side_effect=OSError(24, 'synthetic fd exhaustion')):
+            with self.assertRaises(OSError) as caught:
+                self.m.OwnedWorker("import sys,time; print('SYNTHETIC_BOOTSTRAP_FAILURE',file=sys.stderr,flush=True); time.sleep(30)")
+        self.assertEqual(getattr(caught.exception, 'available_stderr', b''), b'SYNTHETIC_BOOTSTRAP_FAILURE\n')
+        self.assertIsNotNone(children[0].poll())
+
 
 if __name__ == '__main__':
     unittest.main()
