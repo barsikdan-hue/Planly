@@ -1,6 +1,6 @@
 # Lentaro M2 — execution index
 
-Status21Oct2026: PLAN_REVIEW_PENDING; execution method not selected; product implementation NOT_STARTED.
+Status21Oct2026: PLAN_APPROVED / NATIVE_SELECTED; product implementation NOT_STARTED, pending M1 acceptance.
 
 **Approved spec:** [Commercial design](../specs/2026-10-21-lentaro-m2-commercial-design.md), approved by Owner at c541555. Planning base is that commit; source paths were checked against its M1 tree. No production/runtime acceptance is inferred.
 
@@ -14,7 +14,7 @@ Status21Oct2026: PLAN_REVIEW_PENDING; execution method not selected; product imp
 | 3 | [Enforcement](2026-10-21-lentaro-m2-enforcement.md) | Every commercial mutation and final provider handoff checks access; holds survive renewal/restart. |
 | 4 | [UI and release](2026-10-21-lentaro-m2-ui-release.md) | New USER completes the whole synthetic flow; bounded external release remains a separate gate. |
 
-Plans1–4 execute sequentially after M1 acceptance and plan review. Prefer **Native** execution: one implementer follows the shared interfaces, one fresh Critic reviews the completed source branch, and focused independent reviews cover risky auth/payment/handoff changes. Subagent-driven execution is an alternative the Owner may select; do not start either implicitly.
+Owner confirmed the published plans and **Native** execution21Oct in this chat: «Подтверждаете план и исполнение Native». Plans1–4 execute sequentially after M1 acceptance. One implementer follows the shared interfaces, one fresh Critic reviews the completed source branch, and focused independent reviews cover risky auth/payment/handoff changes. This approval does not renew consumed server authority or waive the M1 prerequisite.
 
 ## Global constraints shared by all plans
 
@@ -38,7 +38,7 @@ New transaction order: user row → entitlement row → own invoice/token/outbox
 
 Each task uses RED → minimal source → GREEN → its named regressions → commit. Focused tests below are future commands, not checks already run. Full CI at an actual changed source HEAD includes migrations/drift, native tests, typecheck, lint, canonical build/CSS, compiled HTTP and browser. Report skips and platform limits separately; do not weaken tests to match Windows.
 
-Before execution record the written plan approval/method and M1 acceptance evidence here. Before each later PR rebase/check its real base/head and changed source; do not merge the planning PR or re-execute recovery automatically. Continue approved tasks without asking about individual files; stop only dependent external operations.
+Written plan approval and Native selection are recorded above; M1 acceptance remains UNVERIFIED. Current independent work is local recovery-diagnostic feasibility, with no SSH/restore dispatch. Before each later PR rebase/check its real base/head and changed source; do not merge the planning PR or re-execute recovery automatically. Continue approved tasks without asking about individual files; stop only dependent external operations.
 
 Self-review coverage: spec§1–3→all plans/entry gate;§4→Accounts;§5–6→Billing;§7→Enforcement;§8→Accounts/Billing/UI;§9→all task checks;§10→M1 prerequisite;§11→UI/release packet;§12→this review gate. No product tests have been run for this documentation change.
 
