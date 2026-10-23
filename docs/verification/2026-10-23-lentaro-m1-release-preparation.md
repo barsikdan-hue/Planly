@@ -1,6 +1,6 @@
 # Lentaro M1 release preparation — 23 October 2026
 
-Status: **SOURCE_MERGED / VERIFIED_IMAGE_BUILT / M1_NOT_DEPLOYED**. Owner standing SaaS continuation authorization21October remains active. New operations have fresh records; historical one-use recovery grants remain consumed. Existing VPS remains the staging target. No provider send or production release is claimed.
+Status: **SOURCE_MERGED / VERIFIED_IMAGE_BUILT / NEWVPS_STAGING_TECHNICAL_PASS / PUBLIC_LOGIN_BROWSER_PASS**. Owner standing SaaS continuation authorization21October remains active. New operations have fresh records; historical one-use recovery grants remain consumed. No provider send or production release is claimed. Authenticated Owner/cross-USER product acceptance remains pending and is not inferred from health or the public login page.
 
 ## Source integration and CI
 
@@ -45,6 +45,16 @@ Independent source review found an incomplete adapter to the frozen Restore meth
 - Response781bytes SHA256 `d05e8c54932d1a1e0ae45a53021029470471c1f65584614397ee6e6eaeda6216`.
 - Private ciphertext1030bytes SHA256 `7c289a73b72a88daca4a9f2bdb56c4dbaa9e9937e1327e29aacf9f08ce314990`.
 
+## Actual NEWVPS staging rollout
+
+The persistent rollout was completed from the verified image without rebuilding or pulling. Two preflight-only HOLDs proved and corrected Compose representation differences before any service stop or migration: absolute `storage.build.context`, then `OWNER_PASSWORD_HASH` dollar escaping. Failed candidates were retained under their run evidence and the old pointers/runtime remained active. Intermittent SSH banner timeouts never reached server execution.
+
+Run `66d0e22c-93a6-4560-adf8-7600623fae0f` then stopped the exact old worker/web, ran migrations0013–0016 once, and verified28tables/ledger17, the original projected rows and sequences, six empty new tables and provider calls0. It atomically moved `current`/`SOURCE_SHA` to b7 and started exact web `707bd9a1430de712528c55da1ffb6f5cfe02ce330b181724680418c6e22be0b5`. Its WEB_REPLACE HOLD was caused by a host-local health probe against an intentionally unpublished port; Docker showed `3000/tcp:null` while the container health was healthy/restarts0.
+
+The exact non-migrating resume `dd40aeaa-e566-4810-8bd0-2d47f82b99c9` required that retained HOLD, rechecked28tables/ledger17/publications0, verified `/api/health` from inside the exact web container, started only worker `e3a19ccc5d24ed4874b4df064b2e3cb8558adc7e2a70b5ce681c8e3975375b08`, waited for stable web/worker, confirmed the exact five running Compose components, and removed the stopped owned migrator. Result: `M1_STAGING_RELEASE_PASS`, SSH0, SEALED/VALID, errors0, provider calls0.
+
+Playwright then opened `https://stage.lentaro.ru/login` and received title `Lentaro`, a nonblank Russian login form with Email/Пароль/Войти controls, no visible overlay, and zero console warnings/errors. The show-password control changed the empty password input from `password` to `text`. No credentials were exposed or guessed.
+
 ## Remaining acceptance
 
-Next: persistent staging rollout and browser/user isolation acceptance. M1 remains NOT_DEPLOYED. Public-origin/Mini App/bot configuration and real USER provider journey remain unverified. Independent off-VM disaster recovery is still unverified and remains a production-cutover prerequisite. Robokassa and email accounts are not connected; development continues with the approved1000RUB/calendar-month/manual-renewal/no-trial terms, without invented credentials or commercial acceptance.
+Next: Owner-authenticated staging walkthrough and the required cross-USER/ADMIN-as-non-owner isolation checks. This human/product acceptance cannot be manufactured by standing deployment authority. Public-origin/Mini App/bot configuration and real USER provider journey remain unverified. Independent off-VM disaster recovery remains a production-cutover prerequisite. Robokassa and email accounts are not connected; development continues with the approved1000RUB/calendar-month/manual-renewal/no-trial terms, without invented credentials or commercial acceptance.
