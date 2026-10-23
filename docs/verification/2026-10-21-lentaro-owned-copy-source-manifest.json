@@ -1,0 +1,172 @@
+{
+  "acceptance": {
+    "currentHostHealth": "UNKNOWN",
+    "fullRecovery": "UNVERIFIED",
+    "hostCapability": "NOT_VERIFIED",
+    "m2Implementation": "NOT_STARTED",
+    "offVMRecovery": "UNVERIFIED",
+    "productDeployment": "NOT_DEPLOYED",
+    "productSource": "b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7",
+    "rootCause": "NOT_PROVEN"
+  },
+  "authority": {
+    "allPriorExternalScopes": "CONSUMED_STOP",
+    "newGrantExists": false,
+    "newLatchExists": false,
+    "serverActions": 0
+  },
+  "branch": "codex/lentaro-m1-diagnostic-integration",
+  "copyCaps": {
+    "cleanupSignalWaitSeconds": 1,
+    "maxClosedFailures": 8,
+    "maxDuplicateAttempts": 15,
+    "maxEnvelopeBytes": 6291456,
+    "maxGraphRoots": 2048,
+    "maxHeldPairs": 1,
+    "maxLocalCipherBytes": 6422560,
+    "maxObserverChildren": 2,
+    "maxObserverSignals": 4,
+    "maxObserverStderr": 65536,
+    "maxPairAcquisitions": 7,
+    "maxPayloadBytes": 2097152,
+    "maxPreservationCandidates": 27,
+    "maxPreservationPasses": 2,
+    "maxPreservationRequestedBytes": 262144,
+    "maxPrivateCopyRecordBytes": 262144,
+    "maxPrivateCopyRecords": 1,
+    "maxProbeStderr": 65536,
+    "maxProbeStdout": 4096,
+    "maxReadyBytes": 4096,
+    "maxSampleFrames": 7,
+    "maxSamplePacket": 4096,
+    "maxSamplesBytes": 32768,
+    "maxSourceDepth": 256,
+    "maxSourceEntries": 2000000,
+    "maxTasks": 512,
+    "maxTerminalErrorFrames": 1,
+    "maxVersionReads": 1,
+    "nodeTimeoutSeconds": 60,
+    "prepareObserverSeconds": 30,
+    "probeObserverSeconds": 3,
+    "profileObservationSeconds": 45,
+    "profileSeconds": 3,
+    "versionReadSeconds": 3
+  },
+  "corrections": {
+    "importantCorrected": 3,
+    "importantReproduced": 3,
+    "independentRereview": false,
+    "method": "ONE_NATIVE_TDD_PASS"
+  },
+  "date": "2026-10-21",
+  "diagnosticFiles": {
+    "copy_envelope.py": "ab5a345134c8fff3b085c832515452fbf1a28fa1214e04cb5420344e9be6cca9",
+    "copy_observation.py": "d53b23fc6cbe815729c54b5ca3bdef887b30350a1c271cae6e9f58bed56c7542",
+    "copy_sampler.py": "97a357122338a446f0bf3448e77dbf3da0a7ba9e84efb990b6fa54f1c1f84206",
+    "fd_pin.py": "5990520c474551a9f933f8f72e6a2a22c710bf510dd365bcabcbb86b4b1cea23",
+    "layer_binding.py": "a590241040833af2b38038e0029d6da49d1d9998bdf353539011bfa03ec64a2e",
+    "node_observation.py": "07c53ebef8e02673f57a5d53c2758e3821bdd3ff0457bfe1d89489dce23d38e0",
+    "owned_capability.py": "c2e12591f9a73a078ca001988ab790f4dee083c91b5df482c1fcc4781b109ee8",
+    "owned_worker.py": "40d6a2d13aaeb0407277237178867069f3946adcc40fa4aabf71024d3cba0034",
+    "recovery_adapter.py": "638db46ee79b3623b4fb195942e0afd4e99163922ac7f38a4ec0ecc649cffb91",
+    "resource_observation.py": "d722ba407d13c9fe999e3c826eebc3c863ee2adb43e660ecf0a675e159e58272",
+    "retained_response.py": "4e08b5408b4c15d8054e625ce7c0d2417e977e35dfbb07ec57117ab1645cc7c7",
+    "sampler_worker.py": "d7dfcb36850c706364fc0a1a6933d12bd4ca341a5c4e3a999461b9e0b61e78a7",
+    "vfs_source.py": "9ddf1a0d36c171aac6c1f089d3542107235c69287496b3afe22d2843c1e7ede7"
+  },
+  "frozenFiles": {
+    "a1_c5_dns_closure_continuation.py": "82f658abaea19440d8da273f302fa891f66693bd5791f9a6538d39011b14ae51",
+    "a1_c5_dns_continuation.py": "c588d7b422fbbb32388061430bf9fbc6b4cbccdc391d04ac5605a1a5a734ccc8",
+    "a1_c5_dns_path_continuation.py": "9efcdbe377c90cc5827136ed0a52ffda5d0b10fd6798fe971dd5e8198e379955",
+    "a1_c5_posttermination_absence.py": "e834a1ee80f0a57ee4ca069fa6d0ed310f6e97c2e4a5349e060b049a380d89ce",
+    "a1_continuation_helper_v2.py": "2d3d6824661069968d6355d4a89222812fd394f778293328f4bf37a638cd739c",
+    "a1_de_entry_reconcile.py": "8bab12969ae3f55ceec0c3e4138b626088a67f2a417bb9b8658156046207d5ab",
+    "a1_diagnostic_continuation.py": "244a00811f8df77da24b8c29165dd7c771cf5f2919fc208c4e610b53b69d13ba",
+    "a1_error_retention.py": "e66c6dd455e55fcac71d10a4b67946edb06c237f98710b7444c617fcb48d52ca",
+    "a1_execution_boundary.py": "0ceb63d1ffd4161e9436906b3132a19bfe0fa4c30bd414f2eef506aa1461424b",
+    "a1_image_inventory_only.py": "69bd0ea2c1bfd5d6dfc0dd31761feb0d2bfad3723fa5c32dde23e29118e5d0fa",
+    "a1_inflight_node_profile.py": "42e22a71c2c77d11317076fc3d0dda96a65dd76034cc0fd936e6d2c7dbcec281",
+    "a1_owned_runtime_retirement_v2.py": "0ada77332f596951cd88262b3e3f47f3397c6f7a724f1178e66611f4451430ee",
+    "a1_posttermination_proc_nlink.py": "e4d2a8205cb4d452d0126895943ee57b7412f3b1cf7cf7b0121dc4a4bb489385",
+    "a1_real_readonly_collector_v2.py": "8e78ecc974dcfeab2bab4828c86d3e15d72b1bc3a2fc4b24c2eae8160ce949a6",
+    "a1_single_entry_reconcile_v2.py": "424541f31760faefac9f961fa6b357d6a4592fe669803f924540116923262a0a",
+    "a1_unified_restore_continuation.py": "7708555a495e0c8e3a1b12409bb904b6a3b72aae5f3fc37d0be06eb638534f20",
+    "candidate-execution-unified-enumeration.py": "6797b2eac5c7be8186424678b2cdd3da244207b4bf6b40b786fd40450edbaf3f",
+    "candidate-execution-v2.py": "f90cac16eeabd545b761cd7a2b48557a6a3ad3079225d5af669c82cffbeaf8a8"
+  },
+  "privateFiles": {
+    "a1_owned_copy_diagnostics_v1.py": {
+      "bytes": 21196,
+      "sha256": "921ccfda0ff22527e0fd7fe0b81bc209510c43dc8373ceafca2a8648e1b042a1"
+    },
+    "a1_owned_copy_transport_v1.py": {
+      "bytes": 16971,
+      "sha256": "97a9f6dcd291812d840c01bb249e1c15938628164ec3c76ef1de9641c4288d1d"
+    },
+    "test_a1_owned_copy_diagnostics_v1.py": {
+      "bytes": 14345,
+      "sha256": "c0a573d027648d5b25e662ae6ad3b8387e81da9f4590c18cb9fe10f39ff204ce"
+    },
+    "test_a1_owned_copy_transport_v1.py": {
+      "bytes": 11675,
+      "sha256": "9dd81e9fc45a5a94f42d2e66fecd75ad4881654aa206ac457359a5a482b06a1d"
+    }
+  },
+  "publicImplementationCommit": "fc4592c19aa943322d449fb5e1ecc5e98e535226",
+  "publicImplementationMatchesCommit": true,
+  "pullRequest": 73,
+  "repository": "https://github.com/barsikdan-hue/Planly",
+  "reviewedSnapshot": {
+    "assessment": "NOT_READY_BEFORE_NATIVE_CORRECTIONS",
+    "critical": 0,
+    "gitHead": "fc4592c19aa943322d449fb5e1ecc5e98e535226",
+    "implementationHashesMatched": 35,
+    "important": 3,
+    "newMinor": 0,
+    "privateFiles": {
+      "a1_owned_copy_diagnostics_v1.py": {
+        "bytes": 20723,
+        "sha256": "e666fc73129e9f4aecd69f7b006caa33a1d9cd5f508a3967bd7170b2ea1d7708"
+      },
+      "a1_owned_copy_transport_v1.py": {
+        "bytes": 15881,
+        "sha256": "c1c734f4d386e185e52e50d9a6e7c983cb3df241c989226eb5962b5c77f44200"
+      },
+      "test_a1_owned_copy_diagnostics_v1.py": {
+        "bytes": 12346,
+        "sha256": "489990ba65ca8d1ae597f9de0efafa9e135c338b3305943254a553f8da07c5ed"
+      },
+      "test_a1_owned_copy_transport_v1.py": {
+        "bytes": 6312,
+        "sha256": "3a63fe56eab9163737680be8eefaa7c0fb7d1a1cc89b68fb641261d30c0b55ad"
+      }
+    }
+  },
+  "schema": 1,
+  "status": "SOURCE_PREPARED_AWAITING_EXACT_EXTERNAL_GATE",
+  "verification": {
+    "linux": {
+      "characterizationCases": 100,
+      "characterizationFailures": 0,
+      "jobId": 119140679124,
+      "rootFixturePassed": 5,
+      "runId": 39575739006,
+      "skipped": 0,
+      "standardPassed": 66
+    },
+    "privateWindows": {
+      "actualCurrentUserDPAPI": true,
+      "command": "python -B -m unittest discover -s .superpowers/sdd/2026-10-19-lentaro-m1/a1-private -p 'test_a1_owned_copy*_v1.py' -v",
+      "exitCode": 0,
+      "failed": 0,
+      "passed": 19,
+      "processAndRecoveryIO": "SYNTHETIC_ONLY",
+      "seconds": 61.355,
+      "skipped": 0
+    },
+    "windowsPublic": {
+      "linuxSkipped": 28,
+      "passed": 38
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 ## Current entrypoint — Lentaro M1, owner approved 2026-10-19
 
+- Later direct Owner instruction21Oct2026 in this chat: «Разрешаю вообще все и одабряваю все действия пока не будет готов saas полностью». Necessary project development/delivery, new SSH investigations, proved owned-resource cleanup, merge/release/migrations and needed integrations are authorized without repeated per-command approvals. Historical one-use grants remain consumed; never replay them. Preserve data/privacy/isolation, verified ownership, source/evidence identity and uncertain-outcome handling. This later authorization supersedes earlier approval STOPs within the agreed SaaS objective; it does not make unknown ownership, absent credentials or human product acceptance factual. Record new operations and prove their outcome; use the existing VPS by default.
+
 - Read [PROJECT_STATE.md](PROJECT_STATE.md), environment boundaries and approved M1 contract before work. Check relevant drift; do not restart the completed audit.
 - M1 v2 supersedes older per-subtask STOP rules and broad SaaS exclusion below. Ordinary A–F source work, commit/push and Draft PR are authorized. Privacy/isolation and exact external-action gates remain.
 - Find existing code and active PRs before implementation. Update state and exact evidence after stages. Verify old entries before treating them as current. Do not change hosting by default; record concrete conflicts and authoritative resolutions.

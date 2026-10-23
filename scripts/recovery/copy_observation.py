@@ -98,7 +98,7 @@ def compare(before, after, request_start, request_deadline):
                 return False
         return True
 
-    if not finite(request_start) or not finite(request_deadline) or not 0 < request_deadline - request_start <= 60:
+    if not finite(request_start) or not finite(request_deadline) or not request_start < request_deadline <= request_start + 60:
         return result
     if not valid(before) or not valid(after) or before['end'] >= after['start']:
         return result
