@@ -5,7 +5,7 @@ Status: **SOURCE_MERGED / VERIFIED_IMAGE_BUILT / M1_NOT_DEPLOYED**. Owner standi
 ## Source integration and CI
 
 - PR68 merged as `be77bc721bfdda4e342248504c7d34a3ef992487`; [CI39918296322](https://github.com/barsikdan-hue/Planly/actions/runs/39918296322) and [Self-host39918296407](https://github.com/barsikdan-hue/Planly/actions/runs/39918296407) SUCCESS.
-- PR69 merged after68 as `0691ff91a9497237238941d25d34675c6622453e`. Its tree `b35ddfe5f7e50025cb029aff5af6bbd7b642dc8b` exactly equals the retained CI artifact/source tree for M1 `b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7`. [Self-host39921233023](https://github.com/barsikdan-hue/Planly/actions/runs/39921233023) SUCCESS; [main CI39921233034](https://github.com/barsikdan-hue/Planly/actions/runs/39921233034) still running at this checkpoint.
+- PR69 merged after68 as `0691ff91a9497237238941d25d34675c6622453e`. Its tree `b35ddfe5f7e50025cb029aff5af6bbd7b642dc8b` exactly equals the retained CI artifact/source tree for M1 `b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7`. [Self-host39921233023](https://github.com/barsikdan-hue/Planly/actions/runs/39921233023) and [main CI39921233034](https://github.com/barsikdan-hue/Planly/actions/runs/39921233034) SUCCESS.
 - Render service autoDeploy=`no`, trigger=`off`, freshly read23October before the M1 merge. No Render mutation.
 
 ## Preservation prerequisites
@@ -32,6 +32,19 @@ A new v2 helper replaces only the verified artifact's build-context ignore file;
 
 Private raw evidence, helpers, configuration and encrypted response remain outside Git. `pull=false` and RUN `network=none` are not presented as an absolute daemon egress firewall.
 
+## Actual disposable migration rehearsal
+
+Run `78e49030-630c-4d0b-8b6e-1247b7af90c1` completed **MIGRATION_REHEARSAL_PASS / SSH0 / SEALED / VALID**. A separate pinned PostgreSQL container used networknone/read-only/tmpfs; a candidate Node container shared only that isolated namespace. No working volumes, public ports, provider tokens or sender were used.
+
+The original dump was restored and verified against all22 tables/rows/schema/ledger13/sequences. The real candidate `node node_modules/drizzle-kit/bin.cjs migrate` ran once, producing exactly28 tables and17 ledger rows. All four new hashes/timestamps matched0013–0016, all first13 ledger entries were preserved, all old projected rows and sequences were preserved, and the six new tables were empty. The migration ID sequence alone advanced13→17. Historical migration replayfalse/provider calls0. Both owned containers were normally stopped/removed; final label-scoped absence PASS. Full working baseline before/after remained unchanged.146 rehearsal native commands, excluding the two fixed read-only baseline collector calls.
+
+Independent source review found an incomplete adapter to the frozen Restore methods. One Native correction added explicit local-daemon routing, pinned-image/empty-bind allowlists and owned-container lifecycle checks. Actual frozen create/container/exec integration was tested with mocked native replies, including refusal of foreign images/networks/binds/CIDs and stopped exec. Five focused checks PASS before dispatch. This does not represent a second independent source PASS.
+
+- Root helper SHA256 `5fe60cc5a3691500ffef2fb413566e530544135f93ca911d3e71e7121179f004`.
+- Wrapper SHA256 `7f9d052349e8700901dd456bc595e6796eb416507b05600db10fbcefccb3337f`.
+- Response781bytes SHA256 `d05e8c54932d1a1e0ae45a53021029470471c1f65584614397ee6e6eaeda6216`.
+- Private ciphertext1030bytes SHA256 `7c289a73b72a88daca4a9f2bdb56c4dbaa9e9937e1327e29aacf9f08ce314990`.
+
 ## Remaining acceptance
 
-Next: one disposable candidate migration rehearsal, then persistent staging rollout and browser/user isolation acceptance. M1 remains NOT_DEPLOYED. Public-origin/Mini App/bot configuration and real USER provider journey remain unverified. Independent off-VM disaster recovery is still unverified and remains a production-cutover prerequisite. Robokassa and email accounts are not connected; development continues with the approved1000RUB/calendar-month/manual-renewal/no-trial terms, without invented credentials or commercial acceptance.
+Next: persistent staging rollout and browser/user isolation acceptance. M1 remains NOT_DEPLOYED. Public-origin/Mini App/bot configuration and real USER provider journey remain unverified. Independent off-VM disaster recovery is still unverified and remains a production-cutover prerequisite. Robokassa and email accounts are not connected; development continues with the approved1000RUB/calendar-month/manual-renewal/no-trial terms, without invented credentials or commercial acceptance.
