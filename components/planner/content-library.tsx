@@ -28,8 +28,9 @@ function MediaPreview({ item }: { item: Media }) {
     return item.type.startsWith('video/') ? <video src={item.url} controls aria-label={item.name}/> : <img src={item.url} alt={item.name}/>;
 }
 
-export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, startReview, editorControl, children, ownerId, onSharedCopied }: {
+export function ContentLibrary({ items, media, posts, activeTab, onTabChange, upload, saveItem, deleteItem, createPublication, openPublication, startReview, editorControl, children, ownerId, onSharedCopied, batchControl }: {
     ownerId?: string;
+    batchControl?: ReactNode;
     onSharedCopied?: (items: LibraryItemDto[]) => Promise<void>;
     items: LibraryItemDto[];
     media: Media[];
@@ -119,6 +120,7 @@ export function ContentLibrary({ items, media, posts, activeTab, onTabChange, up
         {tab === 'publications' ? <section role="tabpanel" id="publications-panel" aria-labelledby="publications-tab">{children}</section> : <section role="tabpanel" id="prepared-panel" aria-labelledby="prepared-tab">
             <div className="page-heading library-heading"><div><div className="eyebrow">ОТ ИДЕИ К ПУБЛИКАЦИИ</div><h1>Библиотека</h1><p>Подготовь текст и медиа для будущих публикаций.</p></div>{scope === 'mine' && !editor && <Button className="action" disabled={busy} onClick={() => edit()}><Plus size={17}/>Новая заготовка</Button>}</div>
             {!editor && <div className="library-tabs" role="group" aria-label="Источник заготовок"><Button aria-pressed={scope === 'mine'} variant={scope === 'mine' ? 'default' : 'outline'} disabled={busy} onClick={() => setScope('mine')}>Мои</Button><Button aria-pressed={scope === 'shared'} variant={scope === 'shared' ? 'default' : 'outline'} disabled={busy} onClick={() => setScope('shared')}>Общие</Button></div>}
+            {scope === 'mine' && !editor && batchControl}
             {error && <p className="notice error" role="alert">{error}</p>}
             {editorControl?.notice && <p className="notice" role="status">{editorControl.notice}</p>}
             {editorControl?.blockedReason && <p className="notice error" role="alert">{editorControl.blockedReason}</p>}

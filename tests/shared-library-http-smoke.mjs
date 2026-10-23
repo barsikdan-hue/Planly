@@ -55,7 +55,9 @@ async function privateStorage() {
   return { config: { ...config, S3_ENDPOINT: endpoint, S3_PUBLIC_ENDPOINT: endpoint }, stop: () => new Promise(resolve => server.close(resolve)) };
 }
 
-export async function startSharedLibraryRuntime() {
+/** @param {{cleanupPhase?: <T>(label: string, work: () => Promise<T>) => Promise<T>}} [options] */
+export async function startSharedLibraryRuntime(options = {}) {
+  const phase = options.cleanupPhase ?? ((_label, work) => work());
   const database = new URL(process.env.DATABASE_URL || '');
   const local = ['127.0.0.1', 'localhost'].includes(database.hostname) && database.pathname === '/planly_test';
   const docker = process.env.PLANLY_SHARED_LIBRARY_HTTP_TEST === 'isolated-ci' && database.hostname === 'postgres' && database.pathname === '/planly';
@@ -97,14 +99,14 @@ export async function startSharedLibraryRuntime() {
     const cookie = header.split(';')[0]; cookies.push(cookie); return cookie;
   };
   const cleanup = async () => {
-    for (const cookie of cookies) await api('/api/auth/logout', cookie, 'POST').catch(() => {});
-    if (server?.exitCode === null) { const exited = once(server, 'exit'); server.kill(); await exited; }
-    const assets = await db.select().from(mediaAssets).where(inArray(mediaAssets.userId, ids));
+    for (const cookie of cookies) await phase('shared.logout', async () => { await api('/api/auth/logout', cookie, 'POST').catch(() => {}); });
+    if (server?.exitCode === null) await phase('shared.next.exit', async () => { const exited = once(server, 'exit'); server.kill(); await exited; });
+    const assets = await phase('shared.pg.media', async () => await db.select().from(mediaAssets).where(inArray(mediaAssets.userId, ids)));
     for (const asset of assets) keys.add(asset.storageKey);
-    await db.delete(users).where(inArray(users.id, ids));
-    for (const key of keys) await storage.delete(key);
-    if (storageFixture) await storageFixture.stop();
-    await closeDb();
+    await phase('shared.pg.users.delete', async () => { await db.delete(users).where(inArray(users.id, ids)); });
+    for (const key of keys) await phase('shared.s3.delete', () => storage.delete(key));
+    if (storageFixture) await phase('shared.storage.close', () => storageFixture.stop());
+    await phase('shared.pg.close', closeDb);
   };
   try {
     await db.insert(users).values(await Promise.all(ids.map(async (id, index) => ({ id, email: `${id}@example.test`, displayName: `Shared fixture ${index}`, role: index === 0 ? 'ADMIN' : 'USER', accessState: 'ACTIVE', authInitialized: true, passwordHash: await hashOwnerPassword(password) }))));

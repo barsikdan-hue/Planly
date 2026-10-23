@@ -16,8 +16,10 @@ const test = baseTest.extend<object, { sharedRuntime: SharedRuntime }>({
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 
-async function openPrepared(page: Page, base: string) {
-  await page.goto(`${base}/#content`);
+async function openPrepared(page: Page, base: string, displayName: string) {
+  await page.goto(`${base}/`);
+  await expect(page.locator('.profile-button')).toContainText(displayName);
+  await page.evaluate(() => { window.location.hash = 'content'; });
   await expect(page.getByRole('heading', { name: 'Библиотека', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Заготовки', exact: true }).click();
 }
@@ -30,7 +32,7 @@ test('ADMIN publishes explicitly; USER copies selected ordered media into indepe
     // ADMIN session is issued by the actual login API, over this compiled server.
     await page.goto(`${base}/login`);
     expect(await page.evaluate(async credentials => (await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(credentials) })).status, { email: `${ids[0]}@example.test`, password })).toBe(200);
-    await openPrepared(page, base);
+    await openPrepared(page, base, 'Shared fixture 0');
     await expect(page.getByRole('button', { name: 'Мои', exact: true })).toBeVisible();
     const card = (title: string) => page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
     await expect(card('Archived hidden').getByRole('button', { name: 'Добавить в общую библиотеку', exact: true })).toHaveCount(0);
@@ -49,7 +51,7 @@ test('ADMIN publishes explicitly; USER copies selected ordered media into indepe
     await page.getByLabel('Пароль', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page).toHaveURL(`${base}/`);
-    await openPrepared(page, base);
+    await openPrepared(page, base, 'Shared fixture 1');
     await expect(page.getByRole('button', { name: 'Добавить в общую библиотеку', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Общие', exact: true }).click();
     await expect(card('Shared text')).toBeVisible(); await expect(card('Shared ordered media')).toBeVisible();
@@ -110,7 +112,7 @@ test('ADMIN publishes explicitly; USER copies selected ordered media into indepe
     try {
       await bPage.goto(`${base}/login`);
       expect(await bPage.evaluate(async credentials => (await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(credentials) })).status, { email: `${ids[2]}@example.test`, password })).toBe(200);
-      await openPrepared(bPage, base); await expect(bPage.getByRole('heading', { name: 'Shared text', exact: true })).toHaveCount(0);
+      await openPrepared(bPage, base, 'Shared fixture 2'); await expect(bPage.getByRole('heading', { name: 'Shared text', exact: true })).toHaveCount(0);
       await bPage.getByRole('button', { name: 'Общие', exact: true }).click();
       const single = bPage.locator('article').filter({ has: bPage.getByRole('heading', { name: 'Shared text', exact: true }) });
       const response = bPage.waitForResponse(value => new URL(value.url()).pathname === '/api/shared-library/copy' && value.request().method() === 'POST');

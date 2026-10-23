@@ -11,6 +11,7 @@ import type { ComposerPostInput } from '../planner.ts';
 import type { SlotQuery } from '../contracts/swipe-planner.ts';
 import type {AnalyticsQuery,AnalyticsDto,RefreshSummary} from '../contracts/analytics.ts';
 import type {SchedulingPlanPreviewInput,SchedulingPlanPreview,SchedulingPlanCommitInput,SchedulingPlanCommitResult} from '../contracts/scheduling-plan.ts';
+import type {LibraryBatchPreviewInput,LibraryBatchPreview,LibraryBatchCommitInput,LibraryBatchCommitResult} from '../contracts/library-batch.ts';
 
 export type MediaAssetWithPreview = MediaAssetDto & { previewUrl: string };
 export type PlannerSnapshot = {
@@ -79,6 +80,17 @@ export function cancelPostTargetApproval(postId:string,targetId:string,input:imp
 export function loadProfile(): Promise<ProfileDto> { return request('/api/profile'); }
 export function logoutSession(): Promise<void> { return request('/api/auth/logout',{method:'POST'}); }
 export function loadSchedulingDrafts():Promise<PostDto[]> {return request('/api/posts');}
+
+export function loadLibraryBatchEligibility():Promise<{eligible:boolean}>{return request('/api/library/batch-consent/preview');}
+export function previewLibraryBatchRequest(input:LibraryBatchPreviewInput):Promise<LibraryBatchPreview>{
+  return request('/api/library/batch-consent/preview',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Library-Batch':'1'}});
+}
+export function commitLibraryBatchRequest(input:LibraryBatchCommitInput):Promise<LibraryBatchCommitResult>{
+  return request('/api/library/batch-consent/commit',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Library-Batch':'1'}});
+}
+export function loadLibraryBatchOperation(operationId:string):Promise<LibraryBatchCommitResult>{
+  return request(`/api/library/batch-consent/operations/${encodeURIComponent(operationId)}`);
+}
 
 export function previewSchedulingPlanRequest(input:SchedulingPlanPreviewInput):Promise<SchedulingPlanPreview> {
   return request('/api/scheduling-plans/preview',{...jsonRequest('POST',input),headers:{'content-type':'application/json','X-Planly-Scheduling':'1'}});

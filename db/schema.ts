@@ -17,6 +17,7 @@ import { sql } from 'drizzle-orm';
 import type { AnalyticsError, AnalyticsMetric, MetricObservation } from '../lib/contracts/analytics.ts';
 import type { SchedulingPlanReceipt } from '../lib/contracts/scheduling-plan.ts';
 import type { LibraryItemDto } from '../lib/contracts/library.ts';
+import type { LibraryBatchIntent, LibraryBatchReceipt } from '../lib/contracts/library-batch.ts';
 
 const createdAt = timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
@@ -66,6 +67,19 @@ export const schedulingPlanOperations = pgTable('scheduling_plan_operations', {
   receipt: jsonb('receipt').$type<SchedulingPlanReceipt>().notNull(),
   createdAt,
 }, table => [primaryKey({columns:[table.userId,table.operationId]}),check('scheduling_plan_request_hash_format',sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`)]);
+
+// Historical result IDs are retained in JSON without source/result cascading FKs.
+export const libraryBatchConsentOperations = pgTable('library_batch_consent_operations', {
+  userId:text('user_id').notNull().references(()=>users.id,{onDelete:'cascade'}),
+  operationId:uuid('operation_id').notNull(),
+  requestHash:text('request_hash').notNull(),
+  canonicalIntent:jsonb('canonical_intent').$type<LibraryBatchIntent>().notNull(),
+  acceptedSnapshotFingerprint:text('accepted_snapshot_fingerprint').notNull(),
+  receipt:jsonb('receipt').$type<LibraryBatchReceipt>().notNull(),
+  createdAt,
+}, table=>[primaryKey({columns:[table.userId,table.operationId]}),
+  check('library_batch_request_hash_format',sql`${table.requestHash} ~ '^[a-f0-9]{64}$'`),
+  check('library_batch_snapshot_hash_format',sql`${table.acceptedSnapshotFingerprint} ~ '^[a-f0-9]{64}$'`)]);
 
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),

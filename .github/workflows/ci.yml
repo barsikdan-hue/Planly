@@ -87,6 +87,9 @@ jobs:
       - name: Real compiled shared library and independent private media HTTP smoke
         run: node --experimental-strip-types tests/shared-library-http-smoke.mjs
 
+      - name: Real compiled finite Library batch consent and recovery HTTP smoke
+        run: node --experimental-strip-types tests/library-batch-http-smoke.mjs
+
       - name: Install isolated browser test Chromium
         run: pnpm exec playwright install --with-deps chromium
 
