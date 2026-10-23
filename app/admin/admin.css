@@ -1,0 +1,18 @@
+.admin-shell { min-height: 100vh; background: #f3f7fc; padding: 32px 16px; color: #28324a; }
+.admin-card { max-width: 900px; margin: auto; padding: 32px; background: white; border: 1px solid #e4eaf3; border-radius: 20px; }
+.admin-back { color: #3159cc; }
+.admin-back:focus-visible, .admin-actions a:focus-visible { outline: 3px solid #92b5ff; outline-offset: 3px; }
+.admin-heading { margin: 28px 0; }
+.admin-heading > span { color: #3867f4; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.admin-heading h1 { margin: 8px 0 10px; font-size: 32px; font-weight: 750; }
+.admin-heading p, .admin-privacy { line-height: 1.6; }
+.admin-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-actions a { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; min-height: 140px; padding: 22px; border: 1px solid #dfe6f0; border-radius: 16px; color: inherit; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+.admin-actions a:hover { border-color: #92b5ff; box-shadow: 0 10px 28px #3159cc14; }
+.admin-actions svg { width: 26px; height: 26px; color: #3867f4; }
+.admin-actions span { display: grid; gap: 7px; }
+.admin-actions strong { font-size: 18px; }
+.admin-actions small { color: #606d86; font-size: 14px; line-height: 1.5; }
+.admin-actions b { color: #3867f4; font-size: 22px; }
+.admin-privacy { margin: 24px 0 0; padding: 16px; border-radius: 12px; background: #f6f8fc; color: #526078; font-size: 14px; }
+@media(max-width: 660px) { .admin-card { padding: 22px; } .admin-actions { grid-template-columns: 1fr; } .admin-heading h1 { font-size: 28px; } }

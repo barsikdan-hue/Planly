@@ -57,7 +57,10 @@ test('ADMIN confirms block and restore without gaining USER content or reviving 
     await page.goto(`${base}/`);
     await page.locator('.profile-button').click();
     await page.getByRole('menuitem', { name: 'Настройки профиля', exact: true }).click();
-    await page.getByRole('link', { name: 'Пользователи', exact: true }).click();
+    await page.getByRole('link', { name: 'Администрирование коллег', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/admin`);
+    await expect(page.getByRole('heading', { name: 'Администрирование', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: /Управление коллегами/ }).click();
     await expect(page).toHaveURL(`${base}/admin/users`);
     await expect(page.getByRole('heading', { name: 'Пользователи', exact: true })).toBeVisible();
     const aRow = page.getByRole('row').filter({ hasText: `${ids[1]}@example.test` });
@@ -100,9 +103,10 @@ test('ADMIN confirms block and restore without gaining USER content or reviving 
     await page.getByRole('button', { name: 'Войти', exact: true }).click(); await expect(page).toHaveURL(`${base}/`);
     await page.reload();
     expect(await page.evaluate(async expected => (await (await fetch('/api/profile')).json()).email === expected, `${ids[1]}@example.test`)).toBe(true);
+    await page.goto(`${base}/admin`); await expect(page).toHaveURL(`${base}/`);
     await page.goto(`${base}/admin/users`); await expect(page).toHaveURL(`${base}/`);
     await page.locator('.profile-button').click(); await page.getByRole('menuitem', { name: 'Настройки профиля', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Пользователи', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Администрирование коллег', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Выйти', exact: true }).click(); await expect(page).toHaveURL(`${base}/login`);
   } finally {
     await context.unrouteAll({ behavior: 'wait' }); await page.close();
