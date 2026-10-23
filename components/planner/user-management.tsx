@@ -72,7 +72,7 @@ export function UserManagement() {
     finally {mutation.current=false;if(!controller.signal.aborted)setBusy(false);}
   }
   return <main className="users-shell"><section className="users-card">
-    <Link href="/">← В Lentaro</Link><h1>Пользователи</h1>
+    <Link href="/admin">← Администрирование</Link><h1>Пользователи</h1>
     <p>Управляй доступом коллег. Их личные посты, медиа и подключения доступны только им.</p>
     {loading?<p>Загрузка пользователей…</p>:!colleagues.length&&!error?<p>Зарегистрированных коллег пока нет. <Link href="/admin/invitations">Пригласить коллегу</Link></p>:null}
     {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}

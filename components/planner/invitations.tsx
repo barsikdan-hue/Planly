@@ -70,7 +70,7 @@ export function Invitations() {
     catch { setNotice('Выдели и скопируй ссылку из поля.'); }
   }
   return <main className="invitations-shell"><section className="invitations-card">
-    <Link href="/">← В Lentaro</Link><h1>Приглашения</h1><p>Доступ к личному кабинету. Передай ссылку адресату самостоятельно; она действует 24 часа и используется один раз.</p>
+    <Link href="/admin">← Администрирование</Link><h1>Приглашения</h1><p>Доступ к личному кабинету. Передай ссылку адресату самостоятельно; она действует 24 часа и используется один раз.</p>
     <form onSubmit={create}><label htmlFor="invitation-email">Email</label><input id="invitation-email" type="email" required maxLength={320} autoComplete="off" value={email} onChange={event => setEmail(event.target.value)} disabled={busy}/><button type="submit" disabled={busy}>{busy ? 'Подождите…' : 'Пригласить'}</button></form>
     {link && <div className="invitation-link"><label htmlFor="invitation-link">Одноразовая ссылка</label><input id="invitation-link" readOnly value={link} onFocus={event => event.target.select()}/><button type="button" onClick={() => { void copy(); }}>Копировать ссылку</button><p>Скопируй сейчас: после обновления страницы ссылка не восстанавливается.</p></div>}
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}

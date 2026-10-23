@@ -60,11 +60,14 @@ test('ADMIN manually shares a single-use invite and USER activates an isolated w
     await page.goto(`${base}/`);
     await page.locator('.profile-button').click();
     await page.getByRole('menuitem', { name: 'Настройки профиля', exact: true }).click();
+    await page.getByRole('link', { name: 'Администрирование коллег', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/admin`);
+    await expect(page.getByRole('heading', { name: 'Администрирование', exact: true })).toBeVisible();
     const mounted = page.waitForResponse(response => {
       const referer = response.request().headers().referer;
       return new URL(response.url()).pathname === '/api/admin/invitations' && response.request().method() === 'GET' && Boolean(referer && new URL(referer).pathname === '/admin/invitations');
     });
-    await page.getByRole('link', { name: 'Приглашения коллег', exact: true }).click();
+    await page.getByRole('link', { name: /Пригласить коллегу/ }).click();
     expect((await mounted).status()).toBe(200);
     await expect(page.getByRole('heading', { name: 'Приглашения', exact: true })).toBeVisible();
     const create = async (email: string) => {
@@ -108,13 +111,15 @@ test('ADMIN manually shares a single-use invite and USER activates an isolated w
     await page.reload();
     expect((await ownWorkspace()).email).toBe(emails[0]);
     expect(await page.evaluate(async () => (await fetch('/api/admin/invitations')).status)).toBe(403);
+    await page.goto(`${base}/admin`);
+    await expect(page).toHaveURL(`${base}/`);
     await page.goto(`${base}/admin/invitations`);
     await expect(page).toHaveURL(`${base}/`);
     await expect(page.getByRole('heading', { name: 'Приглашения', exact: true })).toHaveCount(0);
     await page.locator('.profile-button').click();
     await page.getByRole('menuitem', { name: 'Настройки профиля', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Приглашения коллег', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Администрирование коллег', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Выйти', exact: true }).click();
     await expect(page).toHaveURL(`${base}/login`);
     await page.reload();
