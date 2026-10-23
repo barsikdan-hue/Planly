@@ -30,7 +30,7 @@ for(const width of [1366,390,320])test(`compiled real HTTP same-operation late r
  const assets=await f.db.select().from(publications).where(eq(publications.userId,f.ids[1]));expect(assets).toHaveLength(0);
  // The child serves real routes. Only transport responses are held/lost below.
  context.on('request',r=>{const url=new URL(r.url());if(!origins.has(url.origin)&&!['127.0.0.1','localhost'].includes(url.hostname))external.push(url.origin);});
- await login(page,f);expect(await page.title()).toBe('Personal SMM Planner');await page.getByRole('button',{name:'Запланировать набор',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'Набор из библиотеки',exact:true})).toBeVisible();
+ await login(page,f);expect(await page.title()).toBe('Lentaro');await page.getByRole('button',{name:'Запланировать набор',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'Набор из библиотеки',exact:true})).toBeVisible();
  for(const id of f.input.sourceIds)await page.getByLabel(`Выбрать заготовку ${id}`,{exact:true}).check();
  for(const provider of ['TELEGRAM','MAX'])await page.getByLabel(`Площадка Batch ${provider}`,{exact:true}).check();
  await page.getByLabel('Начало периода').fill(f.input.settings.startDate);await page.getByLabel('Конец периода').fill(f.input.settings.endDate);await page.getByLabel('Время слотов').fill('10:00,18:00');

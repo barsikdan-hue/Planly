@@ -1,0 +1,616 @@
+{
+  "job_id": "m1-task-d-editorial-pilot-r1",
+  "batch_id": "lentaro-m1-pilot-2026-10-19",
+  "material_id": "BATCH-L01-L02-L03",
+  "revision": 1,
+  "input_digest": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "role": "fact-checker",
+  "reviewer": "independent delegated context /root/m1_editorial_factcheck; not author",
+  "checked_on": "2026-10-19",
+  "exact_access_time": "NOT_RECORDED",
+  "verdict": "READY",
+  "scope_checked": [
+    "Exact frozen text, title, CTA, caption and alt of L01-L03 r1",
+    "Independent recalculation of hypothetical L01 model",
+    "Current official Dendrarium source, preamble and clauses 1.7, 1.12, 3.6",
+    "Actual fileview of all 12 final portrait/square/mobile270/mobile360 images",
+    "Final and original asset integrity; current general OpenAI content-ownership statement"
+  ],
+  "scope_not_checked": [
+    "Product/runtime/API execution, import, publication, provider delivery or account-specific legal/platform permission",
+    "Actual rent/cleaning rates, bookings, properties, engineering, accessible dog routes or assistance-animal legal rights",
+    "Independent third-party originality/non-infringement audit or determination of the actual account agreement"
+  ],
+  "materials": [
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "verdict": "READY",
+      "reason": "All amounts reproduce exactly under explicit hypothetical assumptions; title says remainder, text distinguishes cleaning-only remainder from net profit and market prices. CTA requests a cost comparison without promising an outcome."
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "verdict": "READY",
+      "reason": "Personal viewing exercise and CTA are editorial recommendations. No universal clearance standard, engineering finding or actual measured property is asserted. Limitations are explicit."
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "verdict": "READY",
+      "reason": "Published rule 3.6 independently confirmed. Scope is Dendrarium and ordinary pets; no all-parks or actual-route conclusion. Current source access date agrees with text."
+    }
+  ],
+  "claim_register": [
+    {
+      "claim_id": "L01-C1",
+      "verbatim_claim": "Десять броней по две ночи и две брони по десять дают одинаковую выручку — 80 000 ₽.",
+      "location": "L01 text paragraph 3",
+      "claim_type": "conditional calculation",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-CALC-L01"
+      ],
+      "exact_locator": "20*4000, 10*2=2*10=20",
+      "evidence_summary": "Both schemes sell 20 nights at the stipulated unchanged RUB 4000/night: RUB 80000.",
+      "entity_region_period": "Hypothetical single comparison period; no market geography",
+      "applicability": "Completed paid nights, same nightly price; not observed bookings",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Any input, period, fee allocation or price change",
+      "reasoning": "Independent PowerShell arithmetic; input assumptions are visible in final text."
+    },
+    {
+      "claim_id": "L01-C2a",
+      "verbatim_claim": "Но десять уборок стоят 20 000 ₽, а две — 4 000 ₽.",
+      "location": "L01 paragraph 4",
+      "claim_type": "conditional calculation",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-CALC-L01"
+      ],
+      "exact_locator": "10*2000; 2*2000",
+      "evidence_summary": "RUB 20000 and RUB 4000 respectively.",
+      "entity_region_period": "Hypothetical same period",
+      "applicability": "One owner-paid RUB 2000 cleaning per stay, no separate guest collection",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Change to number/cost/payer of cleanings",
+      "reasoning": "No actual service tariff claimed."
+    },
+    {
+      "claim_id": "L01-C2b",
+      "verbatim_claim": "После только этого расхода остаются 60 000 и 76 000 ₽. Разница — 16 000 ₽.",
+      "location": "L01 paragraph 4 and title",
+      "claim_type": "conditional calculation",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-CALC-L01"
+      ],
+      "exact_locator": "80000-20000; 80000-4000; 76000-60000",
+      "evidence_summary": "RUB 60000/76000; difference RUB 16000; discrepancy zero.",
+      "entity_region_period": "Hypothetical same period",
+      "applicability": "Cleaning-only remainder; commissions, taxes, utilities and other costs explicitly not calculated",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Any model or wording change",
+      "reasoning": "Title promises two remainders, not two net profits or yields."
+    },
+    {
+      "claim_id": "L01-C3",
+      "verbatim_claim": "Сравнивайте не только заполненный календарь, но и расходы на каждую смену гостей.",
+      "location": "L01 lead and CTA",
+      "claim_type": "editorial recommendation",
+      "status": "OPINION",
+      "materiality": "material",
+      "source_ids": [
+        "FC-CALC-L01"
+      ],
+      "exact_locator": "L01 final text",
+      "evidence_summary": "Comparison method illustrated by the conditional counterexample.",
+      "entity_region_period": "General rental evaluation",
+      "applicability": "No promised savings or guaranteed long booking; discount possibility is explicitly hedged",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Change to categorical profitability advice",
+      "reasoning": "No actual investment result or universal pricing behavior asserted."
+    },
+    {
+      "claim_id": "L02-C1",
+      "verbatim_claim": "Остаётся ли удобный лично вам проход? Не подставляйте универсальную «норму комфорта» вместо своего сценария.",
+      "location": "L02 title, paragraphs 2-4 and CTA",
+      "claim_type": "editorial recommendation",
+      "status": "OPINION",
+      "materiality": "material",
+      "source_ids": [],
+      "exact_locator": "L02 frozen text",
+      "evidence_summary": "Reader is asked to measure own furniture and test doors, drawers and passage with owner permission.",
+      "entity_region_period": "Hypothetical viewing in Russia",
+      "applicability": "Personal usability only; no regulatory minimum or actual dimensions",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Addition of dimensions, standards or property assertions",
+      "reasoning": "Question/title has no hidden universal measurement claim; taking three furniture dimensions is a voluntary exercise."
+    },
+    {
+      "claim_id": "L02-C2",
+      "verbatim_claim": "Он не подтверждает возможность перепланировки, конструктивную безопасность или точность площади в документах.",
+      "location": "L02 paragraph 5",
+      "claim_type": "method limitation",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [],
+      "exact_locator": "Stated exercise consists of furniture/door measurements, not structural/documentary investigation",
+      "evidence_summary": "The stated procedure cannot by itself establish those additional outcomes.",
+      "entity_region_period": "Scope of proposed viewing exercise",
+      "applicability": "No legal or engineering conclusion supplied",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Change to scope of exercise",
+      "reasoning": "Explicit limitation prevents measuring tape being presented as structural proof."
+    },
+    {
+      "claim_id": "L03-C1",
+      "verbatim_claim": "в опубликованных правилах «Дендрария» пункт 3.6 запрещает посещение с животными.",
+      "location": "L03 paragraph 3",
+      "claim_type": "attributed current published rule",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-SNP-RULES"
+      ],
+      "exact_locator": "Section 3 heading and 3.6; web lines 86,95",
+      "evidence_summary": "The official visitor-rule page prohibits entering with animals, expressly including dogs, cats and birds.",
+      "entity_region_period": "Dendrarium, Sochi; page actually opened 2026-10-19",
+      "applicability": "Ordinary pet example only. No independent ruling on assistance-animal rights, sanctions or all Sochi parks",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Before publication or visit and on any change to official page; no arbitrary expiry",
+      "reasoning": "Authoritative publisher and exact clause independently opened; preamble checked for document identity."
+    },
+    {
+      "claim_id": "L03-C2",
+      "verbatim_claim": "Близость парка сама по себе этого не подтверждает. Маршрут конкретного дома здесь не обследован.",
+      "location": "L03 title, lead and route CTA",
+      "claim_type": "editorial recommendation and scope limit",
+      "status": "OPINION",
+      "materiality": "material",
+      "source_ids": [
+        "FC-SNP-RULES"
+      ],
+      "exact_locator": "L03 route checklist",
+      "evidence_summary": "Reader is asked to verify permission, crossings and personal evening comfort; no factual route is represented as inspected.",
+      "entity_region_period": "General apartment-choice exercise in Sochi",
+      "applicability": "No exact property, route, travel time, accessibility or safety result",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Addition of a specific building/route/safety claim",
+      "reasoning": "Rule example supports need to check access, without proving any specific alternative route."
+    },
+    {
+      "claim_id": "L03-C3",
+      "verbatim_claim": "Правила проверены 19.10.2026; перед посещением откройте их снова.",
+      "location": "L03 paragraph 3",
+      "claim_type": "access date and recheck instruction",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-SNP-RULES"
+      ],
+      "exact_locator": "Independent source opening in this review; official 1.7 web lines 56-57",
+      "evidence_summary": "Opened on the stated date; 1.7 allows changes and establishes website version priority over conflicting onsite text.",
+      "entity_region_period": "2026-10-19 source access",
+      "applicability": "Access date is not publication date or a guarantee of future rule stability",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Future use",
+      "reasoning": "Preamble mentions protocol dated 12.03.2025, not a demonstrated web publication date."
+    },
+    {
+      "claim_id": "VIS-L01",
+      "verbatim_claim": "Два условных интерьера за дверями; один ключ сопоставлен со связкой ключей и бельём.",
+      "location": "L01 all 4 final variants, alt and provenance caption",
+      "claim_type": "visual/context description",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-ASSET-FILEVIEW"
+      ],
+      "exact_locator": "L01 final assets",
+      "evidence_summary": "Viewed doors/interiors, one key versus keyring and folded fabric. No prices, profitability figures, branded property or claim of ten depicted stays.",
+      "entity_region_period": "Conceptual synthetic illustration",
+      "applicability": "Not an exact numerical chart or real listing",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Any asset/caption change",
+      "reasoning": "Text discloses conceptual AI origin; visual does not expand monetary claim."
+    },
+    {
+      "claim_id": "VIS-L02",
+      "verbatim_claim": "Условная спальня с кроватью, шкафом и измерительной лентой в проходе; размеры не утверждаются.",
+      "location": "L02 all 4 final variants, alt and caption",
+      "claim_type": "visual/context description",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-ASSET-FILEVIEW"
+      ],
+      "exact_locator": "L02 final assets",
+      "evidence_summary": "Bed, wardrobe and yellow tape visible; no reliably readable dimensional value or building identifier. Tape is conceptual, not calibrated measurement evidence.",
+      "entity_region_period": "Conceptual synthetic bedroom",
+      "applicability": "No safe-clearance or usable-area claim",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Any asset/caption change",
+      "reasoning": "Visual shows exercise theme, not proof of a real bedroom fitting a particular user."
+    },
+    {
+      "claim_id": "VIS-L03",
+      "verbatim_claim": "Поводок у условной двери, дорожка вдоль ограждённого сада; это не карта и не изображение Дендрария.",
+      "location": "L03 all 4 final variants, alt and caption",
+      "claim_type": "visual/context description",
+      "status": "SUPPORTED",
+      "materiality": "material",
+      "source_ids": [
+        "FC-ASSET-FILEVIEW"
+      ],
+      "exact_locator": "L03 final assets",
+      "evidence_summary": "Leash, generic doorway, sidewalk and garden fence visible; no Dendrarium sign, documented route, access sign, dog inside a forbidden area or actual location claim.",
+      "entity_region_period": "Conceptual synthetic outdoor scene",
+      "applicability": "No route permission, geographic accuracy or evening-safety proof",
+      "checked_at": "2026-10-19",
+      "recheck_condition": "Any asset/caption change",
+      "reasoning": "No material implicit factual expansion beyond the personal route-check recommendation."
+    }
+  ],
+  "primary_sources_opened": [
+    {
+      "source_id": "FC-SNP-RULES",
+      "publisher": "ФГБУ Сочинский национальный парк",
+      "url": "https://npsochi.ru/rules/informatsionnye-materialy-o-poseshchenii-dendrologicheskogo-parka-federalnogo-znacheniya-dendrariy-t/",
+      "accessed_on": "2026-10-19",
+      "document_date": "Preamble refers to 12.03.2025 protocol 2-Д p8; web publication date unknown",
+      "sections_actually_read": [
+        "preamble",
+        "1.1",
+        "1.7",
+        "1.12",
+        "Section 3 and 3.6"
+      ],
+      "limits": "Published operator rule, not a legal opinion on statutory exceptions; clause 1.12 allows special local-part rules; example correctly bounded to published 3.6"
+    },
+    {
+      "source_id": "FC-OPENAI-TERMS",
+      "publisher": "OpenAI",
+      "url": "https://openai.com/policies/terms-of-use/",
+      "accessed_on": "2026-10-19",
+      "document_date": "Published/effective January 1, 2026",
+      "sections_actually_read": [
+        "scope",
+        "Using our Services",
+        "Content / ownership / similarity / accuracy"
+      ],
+      "limits": "General content allocation statement supports the qualified provenance note. It does not prove account-specific agreement applicability, copyright exclusivity or non-infringement; those guarantees are not claimed."
+    }
+  ],
+  "source_lineage": [
+    "FC-SNP-RULES is the issuing operator's current page; author evidence and my opening are not two independent underlying rules",
+    "FC-CALC-L01 is independent recomputation from disclosed hypothetical inputs, not a market dataset",
+    "FC-ASSET-FILEVIEW is direct local inspection, bound to file hashes; internal generation provenance is not independent third-party rights clearance"
+  ],
+  "calculations_reproduced": {
+    "tool": "PowerShell arithmetic, independently typed from final text",
+    "currency": "RUB",
+    "period": "Same hypothetical 20 occupied nights",
+    "inputs": {
+      "night_price": 4000,
+      "cleaning_per_stay": 2000,
+      "stays_a": 10,
+      "nights_per_stay_a": 2,
+      "stays_b": 2,
+      "nights_per_stay_b": 10,
+      "owner_pays": true,
+      "extra_guest_cleaning_collection": 0,
+      "other_costs": "NOT_CALCULATED"
+    },
+    "results": {
+      "revenue": 80000,
+      "cleaning_a": 20000,
+      "cleaning_b": 4000,
+      "remainder_a": 60000,
+      "remainder_b": 76000,
+      "difference": 16000
+    },
+    "rounding": "Exact integer RUB, none",
+    "discrepancy": 0
+  },
+  "asset_integrity": [
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-portrait",
+      "path": "assets/final/L01-r1-portrait.jpg",
+      "expected_sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+      "actual_sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-square",
+      "path": "assets/final/L01-r1-square.jpg",
+      "expected_sha256": "9b4d97a566f21bd30b9680489162338813ef4cca5ce40b9d9b262d077d053da9",
+      "actual_sha256": "9b4d97a566f21bd30b9680489162338813ef4cca5ce40b9d9b262d077d053da9",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-mobile270",
+      "path": "assets/final/L01-r1-mobile270.jpg",
+      "expected_sha256": "9401b9a108fa89a93f33c438882835ae10e492195e00c32630f42696fd462b41",
+      "actual_sha256": "9401b9a108fa89a93f33c438882835ae10e492195e00c32630f42696fd462b41",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-mobile360",
+      "path": "assets/final/L01-r1-mobile360.jpg",
+      "expected_sha256": "b0c52103425080709d6ab3821dca925f5faba6877df2125ff28acdbd4fb1b893",
+      "actual_sha256": "b0c52103425080709d6ab3821dca925f5faba6877df2125ff28acdbd4fb1b893",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "path": "assets/originals/L01-r1.png",
+      "expected_sha256": "d2382ac999a8c78c7d3738776153c4935d159a78171d4e7a27ba3852999182cb",
+      "actual_sha256": "d2382ac999a8c78c7d3738776153c4935d159a78171d4e7a27ba3852999182cb",
+      "match": true,
+      "actually_viewed": false,
+      "scope": "Hash integrity; original not assigned as final visual"
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-portrait",
+      "path": "assets/final/L02-r1-portrait.jpg",
+      "expected_sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+      "actual_sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-square",
+      "path": "assets/final/L02-r1-square.jpg",
+      "expected_sha256": "ea76f30e945b511ffa28b2d78384774e7ff788c2ffe4829c94db6bf4ee51f473",
+      "actual_sha256": "ea76f30e945b511ffa28b2d78384774e7ff788c2ffe4829c94db6bf4ee51f473",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-mobile270",
+      "path": "assets/final/L02-r1-mobile270.jpg",
+      "expected_sha256": "f1bf9382b38c8843f3cb766bdcf19a58374013a3bdc524ab98639a02cbef6d96",
+      "actual_sha256": "f1bf9382b38c8843f3cb766bdcf19a58374013a3bdc524ab98639a02cbef6d96",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-mobile360",
+      "path": "assets/final/L02-r1-mobile360.jpg",
+      "expected_sha256": "570da45121c7cdeabe8c09fa5e5bb82db3088e87e10779aa8d28c774542bcc9f",
+      "actual_sha256": "570da45121c7cdeabe8c09fa5e5bb82db3088e87e10779aa8d28c774542bcc9f",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "path": "assets/originals/L02-r1.png",
+      "expected_sha256": "e7812cbbbb21e82ec0f4d2c1b0c40f67e8671224baf8da773abf70580a3f70e8",
+      "actual_sha256": "e7812cbbbb21e82ec0f4d2c1b0c40f67e8671224baf8da773abf70580a3f70e8",
+      "match": true,
+      "actually_viewed": false,
+      "scope": "Hash integrity; original not assigned as final visual"
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-portrait",
+      "path": "assets/final/L03-r1-portrait.jpg",
+      "expected_sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+      "actual_sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-square",
+      "path": "assets/final/L03-r1-square.jpg",
+      "expected_sha256": "4c7c113ec2f7dd3c324275246236ecaf951fc796b6235708709b338a824095d0",
+      "actual_sha256": "4c7c113ec2f7dd3c324275246236ecaf951fc796b6235708709b338a824095d0",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-mobile270",
+      "path": "assets/final/L03-r1-mobile270.jpg",
+      "expected_sha256": "6de48ca420ffd0b77c9b8cadc7a49b8ce6d69f750b76585b6b8a0ea74ef5c45c",
+      "actual_sha256": "6de48ca420ffd0b77c9b8cadc7a49b8ce6d69f750b76585b6b8a0ea74ef5c45c",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-mobile360",
+      "path": "assets/final/L03-r1-mobile360.jpg",
+      "expected_sha256": "53eb4d3d18f05395a0775c8de4876822c4ecd2ab4d48049ce4f022aeb0f17d14",
+      "actual_sha256": "53eb4d3d18f05395a0775c8de4876822c4ecd2ab4d48049ce4f022aeb0f17d14",
+      "match": true,
+      "actually_viewed": true
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "path": "assets/originals/L03-r1.png",
+      "expected_sha256": "396a91a80a8bc151c649a3f2b9611d72ee0e44cd6eba6fedd66d9aee29b353b2",
+      "actual_sha256": "396a91a80a8bc151c649a3f2b9611d72ee0e44cd6eba6fedd66d9aee29b353b2",
+      "match": true,
+      "actually_viewed": false,
+      "scope": "Hash integrity; original not assigned as final visual"
+    }
+  ],
+  "input_integrity": [
+    {
+      "path": "input-snapshot.json",
+      "expected_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+      "actual_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+      "match": true
+    },
+    {
+      "path": "assets-manifest.json",
+      "expected_sha256": "3d8bbff13084eee1661a2fee3c98cbf31db90be0b69db5abf598ee7916ed2c7f",
+      "actual_sha256": "3d8bbff13084eee1661a2fee3c98cbf31db90be0b69db5abf598ee7916ed2c7f",
+      "match": true
+    },
+    {
+      "path": "api-package.json",
+      "expected_sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4",
+      "actual_sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4",
+      "match": true
+    },
+    {
+      "path": "loading-journal-template.json",
+      "expected_sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d",
+      "actual_sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d",
+      "match": true
+    },
+    {
+      "path": "evidence/sources.json",
+      "expected_sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0",
+      "actual_sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0",
+      "match": true
+    },
+    {
+      "path": "evidence/claims.json",
+      "expected_sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b",
+      "actual_sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b",
+      "match": true
+    },
+    {
+      "path": "evidence/calculations.json",
+      "expected_sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c",
+      "actual_sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c",
+      "match": true
+    },
+    {
+      "path": "qa/technical-self-check.json",
+      "expected_sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8",
+      "actual_sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8",
+      "match": true
+    },
+    {
+      "path": "qa/visual-self-review.json",
+      "expected_sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f",
+      "actual_sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f",
+      "match": true
+    },
+    {
+      "path": "README.md",
+      "expected_sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "actual_sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "match": true
+    },
+    {
+      "path": "LOADING.md",
+      "expected_sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9",
+      "actual_sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9",
+      "match": true
+    }
+  ],
+  "coverage": {
+    "atomic_register_entries_checked": 12,
+    "atomic_register_entries_total": 12,
+    "final_variants_viewed": 12,
+    "final_variants_total": 12,
+    "material_count": 3,
+    "material_count_checked": 3,
+    "exceptions": "No actual property/market/engineering/legal-exception conclusions were part of content; platform/live acceptance excluded"
+  },
+  "contradictions": [],
+  "unresolved_claims": [],
+  "findings": [],
+  "knowledge_version": "2.0 / 2026-10-09 plus editorial v1.0 override",
+  "knowledge_used": [
+    {
+      "module": "knowledge/08-fact-checker.md",
+      "source_ids": [
+        "FC1"
+      ],
+      "applied_rule": "Separate source identity, date, object and limits; recompute numbers independently",
+      "applied_to": "L01 calculations and L03 rule/date",
+      "limitation": "Read supplied method notes, not an entire handbook"
+    },
+    {
+      "module": "references/v3-teaching/fact-checker/curriculum.md and references/v3-research/fact-checker/fc08.md",
+      "source_ids": [
+        "fc08"
+      ],
+      "applied_rule": "Bind independent review to untouched original and immutable snapshot hashes",
+      "applied_to": "Input and asset integrity",
+      "limitation": "No claim of judicial evidence certification or full book reading"
+    },
+    {
+      "module": "references/v3-research/fact-checker/fc12.md",
+      "source_ids": [
+        "fc12"
+      ],
+      "applied_rule": "Verify image context independently from file existence or authenticity",
+      "applied_to": "All title/text/alt/image interactions",
+      "limitation": "No reverse image search or independent originality audit; images explicitly synthetic and generic"
+    }
+  ],
+  "actual_reads": [
+    "SKILL.md",
+    "references/editorial-rules.md",
+    "references/team-contract.md",
+    "references/book-learning-protocol.md",
+    "references/project-context.md",
+    "references/visual-contract.md",
+    "roles/fact-checker.md",
+    "knowledge/README.md",
+    "knowledge/08-fact-checker.md",
+    "references/v3-teaching/fact-checker/curriculum.md",
+    "references/v3-research/fact-checker/fc08.md",
+    "references/v3-research/fact-checker/fc12.md",
+    "review-context.json",
+    "input-snapshot.json",
+    "evidence/sources.json",
+    "evidence/claims.json",
+    "evidence/calculations.json",
+    "12 final image files"
+  ],
+  "knowledge_gaps": [],
+  "limits": [
+    "READY applies only to factual/editorial evidence scope of this exact revision; not overall release, legal advice or permission to schedule/publish",
+    "Current official rule must be reopened for later use; no future stability inferred",
+    "Generated-origin metadata and supplied prompt/input log reviewed as internal provenance, not an external forensic verification of generator operation",
+    "Actual display inspection in desktop tool, not a physical phone or audience comprehension study",
+    "No product, runtime, DB, provider, publication, infrastructure or secret writes executed"
+  ],
+  "handoff_to": {
+    "role": "chief-editor",
+    "task": "Combine this exact-snapshot factual verdict with independent critic and required local package checks; do not transfer conclusions to changed content or publication contexts"
+  },
+  "deliverables": [
+    "reviews/factcheck-r1.json"
+  ]
+}

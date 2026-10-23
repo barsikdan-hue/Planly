@@ -1,0 +1,38 @@
+[
+  {
+    "asset_id": "lentaro-m1-pilot-2026-10-19-L01-r1-portrait",
+    "path": "assets/final/L01-r1-portrait.jpg",
+    "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+    "mime_type": "image/jpeg",
+    "width": 1080,
+    "height": 1350,
+    "bytes": 501422,
+    "variant": "portrait",
+    "source_path": "assets/originals/L01-r1.png",
+    "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+  },
+  {
+    "asset_id": "lentaro-m1-pilot-2026-10-19-L02-r1-portrait",
+    "path": "assets/final/L02-r1-portrait.jpg",
+    "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+    "mime_type": "image/jpeg",
+    "width": 1080,
+    "height": 1350,
+    "bytes": 443175,
+    "variant": "portrait",
+    "source_path": "assets/originals/L02-r1.png",
+    "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+  },
+  {
+    "asset_id": "lentaro-m1-pilot-2026-10-19-L03-r1-portrait",
+    "path": "assets/final/L03-r1-portrait.jpg",
+    "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+    "mime_type": "image/jpeg",
+    "width": 1080,
+    "height": 1350,
+    "bytes": 539212,
+    "variant": "portrait",
+    "source_path": "assets/originals/L03-r1.png",
+    "transformation": "Uniform contain resample; ivory padding when needed, no crop; System.Drawing high-quality bicubic JPEG quality 94. No retouching, no text overlays."
+  }
+]

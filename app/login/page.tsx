@@ -58,7 +58,7 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-card">
-        <div className="login-brand">planly.</div>
+        <div className="login-brand">Lentaro</div>
         <h1>Личное пространство</h1>
         <p>Вход в личный кабинет.</p>
         <form onSubmit={submit}>

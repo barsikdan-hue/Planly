@@ -1,5 +1,7 @@
 # Personal SMM Planner / Planly
 
+Current entrypoint: [PROJECT_STATE.md](PROJECT_STATE.md). Owner approved Lentaro M1 contract v2 on 2026-10-19: invite-only ready editorial content → individual shared swipe → personal calendar → Telegram/MAX outcomes. [M1 plan](docs/superpowers/plans/2026-10-19-lentaro-m1.md). Dated milestones below retain historical scope; they do not override v2 or authorize environment changes.
+
 ## CURRENT PRODUCT TRACK — 17.10.2026 (owner decision; evidence snapshot)
 
 **Source of product truth:** [Issue #54](https://github.com/barsikdan-hue/Planly/issues/54), confirmed 14.10.2026; the independent reliability queue is [Issue #49](https://github.com/barsikdan-hue/Planly/issues/49). This P00–P07 sequence supersedes the *next-step instructions* of the older Phase 0–10 roadmap below, not their historical acceptance evidence. The former roadmap uses **Phase**, the new owner-approved product milestones use **P**. Do not confuse P03 with the old Phase 3 scheduler. This document is a status ledger, **not** permission to implement, merge, deploy, migrate, or perform real provider sends.

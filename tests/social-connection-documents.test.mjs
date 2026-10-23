@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {createHash} from 'node:crypto';
 import * as docs from '../lib/server/social-connections/documents.ts';
+import {socialConnectionAccountHint} from '../lib/server/social-connections/account-hint.ts';
 const ticket='a'.repeat(43), evil='<img src=x onerror=alert(1)>',origin='https://planly.example.test';
-const consent={planlyName:evil,accountId:'account-1',accountHint:'Planly • abcd123456',provider:'TELEGRAM',humanId:'42',humanName:evil,destinationId:'-12345',destinationName:evil,expiresAt:new Date(Date.now()+60000).toISOString()};
+const consent={planlyName:evil,accountId:'account-1',accountHint:socialConnectionAccountHint('account-1'),provider:'TELEGRAM',humanId:'42',humanName:evil,destinationId:'-12345',destinationName:evil,expiresAt:new Date(Date.now()+60000).toISOString()};
 for(const [name,build,control] of [
  ['finish',()=>docs.buildSocialConnectionFinish(),'button id="confirm"'],
  ['telegram Mini App',()=>docs.buildSocialConnectionMiniApp('telegram',true),'label'],
@@ -42,9 +43,9 @@ test('actual finish first script clears fragment before fetch; preview cannot co
  assert.ok(page.elements.details.textContent.includes(evil));assert.ok(page.elements.details.textContent.includes('-12345'));assert.ok(page.elements.details.textContent.includes('42'));assert.ok(page.elements.details.textContent.includes('account-1'));
  assert.equal(page.elements.confirm.disabled,false);await page.click('confirm',false);assert.equal(page.calls.length,1);
  await page.click('confirm');assert.equal(page.calls.length,2);assert.equal(page.calls[1].url,'/api/social-connections/confirm');assert.deepEqual(page.calls[1].body,{ticket});assert.match(page.elements.status.textContent,/выключено/);
- await page.click('confirm');assert.equal(page.calls.length,2);assert.ok(page.html.includes('href="/"'));assert.ok(page.html.includes('Вернуться в Planly'));assert.equal(page.resources.length,0);
+ await page.click('confirm');assert.equal(page.calls.length,2);assert.ok(page.html.includes('href="/"'));assert.ok(page.html.includes('Вернуться в Lentaro'));assert.equal(page.resources.length,0);
 });
-for(const reason of ['missing','invalid','denied','pagehide'])test(`finish ${reason} loses credential and requires original Planly restart`,async()=>{
+for(const reason of ['missing','invalid','denied','pagehide'])test(`finish ${reason} loses credential and requires original Lentaro restart`,async()=>{
  assert.ok(docs);const page=await execute(docs.buildSocialConnectionFinish(),{fragment:reason==='missing'?'':reason==='invalid'?'#evil':'#'+ticket,fail:reason==='denied',deferred:reason==='pagehide'});
  if(reason==='pagehide'){page.events.pagehide();page.release();await page.flush();}
  await page.click('confirm');assert.equal(page.calls.filter(c=>c.url.endsWith('/confirm')).length,0);assert.equal(page.elements.confirm.disabled,true);
@@ -53,7 +54,7 @@ for(const reason of ['missing','invalid','denied','pagehide'])test(`finish ${rea
 for(const provider of ['telegram','max'])test(`${provider} actual bridge adapter validates raw proof then synchronous consent click opens only first-party finish`,async()=>{
  assert.ok(docs);const page=await execute(docs.buildSocialConnectionMiniApp(provider,true),{provider});
  assert.equal(page.calls.length,1);assert.equal(page.calls[0].url,`/api/social-connections/providers/${provider}/proof`);assert.deepEqual(page.calls[0].body,{initData:'signed synthetic raw'});assert.equal(page.calls[0].options.credentials,'omit');
- assert.equal(page.opened.length,0);assert.ok(page.elements.details.textContent.includes('Planly • abcd123456'));assert.equal(page.elements.details.textContent.includes('account-1'),false);
+ assert.equal(page.opened.length,0);assert.ok(/Lentaro • [a-f0-9]{10}/.test(page.elements.details.textContent));assert.ok(page.elements.details.textContent.includes(consent.accountHint));assert.equal(page.elements.details.textContent.includes('account-1'),false);
  await page.click('continue');assert.equal(page.opened.length,0);page.elements.consent.checked=true;
  // Native bridge openLink must happen before the click handler returns a promise.
  const result=page.elements.continue.handlers.click({isTrusted:true});assert.equal(result,undefined);assert.deepEqual(page.opened,[origin+'/social-connections/finish#'+ticket]);

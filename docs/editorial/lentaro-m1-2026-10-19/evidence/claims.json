@@ -1,0 +1,74 @@
+[
+  {
+    "surfaces": [
+      "text"
+    ],
+    "source_ids": [
+      "CALC-L01"
+    ],
+    "claim_id": "L01-C1",
+    "wording": "Both conditional occupancy schemes produce 80000 RUB",
+    "condition": "20 nights at 4000 RUB, no change in night price",
+    "status": "SUPPORTED"
+  },
+  {
+    "surfaces": [
+      "text"
+    ],
+    "source_ids": [
+      "CALC-L01"
+    ],
+    "claim_id": "L01-C2",
+    "wording": "Cleaning costs 20000 vs 4000; remainder 60000 vs 76000; difference 16000",
+    "condition": "Owner pays 2000 per stay, all stays completed; no extra guest fee; other costs NOT_CALCULATED",
+    "status": "SUPPORTED"
+  },
+  {
+    "surfaces": [
+      "title",
+      "text",
+      "image"
+    ],
+    "source_ids": [],
+    "claim_id": "L01-C3",
+    "wording": "Evaluate occupancy and turnover-related costs together",
+    "condition": "Editorial method; not investment or tax advice",
+    "status": "OPINION"
+  },
+  {
+    "surfaces": [
+      "title",
+      "text",
+      "image"
+    ],
+    "source_ids": [],
+    "claim_id": "L02-C1",
+    "wording": "Use own furniture dimensions and opening/route test to assess personal usability",
+    "condition": "Editorial viewing method, not building norm or engineering conclusion; obtain owner permission",
+    "status": "OPINION"
+  },
+  {
+    "surfaces": [
+      "text"
+    ],
+    "source_ids": [
+      "SNP-RULES"
+    ],
+    "claim_id": "L03-C1",
+    "wording": "Published Dendrarium rule 3.6 prohibits visiting with animals",
+    "condition": "Ordinary pet only; assistance animal rights excluded; recheck before use",
+    "status": "SUPPORTED"
+  },
+  {
+    "surfaces": [
+      "title",
+      "text",
+      "image"
+    ],
+    "source_ids": [],
+    "claim_id": "L03-C2",
+    "wording": "Check actual daily dog route rather than infer access from proximity",
+    "condition": "No particular house, route distance or access survey asserted",
+    "status": "OPINION"
+  }
+]

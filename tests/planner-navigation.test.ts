@@ -15,7 +15,7 @@ test('saved content links still resolve to the Library destination', () => {
 });
 
 test('normal planner destinations remain reachable', () => {
-  for (const view of ['dashboard', 'calendar', 'content', 'media', 'analytics', 'settings']) {
+  for (const view of ['dashboard', 'feed', 'calendar', 'content', 'media', 'analytics', 'settings']) {
     assert.equal(normalizePlannerView(view), view);
   }
 });

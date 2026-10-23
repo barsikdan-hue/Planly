@@ -58,7 +58,7 @@ async function candidate(a:Awaited<ReturnType<typeof actor>>) {
  assert.ok(proofRoute,'cookie-independent proof route must exist');
  const s=await start(a);assert.equal(s.status,200);const started=await s.json();
  const r=await proofRoute.POST(req({initData:signed(started.launchUrl,a.account.provider)},'invalid-cookie'),{params:Promise.resolve({provider:a.account.provider.toLowerCase()})});
- assert.equal(r.status,200);const proof=await r.json();assert.equal(proof.accountHint,started.accountHint);assert.match(proof.accountHint,/^Planly • [a-f0-9]{10}$/);return proof;
+ assert.equal(r.status,200);const proof=await r.json();assert.equal(proof.accountHint,started.accountHint);assert.match(proof.accountHint,/^Lentaro • [a-f0-9]{10}$/);return proof;
 }
 beforeEach(async()=>{
  await getDb().delete(schema.users).where(like(schema.users.id,'e3-%'));await getDb().delete(schema.socialProofRateLimits);calls=0;

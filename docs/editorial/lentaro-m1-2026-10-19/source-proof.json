@@ -1,0 +1,204 @@
+{
+  "original_snapshot": {
+    "path": "input-snapshot.json in external authoring evidence",
+    "sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+    "bundled": false,
+    "unchanged": true
+  },
+  "portable_snapshot": {
+    "path": "snapshot.portable.json",
+    "sha256": "ad6f928e9e1bedabfa92d861c3faf67d6206b3dfc740c093c8f4dbf49a5eef5e",
+    "derivative_not_original": true,
+    "transformations": [
+      "context.source_checkout replaced with SOURCE_REPOSITORY_CHECKOUT",
+      "three image_origin.original_tool_file values replaced with generator basename under EXTERNAL_GENERATOR_OUTPUT"
+    ],
+    "unchanged_fields": "All text, title, caption, alt, prompts, original/variant/ordered-asset hashes, creation keys, claims, dates and editorial context fields except the four machine locators",
+    "review_transfer_basis": "Authoring-time comparison verifies exact published text and selected JPEG bytes against the original independently reviewed snapshot; no new editorial content or image was produced."
+  },
+  "byte_identical_copies": [
+    {
+      "path": "api-package.json",
+      "original_document_sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4",
+      "bundled_sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "loading-journal-template.json",
+      "original_document_sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d",
+      "bundled_sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "LOADING.md",
+      "original_document_sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9",
+      "bundled_sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "acceptance-ledger.json",
+      "original_document_sha256": "52d999cdb5cfe9a45dbc51317d6ba7c2793052b94e7c4a8aa1d39c8a32351ce4",
+      "bundled_sha256": "52d999cdb5cfe9a45dbc51317d6ba7c2793052b94e7c4a8aa1d39c8a32351ce4",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "evidence/README-reviewed-r1.md",
+      "original_document_sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "bundled_sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "evidence/sources.json",
+      "original_document_sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0",
+      "bundled_sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "evidence/claims.json",
+      "original_document_sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b",
+      "bundled_sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "evidence/calculations.json",
+      "original_document_sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c",
+      "bundled_sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "qa/technical-self-check.json",
+      "original_document_sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8",
+      "bundled_sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "qa/visual-self-review.json",
+      "original_document_sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f",
+      "bundled_sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "qa/package-integrity.json",
+      "original_document_sha256": "ba0cebad7bea24605fe12cdc50b6124f32b3ca4d4cde039988ea70c6739efb87",
+      "bundled_sha256": "ba0cebad7bea24605fe12cdc50b6124f32b3ca4d4cde039988ea70c6739efb87",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "reviews/factcheck-r1.json",
+      "original_document_sha256": "507b74e1afe0e305d7d0fec40b40417bd8e193b6658022ebca43bad86794d90b",
+      "bundled_sha256": "507b74e1afe0e305d7d0fec40b40417bd8e193b6658022ebca43bad86794d90b",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "reviews/critic-r1.json",
+      "original_document_sha256": "0ccf676fcf4f3ea146aceddd755ba95d395bd140efaf30ee5958ccb2411adffa",
+      "bundled_sha256": "0ccf676fcf4f3ea146aceddd755ba95d395bd140efaf30ee5958ccb2411adffa",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "reviews/critic-r1.md",
+      "original_document_sha256": "2b42405360b79a1082c9d7938e23d73167a4a790cbbd13ae1d2df2dfdb184642",
+      "bundled_sha256": "2b42405360b79a1082c9d7938e23d73167a4a790cbbd13ae1d2df2dfdb184642",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "materials/L01-r1.txt",
+      "original_document_sha256": "5124851952a9bd875523918b8408757268cc568594e21c8e84b0b7cf3559ac75",
+      "bundled_sha256": "5124851952a9bd875523918b8408757268cc568594e21c8e84b0b7cf3559ac75",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "materials/L02-r1.txt",
+      "original_document_sha256": "9a191117461c2fe4deb94e8afdc0cfa98e45b321abaaac52c55abfc4e8fee809",
+      "bundled_sha256": "9a191117461c2fe4deb94e8afdc0cfa98e45b321abaaac52c55abfc4e8fee809",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "materials/L03-r1.txt",
+      "original_document_sha256": "9345f177eee84e1bb8b4acb8cf996fe64b6d668efb05fdabc08e381ce30f0678",
+      "bundled_sha256": "9345f177eee84e1bb8b4acb8cf996fe64b6d668efb05fdabc08e381ce30f0678",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "assets/final/L01-r1-portrait.jpg",
+      "original_document_sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+      "bundled_sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "assets/final/L02-r1-portrait.jpg",
+      "original_document_sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+      "bundled_sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+      "transformation": "NONE; byte-identical copy"
+    },
+    {
+      "path": "assets/final/L03-r1-portrait.jpg",
+      "original_document_sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+      "bundled_sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+      "transformation": "NONE; byte-identical copy"
+    }
+  ],
+  "omitted_assets": [
+    {
+      "path": "assets/originals/L01-r1.png",
+      "sha256": "d2382ac999a8c78c7d3738776153c4935d159a78171d4e7a27ba3852999182cb",
+      "reason": "Generator original preserved in external authoring evidence; not required for loading the exact reviewed primary JPEG"
+    },
+    {
+      "path": "assets/originals/L02-r1.png",
+      "sha256": "e7812cbbbb21e82ec0f4d2c1b0c40f67e8671224baf8da773abf70580a3f70e8",
+      "reason": "Generator original preserved in external authoring evidence; not required for loading the exact reviewed primary JPEG"
+    },
+    {
+      "path": "assets/originals/L03-r1.png",
+      "sha256": "396a91a80a8bc151c649a3f2b9611d72ee0e44cd6eba6fedd66d9aee29b353b2",
+      "reason": "Generator original preserved in external authoring evidence; not required for loading the exact reviewed primary JPEG"
+    },
+    {
+      "path": "assets/final/L01-r1-square.jpg",
+      "sha256": "9b4d97a566f21bd30b9680489162338813ef4cca5ce40b9d9b262d077d053da9",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L01-r1-mobile270.jpg",
+      "sha256": "9401b9a108fa89a93f33c438882835ae10e492195e00c32630f42696fd462b41",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L01-r1-mobile360.jpg",
+      "sha256": "b0c52103425080709d6ab3821dca925f5faba6877df2125ff28acdbd4fb1b893",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L02-r1-square.jpg",
+      "sha256": "ea76f30e945b511ffa28b2d78384774e7ff788c2ffe4829c94db6bf4ee51f473",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L02-r1-mobile270.jpg",
+      "sha256": "f1bf9382b38c8843f3cb766bdcf19a58374013a3bdc524ab98639a02cbef6d96",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L02-r1-mobile360.jpg",
+      "sha256": "570da45121c7cdeabe8c09fa5e5bb82db3088e87e10779aa8d28c774542bcc9f",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L03-r1-square.jpg",
+      "sha256": "4c7c113ec2f7dd3c324275246236ecaf951fc796b6235708709b338a824095d0",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L03-r1-mobile270.jpg",
+      "sha256": "6de48ca420ffd0b77c9b8cadc7a49b8ce6d69f750b76585b6b8a0ea74ef5c45c",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    },
+    {
+      "path": "assets/final/L03-r1-mobile360.jpg",
+      "sha256": "53eb4d3d18f05395a0775c8de4876822c4ecd2ab4d48049ce4f022aeb0f17d14",
+      "reason": "Non-primary reviewed export retained externally; mobile/square fileview and hashes recorded in both independent review reports"
+    }
+  ],
+  "reviewed_status_note": "qa_status inside frozen portable projection is the historical pre-review field. Current decision is in acceptance-ledger.json."
+}

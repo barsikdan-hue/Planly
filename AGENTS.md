@@ -1,5 +1,11 @@
 # Planly agent instructions
 
+## Current entrypoint — Lentaro M1, owner approved 2026-10-19
+
+- Read [PROJECT_STATE.md](PROJECT_STATE.md), environment boundaries and approved M1 contract before work. Check relevant drift; do not restart the completed audit.
+- M1 v2 supersedes older per-subtask STOP rules and broad SaaS exclusion below. Ordinary A–F source work, commit/push and Draft PR are authorized. Privacy/isolation and exact external-action gates remain.
+- Find existing code and active PRs before implementation. Update state and exact evidence after stages. Verify old entries before treating them as current. Do not change hosting by default; record concrete conflicts and authoritative resolutions.
+
 ## Active product rules — 2026-10-17 (owner-approved scope; dated evidence)
 
 - **Current authoritative product track:** [Issue #54](https://github.com/barsikdan-hue/Planly/issues/54) and [ROADMAP.md](ROADMAP.md) section **CURRENT PRODUCT TRACK — 17.10.2026** (P00–P07); independent debt queue: [Issue #49](https://github.com/barsikdan-hue/Planly/issues/49). Old Phase 0–10 descriptions are historical acceptance boundaries, not authorization to resume a different phase.

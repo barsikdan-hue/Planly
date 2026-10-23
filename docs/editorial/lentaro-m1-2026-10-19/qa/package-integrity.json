@@ -1,0 +1,10 @@
+{
+  "scope": "Local package integrity only; no independent QA or runtime proof",
+  "pass": true,
+  "checks": 76,
+  "failures": [],
+  "snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "text_count": 3,
+  "original_image_count": 3,
+  "final_export_count": 12
+}

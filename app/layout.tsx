@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Personal SMM Planner",
+  title: "Lentaro",
   description: "Твой персональный центр управления контентом. Создавай, планируй и проверяй публикации.",
   other: {
     "codex-preview": "development",

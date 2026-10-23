@@ -1,0 +1,90 @@
+{
+  "job_id": "m1-task-d-editorial-pilot-r1",
+  "batch_id": "lentaro-m1-pilot-2026-10-19",
+  "revision": 1,
+  "snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "review_inputs": [
+    {
+      "path": "input-snapshot.json",
+      "sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56"
+    },
+    {
+      "path": "assets-manifest.json",
+      "sha256": "3d8bbff13084eee1661a2fee3c98cbf31db90be0b69db5abf598ee7916ed2c7f"
+    },
+    {
+      "path": "api-package.json",
+      "sha256": "ee74e876a10b83a6bc403c383677233146f0c36fd7733b9a60b52bf86f3468a4"
+    },
+    {
+      "path": "loading-journal-template.json",
+      "sha256": "c75d80a6d38b5dcfb41d2380a01cc6a7ba352dc8bf698d81972b8262ef0d091d"
+    },
+    {
+      "path": "evidence/sources.json",
+      "sha256": "c36b1bad05c0957d2fe2ce9fc08cc651f59432de5843a0a4b92808f9fdccb4c0"
+    },
+    {
+      "path": "evidence/claims.json",
+      "sha256": "69b94524a1dbcb7ce9d8a23567a65d84cec2f933d0cc832363e26e9101e9978b"
+    },
+    {
+      "path": "evidence/calculations.json",
+      "sha256": "11c97bc57af06a90d702219b96ad436665c78c90266ab7ddb0bebd84b2a7674c"
+    },
+    {
+      "path": "qa/technical-self-check.json",
+      "sha256": "088bc6e60c532bdef259d867b57bc7209a77d71e489a2b9a65d8a3ce288e45c8"
+    },
+    {
+      "path": "qa/visual-self-review.json",
+      "sha256": "e37563d06b0e18fae2cc51e59c3d02326ed72d64aace6fdc1692749701fca27f"
+    },
+    {
+      "path": "README.md",
+      "sha256": "1396d05a8a252b6c20cca3d6010bcec4ee17c69c9f3ec9d2e2cc083786ec1d26"
+    },
+    {
+      "path": "LOADING.md",
+      "sha256": "be7acebff6ef91d6522857dba37c62daa2010461832b8fef2e54e320750d7ae9"
+    }
+  ],
+  "api_source_files": [
+    {
+      "path": "app/api/media/route.ts",
+      "sha256": "dd26cd530c825c5468f31e91df084077387fa0fe6faf48b3a04cb505604bb0df"
+    },
+    {
+      "path": "app/api/library-items/route.ts",
+      "sha256": "860389511dadf5e8ecd236fa89ca0e5bf07c0b8933d58b09885c5937e4969e7e"
+    },
+    {
+      "path": "app/api/admin/shared-library/[id]/route.ts",
+      "sha256": "463382674aa5e0e7925715f0124de62d43920db940d0c4eb0ab9118266e869ca"
+    },
+    {
+      "path": "lib/contracts/library.ts",
+      "sha256": "9259c1413b51696cbd257a0314819475b653c550b80b73f32b11db4f4edee3c4"
+    },
+    {
+      "path": "lib/contracts/shared-library.ts",
+      "sha256": "e34a982e1f576a49f64e478479ac6cfae3c591767b2ecd6170f60dce1e26bff4"
+    },
+    {
+      "path": "lib/server/media.ts",
+      "sha256": "9397b098895b2f485b6f5a62a2fcdf9b25cfa2b7a4010cfa5738942b7836f323"
+    }
+  ],
+  "reviewer_instructions": [
+    "Read exact input-snapshot.json bytes and verify digest before any verdict. Review exact ordered_assets and every alternate geometry from assets/final as applicable.",
+    "Fact-checker: independently reproduce L01 arithmetic; reopen official Dendrarium rule 3.6/preamble/1.7; check conditional assumptions, title/text/visual/source/CTA surfaces; do not import prior accepted verdicts.",
+    "Critic: evaluate final material diversity, real usefulness, natural Russian, misleading visual assumptions, provenance and full mobile read. Do not rewrite and accept your own rewrite.",
+    "Bind report to snapshot_sha256 and exact material revision/asset hashes; report READY/REVISE/UNKNOWN/BLOCKED per scope, no desired PASS supplied.",
+    "Content, asset or caption change creates new revision and invalidates dependent reviews."
+  ],
+  "technical_scope": "Only local package, not source feature, API execution, provider or deployment evidence",
+  "original_review_context_sha256": "51134d1ae7edb8a4f9bf7936f1fb9cab394b58eb7ff87b4cdcf86f66dd726e53",
+  "original_reviewed_snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "portable_projection_sha256": "ad6f928e9e1bedabfa92d861c3faf67d6206b3dfc740c093c8f4dbf49a5eef5e",
+  "note": "Historical review-input names/hashes retained; frozen original remains external. README reviewed bytes archived as evidence/README-reviewed-r1.md. This is not the byte-original snapshot."
+}

@@ -1,0 +1,422 @@
+{
+  "job_id": "m1-task-d-editorial-pilot-r1",
+  "batch_id": "lentaro-m1-pilot-2026-10-19",
+  "material_id": "BATCH",
+  "revision": 1,
+  "input_digest": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "snapshot_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+  "reviewed_at_utc": "2026-10-19T08:30:47.5912102Z",
+  "role": "critic",
+  "verdict": "READY",
+  "scope_checked": [
+    "All three exact frozen Russian texts: title, body, CTA, provenance caption, alt and stated claim boundaries.",
+    "Actual final portrait, square, mobile270 and mobile360 images for each material, opened through view_image (12 files).",
+    "Independent SHA256 of input snapshot, every listed review input and all 12 final images; independent JPEG dimensions/bytes and UTF-16 text lengths.",
+    "Internal batch diversity and declared source-angle overlap against the supplied issue02 FIVE_POSTS.md."
+  ],
+  "scope_not_checked": [
+    "Independent live validation of park rules, calculations or legal qualification; assigned to the separate fact-checker.",
+    "API behavior, import, publishing, account policy, provider rendering or deployed application.",
+    "Physical phone readability, real target-reader comprehension, engagement or conversion.",
+    "Global novelty or duplication beyond the three-post snapshot and supplied five-post issue02 history.",
+    "Independent legal clearance of generated image output or copyright/exclusivity."
+  ],
+  "independence": {
+    "author_self_check_used_as_verdict": false,
+    "content_edits": false,
+    "asset_edits": false,
+    "publication_or_api_writes": false
+  },
+  "integrity": {
+    "snapshot_expected_sha256": "20a88854db86330940ed164ac58b1389abcee05d215fc6a09f620eeb10b40c56",
+    "snapshot_match": true,
+    "review_input_hashes_checked": 11,
+    "review_input_hashes_matched": 11,
+    "final_asset_hashes_checked": 12,
+    "final_asset_hashes_matched": 12,
+    "all_dimensions_and_bytes_match": true,
+    "all_text_lengths_match": true,
+    "origin_file_sha256": "6c6406b0b0362b61ac8575dceab6c3fa8e52a25ab4694bb8eb8a2055d80140d2",
+    "review_input_hash_scope": "File hashes verified; api-package, journal template, loading and QA contents were not substituted for independent editorial judgments."
+  },
+  "materials": [
+    {
+      "material_id": "L01",
+      "revision": 1,
+      "verdict": "READY",
+      "reader_takeaway": "Одинаковое число занятых ночей не означает одинаковый остаток после уборок; попросить в прогнозе также число заездов.",
+      "strongest_implied_promise": "В явно условном сравнении меньше смен гостей сокращает только заданный расход на уборки; преимущества по полной прибыли не обещаны.",
+      "audience_fit": "Агент получает конкретный вопрос для обсуждения арендного прогноза с покупателем или управляющим. Это полезный образовательный пост для аккаунта агента, хотя не профессиональная модель андеррайтинга.",
+      "text_evidence": [
+        "Условная модель названа до цифр; отдельно определён плательщик уборки и отсутствие доплаты гостей.",
+        "Фраза «После только этого расхода» и следующий абзац исключают прочтение 60000/76000 как чистой прибыли.",
+        "Оговорка о скидке и негарантированной длинной брони ограничивает вывод.",
+        "CTA требует сравнивать расходы на смену гостей; не призывает купить объект и не обещает услугу."
+      ],
+      "visual_evidence": [
+        "Два дверных проёма, одиночный ключ слева, связка ключей и бельё справа поддерживают тему смен гостей.",
+        "Числа/деньги/графики/ставки/обещания прибыли на изображении отсутствуют; связка не выдаётся за точный масштаб 10:2.",
+        "На 270 и 360 px различимы оба проёма и одиночный/множественный ключ; бельё сохраняет смысл.",
+        "Квадратная версия содержит всю исходную сцену с боковыми полями, важный смысл не обрезан."
+      ],
+      "mandatory_findings": [],
+      "optional_suggestions": [],
+      "checked_surfaces": [
+        "title",
+        "body",
+        "CTA",
+        "provenance caption",
+        "alt",
+        "portrait",
+        "square",
+        "mobile270",
+        "mobile360"
+      ],
+      "utf16_length": 781,
+      "assets": [
+        {
+          "path": "assets/final/L01-r1-portrait.jpg",
+          "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2",
+          "width": 1080,
+          "height": 1350,
+          "expected_width": 1080,
+          "expected_height": 1350,
+          "bytes": 501422,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L01-r1-square.jpg",
+          "sha256": "9b4d97a566f21bd30b9680489162338813ef4cca5ce40b9d9b262d077d053da9",
+          "width": 1080,
+          "height": 1080,
+          "expected_width": 1080,
+          "expected_height": 1080,
+          "bytes": 346968,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L01-r1-mobile270.jpg",
+          "sha256": "9401b9a108fa89a93f33c438882835ae10e492195e00c32630f42696fd462b41",
+          "width": 270,
+          "height": 338,
+          "expected_width": 270,
+          "expected_height": 338,
+          "bytes": 36855,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L01-r1-mobile360.jpg",
+          "sha256": "b0c52103425080709d6ab3821dca925f5faba6877df2125ff28acdbd4fb1b893",
+          "width": 360,
+          "height": 450,
+          "expected_width": 360,
+          "expected_height": 450,
+          "bytes": 62016,
+          "viewed": true
+        }
+      ]
+    },
+    {
+      "material_id": "L02",
+      "revision": 1,
+      "verdict": "READY",
+      "reader_takeaway": "На просмотр нужно принести размеры своей мебели и пройти бытовой сценарий с открытыми дверями и ящиками.",
+      "strongest_implied_promise": "Метод помогает лично оценить удобство расстановки; нормативный комфорт и конструктивную допустимость не удостоверяет.",
+      "audience_fit": "Агент может применить сценарий на следующем показе и заменить абстрактное «просторно» проверкой движения и пользования шкафом. Польза конкретна и исполнима.",
+      "text_evidence": [
+        "Заголовок отличает вмещаемость кровати от удобства человека; дальнейший сценарий раскрывает эту мысль.",
+        "Рекомендация разметки требует разрешения собственника и материала без повреждения покрытия.",
+        "Комфорт задан как личный сценарий, универсальной нормы или достаточного прохода в сантиметрах нет.",
+        "Последний смысловой абзац явно исключает доказательство перепланировки, безопасности и документальной площади."
+      ],
+      "visual_evidence": [
+        "Кровать, шкаф и жёлтая измерительная лента вокруг прохода поддерживают проверку свободной зоны.",
+        "Лента стилизована с поворотами; конкретный размер, нормативный проход или инженерная точность не показаны и не заявлены.",
+        "Шкаф изображён закрытым: изображение не удостоверяет результат теста открывания, а текст прямо предлагает его провести.",
+        "На 270/360 px жёлтая линия и свободная полоса пола различимы; квадрат сохраняет композицию без потери предметов."
+      ],
+      "mandatory_findings": [],
+      "optional_suggestions": [],
+      "checked_surfaces": [
+        "title",
+        "body",
+        "CTA",
+        "provenance caption",
+        "alt",
+        "portrait",
+        "square",
+        "mobile270",
+        "mobile360"
+      ],
+      "utf16_length": 883,
+      "assets": [
+        {
+          "path": "assets/final/L02-r1-portrait.jpg",
+          "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da",
+          "width": 1080,
+          "height": 1350,
+          "expected_width": 1080,
+          "expected_height": 1350,
+          "bytes": 443175,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L02-r1-square.jpg",
+          "sha256": "ea76f30e945b511ffa28b2d78384774e7ff788c2ffe4829c94db6bf4ee51f473",
+          "width": 1080,
+          "height": 1080,
+          "expected_width": 1080,
+          "expected_height": 1080,
+          "bytes": 309943,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L02-r1-mobile270.jpg",
+          "sha256": "f1bf9382b38c8843f3cb766bdcf19a58374013a3bdc524ab98639a02cbef6d96",
+          "width": 270,
+          "height": 338,
+          "expected_width": 270,
+          "expected_height": 338,
+          "bytes": 34580,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L02-r1-mobile360.jpg",
+          "sha256": "570da45121c7cdeabe8c09fa5e5bb82db3088e87e10779aa8d28c774542bcc9f",
+          "width": 360,
+          "height": 450,
+          "expected_width": 360,
+          "expected_height": 450,
+          "bytes": 59088,
+          "viewed": true
+        }
+      ]
+    },
+    {
+      "material_id": "L03",
+      "revision": 1,
+      "verdict": "READY",
+      "reader_takeaway": "Наличие рядом парка нужно проверять относительно собственного маршрута с питомцем, а не только по карте.",
+      "strongest_implied_promise": "Документ конкретного парка способен изменить бытовой сценарий выбора квартиры; разрешённый маршрут конкретного дома здесь не установлен.",
+      "audience_fit": "Агент получает адресуемую потребность клиента с собакой: проверить фактический путь от подъезда, переходы и вечернее возвращение до решения о квартире.",
+      "text_evidence": [
+        "Правило ограничено Дендрарием и обычным питомцем, специальные права животных сопровождения вынесены за пределы разбора.",
+        "Дата проверки и просьба открыть правила снова видны в самом тексте.",
+        "Прямо сказано, что маршрут конкретного дома не обследован; вывод не переносится на все парки Сочи.",
+        "CTA — пройти предполагаемый маршрут и проверить проход, без обещания наличия разрешённой альтернативы."
+      ],
+      "visual_evidence": [
+        "Поводок у двери и дорожка рядом с ограждённым садом соответствуют теме бытового маршрута.",
+        "Нет узнаваемой карты, подписи Дендрария, адреса, знака разрешения, собаки внутри сада или утверждения о реальном виде из квартиры.",
+        "Сцена условна; подпись в тексте сообщает об ИИ и отсутствии фото объекта. Alt дополнительно не приписывает ей географическую точность.",
+        "Поводок, ограждение и направление тротуара различимы на 270/360 px; квадратная версия содержит сцену с боковыми полями."
+      ],
+      "mandatory_findings": [],
+      "optional_suggestions": [],
+      "checked_surfaces": [
+        "title",
+        "body",
+        "source URL",
+        "CTA",
+        "provenance caption",
+        "alt",
+        "portrait",
+        "square",
+        "mobile270",
+        "mobile360"
+      ],
+      "utf16_length": 855,
+      "assets": [
+        {
+          "path": "assets/final/L03-r1-portrait.jpg",
+          "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059",
+          "width": 1080,
+          "height": 1350,
+          "expected_width": 1080,
+          "expected_height": 1350,
+          "bytes": 539212,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L03-r1-square.jpg",
+          "sha256": "4c7c113ec2f7dd3c324275246236ecaf951fc796b6235708709b338a824095d0",
+          "width": 1080,
+          "height": 1080,
+          "expected_width": 1080,
+          "expected_height": 1080,
+          "bytes": 383888,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L03-r1-mobile270.jpg",
+          "sha256": "6de48ca420ffd0b77c9b8cadc7a49b8ce6d69f750b76585b6b8a0ea74ef5c45c",
+          "width": 270,
+          "height": 338,
+          "expected_width": 270,
+          "expected_height": 338,
+          "bytes": 46249,
+          "viewed": true
+        },
+        {
+          "path": "assets/final/L03-r1-mobile360.jpg",
+          "sha256": "53eb4d3d18f05395a0775c8de4876822c4ecd2ab4d48049ce4f022aeb0f17d14",
+          "width": 360,
+          "height": 450,
+          "expected_width": 360,
+          "expected_height": 450,
+          "bytes": 77629,
+          "viewed": true
+        }
+      ]
+    }
+  ],
+  "batch_diversity": {
+    "verdict": "READY",
+    "evidence": "L01: условный контрпример об операционных расходах; L02: физический тест бытовой планировки; L03: локальный документ и проверка ежедневного маршрута. Разные действия читателя: запросить показатели, измерить/разыграть пользование, пройти маршрут. Общая визуальная палитра объединяет серию, не подменяет различие содержания."
+  },
+  "duplication_findings": [
+    {
+      "materials": [
+        "L01",
+        "issue02 N01"
+      ],
+      "status": "DECLARED_ADAPTATION",
+      "evidence": "Сохранены 20 ночей, тариф 4000, уборка 2000, схемы 10×2 и 2×10 и главный вывод. Сокращение и удаление тезиса о площадке не делают идею новой.",
+      "blocking": false,
+      "condition": "Допустимо в брифе этого пилота как явно задекларированная адаптация; не заявлять три новых исследованных темы и не считать отдельным новым углом в общей истории."
+    },
+    {
+      "materials": [
+        "L03",
+        "issue02 N04"
+      ],
+      "status": "DECLARED_ADAPTATION",
+      "evidence": "Сохранена связь Дендрария и ежедневного маршрута с собакой; компактная версия убрала режим и билеты, не меняя базовый поворот.",
+      "blocking": false,
+      "condition": "Происхождение явно записано; новизна относительно всей публикационной истории не установлена."
+    },
+    {
+      "materials": [
+        "L01",
+        "L02",
+        "L03"
+      ],
+      "status": "NO_INTERNAL_SEMANTIC_DUPLICATE",
+      "blocking": false,
+      "evidence": "Ни один пост не повторяет механизм/пример/следующий шаг другого поста этой тройки."
+    }
+  ],
+  "visual_contract": {
+    "verdict": "READY",
+    "actual_files_viewed": 12,
+    "required_variants_per_material": 4,
+    "view_method": "tools.view_image, each actual file opened separately; mobile previews at their exported pixel dimensions",
+    "raster_text": "No editorial words, headings, numeric claims, signatures, brands or forbidden AI labels observed. Tiny tape tick detail in L02 is illustrative, not a legible asserted measurement.",
+    "safe_geometry": "72px rule for significant lettering is NOT_APPLICABLE because no such lettering is present. Full scene retained in square via contain and side padding. Foreground/background decorative edges can meet frame; key subject meaning remains visible. This is not proof of a channel UI overlay safe area.",
+    "contrast": "Semantic contrast checked visually in all variants: dark doors/keys, bright yellow tape, terracotta leash against neutral backgrounds. Text contrast ratio NOT_APPLICABLE to text-free raster; full WCAG audit not performed.",
+    "misleading_claims": "No image asserts a real property, verified dimensions, profitability, actual route, legal entry permission or documentary view of Dendrarium.",
+    "provenance": "Full text captions disclose AI-created conceptual illustration and no object photo. Snapshot records generation tool/prompt/date/original SHA and transformations. This review verifies presentation consistency, not legal certainty."
+  },
+  "claims": [],
+  "mandatory_findings": [],
+  "optional_suggestions": [],
+  "missing_evidence": [],
+  "knowledge_version": "realty-editorial-v3 v1.0; knowledge modules v2, 2026-10-09",
+  "knowledge_used": [
+    {
+      "module": "knowledge/09-critic.md",
+      "source_ids": [
+        "CR1",
+        "CR2",
+        "CR3"
+      ],
+      "applied_rule": "Distinguish literal content from implied promise; limits must visibly constrain inference; concrete usable action.",
+      "applied_to": [
+        "L01 title/remainder/CTA",
+        "L02 comfort and safety limits",
+        "L03 park/route inference"
+      ],
+      "limitation": "Method module read locally; underlying OpenLearn course not reopened or claimed read in full."
+    },
+    {
+      "module": "knowledge/10-art-director.md",
+      "source_ids": [
+        "AD1",
+        "AD2"
+      ],
+      "applied_rule": "Inspect actual exported file sizes and semantic contrast; distinguish conceptual image from documentary evidence; retain recorded provenance.",
+      "applied_to": [
+        "all 12 final images",
+        "all provenance captions"
+      ],
+      "limitation": "No independent license opinion or complete accessibility audit; W3C and CC pages not reopened."
+    },
+    {
+      "module": "references/v3-research/critic/CR01.md",
+      "book_id": "CR01",
+      "applied_rule": "Separate logical implication from truth of premises.",
+      "applied_to": [
+        "L01 conditional arithmetic interpretation",
+        "L03 private park example vs general access"
+      ],
+      "limitation": "Local notes only, not a new original-book reading."
+    },
+    {
+      "module": "references/v3-research/critic/CR06.md",
+      "book_id": "CR06",
+      "applied_rule": "Do not promote taste preferences to blockers; observations must have concrete impact and minimal action.",
+      "applied_to": [
+        "no invented blockers",
+        "optional suggestions intentionally empty"
+      ],
+      "limitation": "Local notes only."
+    },
+    {
+      "module": "references/v3-research/critic/CR08.md",
+      "book_id": "CR08",
+      "applied_rule": "Review purpose, argument and source meaning before polishing style.",
+      "applied_to": [
+        "title/body/CTA consistency",
+        "declared adaptation comparison"
+      ],
+      "limitation": "Local notes only."
+    }
+  ],
+  "actual_reads": [
+    "SKILL.md",
+    "references/editorial-rules.md",
+    "references/team-contract.md",
+    "references/project-context.md",
+    "references/book-learning-protocol.md",
+    "references/visual-contract.md",
+    "roles/critic.md",
+    "knowledge/README.md",
+    "knowledge/09-critic.md",
+    "knowledge/10-art-director.md",
+    "references/v3-teaching/critic/curriculum.md",
+    "references/v3-research/critic/CR01.md",
+    "references/v3-research/critic/CR06.md",
+    "references/v3-research/critic/CR08.md",
+    "review-context.json",
+    "input-snapshot.json",
+    "evidence/claims.json",
+    "supplied issue02 FIVE_POSTS.md",
+    "12 listed final JPEGs via view_image"
+  ],
+  "primary_sources_opened": [],
+  "knowledge_gaps": [
+    "Original books/courses not newly opened; local methodological notes used, no full-book or new-training claim."
+  ],
+  "recheck_scope": "Any text, image, caption, alt or material context change creates a new revision and requires review of affected surfaces and exact new hashes. Factual findings from the separate checker remain binding even with this editorial READY.",
+  "handoff_to": {
+    "role": "chief-editor",
+    "task": "Combine this scoped critic verdict with the separate independent fact-checker result and authorization limits. Keep publication and schedule eligibility unevaluated."
+  },
+  "limits": [
+    "READY is the critic's local editorial/visual judgment of exact r1 only. It is not ACCEPTED_LOCAL for the whole package, legal clearance, account suitability or permission to import/publish."
+  ],
+  "deliverables": [
+    "editorial/reviews/critic-r1.json",
+    "editorial/reviews/critic-r1.md"
+  ]
+}
