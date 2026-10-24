@@ -40,6 +40,19 @@ passed. Failures:2old DISLIKE/no-copy expectations and7VK mock awaitability.
 Fixtures corrected without changing production/origin assertions; local VK7PASS.
 Full corrected-head CI/browser acceptance remains pending.
 
+Next checkpointcfc45f9/merge94a34fca54cd1103a74ea4330f666151022bdd93:
+native1726PASS/0FAIL/0SKIP, canonical build/CSS and6compiled HTTP checks PASS;
+Self-host40085216761PASS. Artifact12557285113 readback confirms788exact Git blobs,
+945compiled entries, BUILD_IDMnj7v4i9KOOs90mJ-Z_ft, one existing pg symlink.
+ZIP SHA2569025378bb13b926381ca4f1e187851daf53d58a94ad190f4d9033566d5ab2be9;
+inner TGZ SHA256f856104936b6a507fbff7571d8634c5882fe3ab837c1b706b36592a01c66ab6f.
+Browser160PASS/2FAIL/4configuredSKIP: new ADMIN scenarios PASS; test-context
+teardown blocked child exit and interrupted nonce fixture cleanup, contaminating
+the following shared-catalog title locator. Correct fixture lifecycle order and
+verify absence; do not raise timeouts or pick an arbitrary duplicate card.
+Owner accepted the three reviewed image posts for first delivery; real video
+is not required for this accepted starter scope. No live import claimed.
+
 ## Requirement → path → acceptance
 
 | Requirement | Existing path plus minimal change | Acceptance |

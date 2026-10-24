@@ -8,15 +8,20 @@ import {posts,publications,libraryBatchConsentOperations} from '../../db/schema.
 import type {LibraryBatchCommitResult} from '../../lib/contracts/library-batch.ts';
 
 type Runtime=Awaited<ReturnType<typeof startLibraryBatchRuntime>>;
-const test=base.extend<{runtime:Runtime}>({runtime:async({browser},provide)=>{
- const context=browser.contexts()[0],started=performance.now();
- let contextClosed=context?!browser.contexts().includes(context):null;context?.on('close',()=>{contextClosed=true;});
+const test=base.extend<{runtime:Runtime}>({runtime:async({context},provide)=>{
+ const started=performance.now();
+ let contextClosed=false;context.on('close',()=>{contextClosed=true;});
  const cleanupPhase=async<T,>(label:string,work:()=>Promise<T>):Promise<T>=>{
   const state=()=>({contextClosed,pageCount:context?.pages().length??0});
   console.log(JSON.stringify({diagnostic:'library-batch-cleanup',label,event:'BEGIN',elapsedMs:Math.round(performance.now()-started),...state()}));
   let returned=false;try{const result=await work();returned=true;return result;}finally{console.log(JSON.stringify({diagnostic:'library-batch-cleanup',label,event:'END',elapsedMs:Math.round(performance.now()-started),returned,...state()}));}
  };
- const f=await startLibraryBatchRuntime({cleanupPhase});try{await provide(f);}finally{await f.cleanup();}
+ const f=await startLibraryBatchRuntime({cleanupPhase});try{await provide(f);}finally{
+  // The compiled child must outlive its clients. SIGTERM while the test context
+  // is still open can wait for browser connections until Playwright's timeout,
+  // interrupting DB cleanup and contaminating the next shared-catalog fixture.
+  try{await cleanupPhase('browser.context.close',()=>context.close());}finally{await f.cleanup();}
+ }
 }});
 // Automatic auth/signed-URL artifacts are forbidden; explicit images follow login.
 test.use({trace:'off',screenshot:'off',video:'off'});

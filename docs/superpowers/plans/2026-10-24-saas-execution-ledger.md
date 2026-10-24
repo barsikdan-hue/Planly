@@ -15,21 +15,24 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
   of the specific operation. Implementation/tests do not authorize deleting real users.
 - ADMIN can inspect/reschedule agent scheduled/published posts; private drafts,
   private media and secrets remain outside that permission.
+- Owner accepted the three reviewed image posts as sufficient for the first
+  delivery on24October. Missing real video no longer blocks that starter package;
+  synthetic video remains technical test evidence only.
 
 ## Queue
 
 | ID | Result | Status | Evidence / next action |
 |---|---|---|---|
-| S0 | Confirm source/runtime and avoid rebuilding | SOURCE_CONFIRMED | Existing isolated branch/PR75; runtime not changed. Initial2f CI cancelled at test teardown. |
-| S1a | Repair admin schedule privacy/time/status and fixture | SOURCE_IMPLEMENTED | Projection/MSK/409 fixes; valid USER proof fixture and Redis teardown. Native CI pending. |
-| S1b | Safe password reset | SOURCE_IMPLEMENTED | Hashed30min capability; single-use/session revocation; IP+token budgets. Native/browser CI pending. |
-| S1c | Manual expiry/unlimited access | SOURCE_IMPLEMENTED | Null preserves existing access; guarded mutation/final handoff; read/safe cancellation retained. CI pending. |
-| S1d | Confirmed complete deletion | SOURCE_IMPLEMENTED | Exact email; unsafe publication/upload barriers; durable cleanup/readback. No real deletion. CI pending. |
-| S2 | Archive/cancel/reuse/MSK | SOURCE_IMPLEMENTED | Independent archive copy; receipts/reuse preserved; after10MSK verified locally. Native/browser CI pending. |
-| S3 | Catalog/update pipeline | SOURCE_IMPLEMENTED |3reviewed image items offline verified; repeatable journal runner. Live import/video NOT_VERIFIED. |
-| S4 | Delivery | CI_PENDING_LIVE_GATED | Existing scheduler/connector suites plus expiry races; actual USER consent/sends remain gated. |
+| S0 | Confirm source/runtime and avoid rebuilding | VERIFIED | Existing isolated branch/PR75; fresh runtime/image/ledger readback. Runtime unchanged. |
+| S1a | Repair admin schedule privacy/time/status and fixture | IN_PROGRESS | Source/native PASS; projection/MSK/409 fixes. Target runtime acceptance pending. |
+| S1b | Safe password reset | IN_PROGRESS | Hashed30min capability/session revocation/IP+token budgets. Native/compiled browser PASS; target pending. |
+| S1c | Manual expiry/unlimited access | IN_PROGRESS | Guarded writes/final handoff/read/cancel. Native/compiled browser PASS; target pending. |
+| S1d | Confirmed complete deletion | IN_PROGRESS | Exact email/unsafe-send/upload barriers/durable cleanup/readback. Native/compiled browser PASS; target pending. |
+| S2 | Archive/cancel/reuse/MSK | IN_PROGRESS | Independent archive/receipts/reuse/after10MSK source checks PASS. Target runtime pending. |
+| S3 | Catalog/update pipeline | IN_PROGRESS |3reviewed image items approved for first delivery/offline verified; live import pending. |
+| S4 | Delivery | BLOCKED | Fixture suite PASS; real USER consent/configuration/read-send scope required. |
 | S5 | Security and browser acceptance | IN_PROGRESS | Critic findings corrected; native/compiled/browser exact-head CI required, then authorized runtime. |
-| S6 | Release and handoff | PREPARED_NOT_RELEASED | Concrete candidate/checklist in docs/verification/2026-10-24-saas-candidate.md; immutable identity/checks pending. |
+| S6 | Release and handoff | BLOCKED | Concrete candidate/checklist/artifact readback prepared; exact CI and separate release gate pending. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |
 
 Pre-flight: S1c access checks must feed both content mutations and provider handoffs;
@@ -93,3 +96,17 @@ configuration. Owner identified old Render/My Workspace; read-only confirmed old
 Planly autoDeployOFF and masked bot-token keys present, Mini App/origin keys absent.
 No secret values/export/edit, provider calls or persistent writes. Details and
 hashes are in the candidate release record. Config provisioning and release gated.
+
+Checkpointcfc45f9: CI40085216763 native1726/1726/0SKIP, build/CSS and all6compiled
+HTTP suites PASS; Self-host40085216761PASS. Browser160PASS/2FAIL/4configuredSKIP.
+New ADMIN reset/manual/deletion desktop/mobile320 scenarios PASS. First browser
+failure: test fixture teardown Next exit waits while its browser context is open,
+BEGIN4451ms→END34437ms exactly when context closes on timeout; subsequent DB cleanup
+is interrupted. Following shared-library fixture sees duplicate shared titles.
+Minimal correction closes the explicitly owned test context before stopping its
+child, keeps all timeouts/assertions, and asserts nonce-owned USER cleanup. No
+production shutdown changes or first()-selector masking. Corrected-head CI next.
+
+Artifact12557285113 verified locally without extraction: ZIP SHA9025378b…, TGZ
+SHAf8561049…, all788source blobs matchcfc45f9,945compiled entries/BUILD_ID present;
+only existing pg symlink. This proves artifact contents, not staging deployment.

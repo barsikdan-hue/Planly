@@ -104,6 +104,7 @@ export async function startSharedLibraryRuntime(options = {}) {
     const assets = await phase('shared.pg.media', async () => await db.select().from(mediaAssets).where(inArray(mediaAssets.userId, ids)));
     for (const asset of assets) keys.add(asset.storageKey);
     await phase('shared.pg.users.delete', async () => { await db.delete(users).where(inArray(users.id, ids)); });
+    await phase('shared.pg.users.absent', async () => { assert.equal((await db.select({ id: users.id }).from(users).where(inArray(users.id, ids))).length, 0, 'Owned fixture users must be removed before the next catalog scenario'); });
     for (const key of keys) await phase('shared.s3.delete', () => storage.delete(key));
     if (storageFixture) await phase('shared.storage.close', () => storageFixture.stop());
     await phase('shared.pg.close', closeDb);
