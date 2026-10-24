@@ -696,7 +696,7 @@ export default function PlannerApp() {
 
     const createFromLibrary = (item: LibraryItemDto) => {
         const source = data.libraryItems.find(current => current.id === item.id);
-        if (source?.status !== 'READY') return;
+        if (source?.status !== 'READY' && source?.status !== 'USED') return;
         replaceEditor({ ...blankPost(), text: source.text, mediaIds: [...source.mediaIds], sourceLibraryItemId: source.id });
     };
 
