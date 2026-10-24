@@ -291,7 +291,6 @@ export const posts = pgTable('posts', {
   index('posts_user_id_idx').on(table.userId),
   index('posts_status_idx').on(table.status),
   uniqueIndex('posts_user_creation_key_uidx').on(table.userId, table.creationKey),
-  uniqueIndex('posts_source_library_item_uidx').on(table.sourceLibraryItemId),
 ]);
 
 export const postTargets = pgTable('post_targets', {

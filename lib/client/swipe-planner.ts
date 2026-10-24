@@ -7,7 +7,7 @@ import type { RecoveryStorage } from './editor-recovery.ts';
 import {readPendingDislike} from './swipe-feedback.ts';
 export type SwipeApproval = { mode: 'draft' | 'manual' | 'next'; providers: Provider[]; scheduledAt: string | null; inputMethod?: ReviewInputMethod };
 export function buildSwipeApproval(item: LibraryItemDto, approval: SwipeApproval): ComposerPostInput {
-  if (item.status !== 'READY' || item.sourcePostId) throw new Error('Заготовка уже недоступна для одобрения. Обнови библиотеку.');
+  if (item.status !== 'READY' && item.status !== 'USED') throw new Error('Заготовка уже недоступна для одобрения. Обнови библиотеку.');
   if (approval.mode === 'draft' || !approval.providers.length || !approval.scheduledAt || !Number.isFinite(Date.parse(approval.scheduledAt)) || Date.parse(approval.scheduledAt) < Date.now()+60_000) throw new Error('Выбери площадку и время не раньше чем через минуту (МСК).');
   return { ...savePostInputSchema.parse({title:item.title,baseText:item.text,status:'READY',mediaIds:[...item.mediaIds],
     targets:approval.providers.map(provider=>({provider,textOverride:null,scheduledAt:approval.scheduledAt}))}),

@@ -160,17 +160,8 @@ export async function createPost(
         if (sourceLibraryUpdatedAt !== undefined) throw new LibrarySourceStaleError();
         throw new Error('Library item not found');
       }
-      const [linked] = await tx.select({ id: posts.id }).from(posts)
-        .where(and(eq(posts.sourceLibraryItemId, sourceLibraryItemId), eq(posts.userId, userId))).limit(1);
-      // Returning a USED source is a lookup: preserve the canonical key/hash and
-      // leave any fresh key unreserved, as decided by the owner.
-      if (linked) {
-        if (swipeReview) throw new LibrarySourceConflictError('Library source already converted');
-        return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
-      }
       if (sourceLibraryUpdatedAt !== undefined && source.updatedAt.getTime() !== Date.parse(sourceLibraryUpdatedAt)) throw new LibrarySourceStaleError();
       if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
-      if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
       if(swipeReview) snapshot=await captureSwipeSource(tx,userId,source);
     }
     const schedules = input.targets.map(target => target.scheduledAt);

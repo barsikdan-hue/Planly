@@ -158,10 +158,7 @@ export async function archiveLibraryItem(userId: string, id: string, expectedUpd
     const [owned] = await tx.select().from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
     if (!owned || owned.updatedAt.getTime() !== Date.parse(input.expectedUpdatedAt)) throw new LibrarySourceStaleError();
-    if (owned.status !== 'READY') throw new LibrarySourceConflictError('Only READY library items can be rejected');
-    const [linked] = await tx.select({ id: posts.id }).from(posts)
-      .where(and(eq(posts.sourceLibraryItemId, id), eq(posts.userId, userId))).limit(1);
-    if (linked) throw new LibrarySourceConflictError('Used library item cannot be rejected');
+    if (owned.status !== 'READY' && owned.status !== 'USED') throw new LibrarySourceConflictError('Only selectable library items can be rejected');
     const snapshot=intent ? await captureSwipeSource(tx,userId,owned) : undefined;
     await tx.update(libraryItems).set({ status: 'ARCHIVED', updatedAt: new Date(Math.max(Date.now(), owned.updatedAt.getTime() + 1)) })
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));

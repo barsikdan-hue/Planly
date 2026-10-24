@@ -5,7 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { getDb, closeDb } from '../db/index.ts';
 import { users, socialAccounts, posts, libraryItems } from '../db/schema.ts';
 import { createPost } from '../lib/server/posts.ts';
-import { createLibraryItem, archiveLibraryItem, updateLibraryItem, deleteLibraryItem } from '../lib/server/library-items.ts';
+import { createLibraryItem, archiveLibraryItem, updateLibraryItem, deleteLibraryItem, listLibraryItems } from '../lib/server/library-items.ts';
 import type { SavePostInput } from '../lib/contracts/planner.ts';
 
 const owner='feedback-owner', other='feedback-other';
@@ -29,6 +29,19 @@ test('LIKE commits a Post and one current vote/receipt; replay preserves snapsho
  assert.equal((await getDb().select().from(posts)).length,1);
  const encoded=JSON.stringify(first);assert.ok(!encoded.includes('Private'));assert.ok(!encoded.includes('bodyText'));assert.ok(!encoded.includes('title'));
 });
+
+test('LIKE can reuse a USED library item for a second free Moscow slot',async()=>{
+ const item=await source();
+ const first=await createPost(owner,input,like(item));
+ const refreshed=(await listLibraryItems(owner)).find(value=>value.id===item.id);
+ assert.ok(refreshed);
+ assert.equal(refreshed.status,'USED');
+ const second=await createPost(owner,{...input,targets:[{...input.targets[0],scheduledAt:'2035-01-02T07:00:00Z'}]},like(refreshed));
+ assert.notEqual(second.id,first.id);
+ assert.equal((await getDb().select().from(posts)).length,2);
+ assert.equal((await listLibraryItems(owner)).find(value=>value.id===item.id)?.status,'USED');
+});
+
 test('DISLIKE restore LIKE replaces current vote; old DISLIKE replay cannot rearchive',async()=>{
  const item=await source(),opts=dislike();await archiveLibraryItem(owner,item.id,item.updatedAt,opts);
  assert.equal((await summary()).aggregate.dislikes,1);

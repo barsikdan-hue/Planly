@@ -76,7 +76,7 @@ export function SwipePlanner({ origin = 'content', onAddItem, items, media, soci
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
     const blocked = busy || pending || working;
-    const ready = items.filter(item => item.status === 'READY' && !item.sourcePostId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    const ready = items.filter(item => item.status === 'READY' || item.status === 'USED').sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const [initialCount] = useState(() => ready.length);
     const nextCard = ready.find(item => !skipped.includes(item.id) && !finished.includes(item.id));
     const current = working && heldCard ? heldCard : nextCard;
