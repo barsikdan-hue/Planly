@@ -118,33 +118,32 @@ test('a failure during publication insertion rolls back Post, targets, media and
   }
 });
 
-test('USED source resolves the surviving Post and does not reconcile or mirror again', async () => {
+test('USED source creates a reusable Post and mirrors each distinct creation', async () => {
   const item = await source();
   let mirrors = 0;
   const options = { sourceLibraryItemId: item.id, mirrorQueue: async () => { mirrors++; } };
   const first = await createPost(owner, input, options);
-  const history = await getDb().select().from(publications);
   await updateLibraryItem(owner, item.id, { text: 'Edited library copy', mediaIds: [], status: 'READY' });
   const replay = await createPost(owner, { ...input, baseText: 'Another draft', targets: [] }, options);
-  assert.equal(replay.id, first.id);
-  assert.equal(replay.baseText, 'Composer copy');
+  assert.notEqual(replay.id, first.id);
+  assert.equal(replay.baseText, 'Another draft');
   assert.equal((await listLibraryItems(owner))[0].status, 'USED');
-  assert.equal((await ownerPosts()).length, 1);
-  assert.deepEqual(await getDb().select().from(publications), history);
-  assert.equal(mirrors, 1);
+  assert.equal((await ownerPosts()).length, 2);
+  assert.equal(mirrors, 2);
 });
 
-test('USED source whose Post was deleted cannot create a second source Post', async () => {
+test('USED source whose Post was deleted can create a second source Post', async () => {
   const item = await source();
   const first = await createPost(owner, input, { ...noMirror, sourceLibraryItemId: item.id });
   await deletePost(owner, first.id);
-  await assert.rejects(() => createPost(owner, input, { ...noMirror, sourceLibraryItemId: item.id }), /used|использ/i);
+  const second = await createPost(owner, input, { ...noMirror, sourceLibraryItemId: item.id });
+  assert.notEqual(second.id, first.id);
   assert.equal((await listLibraryItems(owner))[0].status, 'USED');
   assert.equal((await listLibraryItems(owner))[0].sourcePostId, null);
-  assert.deepEqual(await ownerPosts(), []);
+  assert.deepEqual((await ownerPosts()).map(post => post.id), [second.id]);
 });
 
-test('two concurrent conversions with different keys produce one source Post and one publication', native, async () => {
+test('two concurrent conversions with different keys produce two source Posts', native, async () => {
   const item = await source();
   let mirrors = 0;
   const options = { sourceLibraryItemId: item.id, mirrorQueue: async () => { mirrors++; } };
@@ -152,23 +151,14 @@ test('two concurrent conversions with different keys produce one source Post and
     createPost(owner, input, { ...options, creationKey: '11111111-1111-4111-8111-111111111111' }),
     createPost(owner, input, { ...options, creationKey: '22222222-2222-4222-8222-222222222222' }),
   ]);
-  assert.equal(created[0].id, created[1].id);
+  assert.notEqual(created[0].id, created[1].id);
   const rows = await ownerPosts();
-  assert.equal(rows.length, 1);
-  const canonical = rows[0];
+  assert.equal(rows.length, 2);
   const keys = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
-  assert.ok(keys.includes(canonical.creationKey!));
-  assert.ok(canonical.creationInputHash);
-  assert.equal(canonical.sourceLibraryItemId, item.id);
-  const history = await getDb().select().from(publications);
-  assert.equal(history.length, 1);
+  assert.ok(rows.every(row => keys.includes(row.creationKey!) && row.creationInputHash && row.sourceLibraryItemId === item.id));
   assert.equal((await listLibraryItems(owner))[0].status, 'USED');
-  const losingKey = keys.find(value => value !== canonical.creationKey)!;
-  const retry = await createPost(owner, input, { ...options, creationKey: losingKey });
-  assert.equal(retry.id, created[0].id);
-  assert.deepEqual(await ownerPosts(), [canonical]);
-  assert.deepEqual(await getDb().select().from(publications), history);
-  assert.equal(mirrors, 1);
+  assert.equal((await getDb().select().from(publications)).length, 0);
+  assert.equal(mirrors, 2);
 });
 
 test('concurrent same-key conversion of different sources conflicts and leaves the losing source READY', native, async () => {

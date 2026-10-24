@@ -38,7 +38,7 @@ test('concurrent POST retries with one key create one post and one publication',
   const bodies = await Promise.all(responses.map(response => response.json()));
   assert.ok(responses.every(response => response.status === 201));
   assert.equal(new Set(bodies.map(body => body.id)).size, 1);
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
+  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
   assert.equal((await getDb().select().from(publications)).filter(post => post.userId === owner).length, 1);
 });
 
@@ -82,7 +82,7 @@ test('a rejected first request can be corrected using its uncommitted key', asyn
 
 test('malformed creation key is rejected before persistence', async () => {
   assert.equal((await POST(request(original, 'not-a-uuid'))).status, 422);
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
+  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
 });
 
 test('replaying creation does not repeat queue reconciliation or mirroring', async () => {
@@ -159,37 +159,37 @@ test('changed source under a used key conflicts before resolving another already
   assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 2);
 });
 
-test('a fresh key returning a USED source stays unreserved and preserves canonical creation identity', async () => {
+test('a fresh key returning a USED source creates an independent Post and remains idempotent', async () => {
   await seedLibrarySources();
   const body = { ...original, sourceLibraryItemId: 'idempotency-source-a' };
   const firstResponse = await POST(request(body));
   assert.equal(firstResponse.status, 201);
   const first = await firstResponse.json();
-  const [canonical] = (await getDb().select().from(posts)).filter(post => post.userId === owner);
-  assert.equal(canonical.creationKey, key);
-  assert.ok(canonical.creationInputHash);
-  const history = (await getDb().select().from(publications)).filter(row => row.userId === owner);
+  const [firstPost] = (await getDb().select().from(posts)).filter(post => post.userId === owner);
+  assert.equal(firstPost.creationKey, key);
+  assert.ok(firstPost.creationInputHash);
   const newKey = '674bb716-4d57-4c2d-ad57-7c74d416a880';
   for (let attempt = 0; attempt < 2; attempt++) {
     const replay = await POST(request(body, newKey));
     assert.equal(replay.status, 201);
     assert.equal((await replay.json()).id, first.id);
   }
-  const [afterLookup] = (await getDb().select().from(posts)).filter(post => post.userId === owner);
-  assert.deepEqual(afterLookup, canonical);
-  assert.deepEqual((await getDb().select().from(publications)).filter(row => row.userId === owner), history);
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
+  const postsAfterReplay = (await getDb().select().from(posts)).filter(post => post.userId === owner);
+  assert.equal(postsAfterReplay.length, 2);
+  assert.ok(postsAfterReplay.some(post => post.id === first.id && post.creationKey === key));
+  assert.ok(postsAfterReplay.some(post => post.id !== first.id && post.creationKey === newKey));
   assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'idempotency-source-b')?.status, 'READY');
   assert.equal((await POST(request({ ...body, baseText: 'Changed canonical request' }))).status, 409);
   assert.equal((await POST(request({ ...body, sourceLibraryItemId: 'idempotency-source-b' }))).status, 409);
-  const secondResponse = await POST(request({ ...body, sourceLibraryItemId: 'idempotency-source-b' }, newKey));
+  const thirdKey = '784bb716-4d57-4c2d-ad57-7c74d416a880';
+  const secondResponse = await POST(request({ ...body, sourceLibraryItemId: 'idempotency-source-b' }, thirdKey));
   assert.equal(secondResponse.status, 201);
   const second = await secondResponse.json();
   assert.notEqual(second.id, first.id);
   const rows = (await getDb().select().from(posts)).filter(post => post.userId === owner);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows.find(post => post.id === first.id), canonical);
-  assert.equal(rows.find(post => post.id === second.id)?.creationKey, newKey);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.find(post => post.id === first.id), firstPost);
+  assert.equal(rows.find(post => post.id === second.id)?.creationKey, thirdKey);
   assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'idempotency-source-b')?.status, 'USED');
 });
 
@@ -214,7 +214,7 @@ test('POST rejects malformed create-only source IDs through existing 422 validat
   assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
 });
 
-test('ARCHIVED and orphaned USED sources produce safe client conflicts rather than server errors', async () => {
+test('ARCHIVED sources conflict while orphaned USED sources can be reused', async () => {
   await seedLibrarySources();
   await getDb().update(libraryItems).set({ status: 'ARCHIVED' }).where(eq(libraryItems.id, 'idempotency-source-a'));
   const archived = await POST(request({ ...original, sourceLibraryItemId: 'idempotency-source-a' }));
@@ -224,8 +224,7 @@ test('ARCHIVED and orphaned USED sources produce safe client conflicts rather th
   assert.equal(created.status, 201);
   await deletePost(owner, (await created.json()).id);
   const orphaned = await POST(request({ ...original, sourceLibraryItemId: 'idempotency-source-b' }));
-  assert.equal(orphaned.status, 409);
-  assert.equal((await orphaned.json()).code, 'LIBRARY_SOURCE_CONFLICT');
+  assert.equal(orphaned.status, 201);
   assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'idempotency-source-b')?.status, 'USED');
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
+  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
 });

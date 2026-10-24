@@ -70,7 +70,7 @@ test('library media references shared assets with unique ordered positions and c
   assert.ok(config.foreignKeys.every(key => key.onDelete === 'cascade'));
 });
 
-test('post provenance allows existing posts and protects one source post without cascade deletion', () => {
+test('post provenance allows reusable source posts without a uniqueness constraint', () => {
   assert.ok('sourceLibraryItemId' in schema.posts, 'missing posts.sourceLibraryItemId');
   const provenance = schema.posts.sourceLibraryItemId;
   const config = getTableConfig(schema.posts);
@@ -80,5 +80,5 @@ test('post provenance allows existing posts and protects one source post without
   assert.ok(foreignKey);
   assert.equal(foreignKey.reference().foreignTable, schema.libraryItems);
   assert.equal(foreignKey.onDelete, 'set null');
-  assert.ok(config.indexes.some(index => index.config.unique && index.config.columns.length === 1 && 'name' in index.config.columns[0] && index.config.columns[0].name === 'source_library_item_id'));
+  assert.equal(config.indexes.some(index => index.config.unique && index.config.columns.length === 1 && 'name' in index.config.columns[0] && index.config.columns[0].name === 'source_library_item_id'), false);
 });

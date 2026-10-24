@@ -68,9 +68,9 @@ test('opposite concurrent decisions commit one vote and one receipt',async()=>{
  const item=await source();const results=await Promise.allSettled([createPost(owner,input,like(item)),archiveLibraryItem(owner,item.id,item.updatedAt,dislike())]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);const snapshot=await summary();assert.equal(snapshot.aggregate.total,1);assert.equal(snapshot.receipts.length,1);
 });
-test('legacy conversion and pre-receipt same-key replay fabricate no feedback',async()=>{
+test('legacy conversion and reusable fresh-key creation fabricate no feedback',async()=>{
  const item=await source(),opts=like(item);const post=await createPost(owner,input,{...opts,swipeReview:undefined});assert.equal((await summary()).aggregate.total,0);
- await assert.rejects(()=>createPost(owner,input,like(item)),{name:'LibrarySourceConflictError'});
+ const second=await createPost(owner,input,like(item));assert.notEqual(second.id,post.id);assert.equal((await summary()).aggregate.total,0);
  // Simulate Task2's marked Post before receipts existed, without inventing history.
  const {creationInputHash}=await import('../lib/server/post-idempotency.ts');
  await getDb().update(posts).set({creationInputHash:creationInputHash(input,item.id,opts)}).where(eq(posts.id,post.id));

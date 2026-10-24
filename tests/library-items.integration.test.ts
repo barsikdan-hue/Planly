@@ -137,7 +137,7 @@ test('Library DTO never exposes another owner source Post even if linked in the 
   assert.equal((await listLibraryItems(ownerA))[0].sourcePostId, null);
 });
 
-test('conditional Library archive preserves ordered media and rejects missing, foreign and USED sources', async () => {
+test('conditional Library archive preserves ordered media and allows USED sources', async () => {
   const { archiveLibraryItem, createLibraryItem, listLibraryItems } = await library();
   const created = await createLibraryItem(ownerA, { title: 'Keep', text: 'Keep copy', mediaIds: ['library-a-2','library-a-1'] });
   for (const id of [created.id, 'missing-item']) {
@@ -149,7 +149,8 @@ test('conditional Library archive preserves ordered media and rejects missing, f
   assert.deepEqual(archived.mediaIds, ['library-a-2','library-a-1']);
   await getDb().update(libraryItems).set({ status: 'USED' }).where(eq(libraryItems.id, created.id));
   const [used] = await listLibraryItems(ownerA);
-  await assert.rejects(() => archiveLibraryItem(ownerA, used.id, used.updatedAt), { name: 'LibrarySourceConflictError' });
-  assert.equal((await listLibraryItems(ownerA))[0].status, 'USED');
+  const archivedUsed = await archiveLibraryItem(ownerA, used.id, used.updatedAt);
+  assert.equal(archivedUsed.status, 'ARCHIVED');
+  assert.deepEqual(await listLibraryItems(ownerA), []);
   assert.deepEqual(await getDb().select().from(posts), []);
 });
