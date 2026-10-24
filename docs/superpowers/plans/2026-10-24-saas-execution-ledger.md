@@ -5,7 +5,10 @@ Current24October release: Owner separately confirmed PR75 merge, backup/rehearsa
 import and nonce-owned ADMIN+two USER acceptance. These executed operations are
 recorded in the [staging report](../../verification/2026-10-24-saas-staging-release.md).
 Owner additionally approved web/worker provider egress and named bot/channel
-read-only checks; production and sends remain gated.
+read-only checks, then verified public MAX CA configuration. Both operations
+executed with no-send preconditions; MAX bot/TLS200, native channel control still
+unverified. Current follow-up branch: codex/saas-staging-acceptance-20261024, PR76.
+Production and sends remain gated.
 
 Initial source authority: direct Owner acceptance of the master prompt in this chat. Source work,
 tests, commit/push and Draft PR updates are authorized; merge, persistent migrations,
@@ -30,23 +33,30 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
 
 | ID | Result | Status | Evidence / next action |
 |---|---|---|---|
-| S0 | Confirm source/runtime and avoid rebuilding | VERIFIED | Existing isolated branch/PR75; fresh runtime/image/ledger readback. Runtime unchanged. |
-| S1a | Repair admin schedule privacy/time/status and fixture | IN_PROGRESS | Source/native PASS; projection/MSK/409 fixes. Target runtime acceptance pending. |
-| S1b | Safe password reset | IN_PROGRESS | Hashed30min capability/session revocation/IP+token budgets. Native/compiled browser PASS; target pending. |
-| S1c | Manual expiry/unlimited access | IN_PROGRESS | Guarded writes/final handoff/read/cancel. Native/compiled browser PASS; target pending. |
-| S1d | Confirmed complete deletion | IN_PROGRESS | Exact email/unsafe-send/upload barriers/durable cleanup/readback. Native/compiled browser PASS; target pending. |
-| S2 | Archive/cancel/reuse/MSK | IN_PROGRESS | Independent archive/receipts/reuse/after10MSK source checks PASS. Target runtime pending. |
-| S3 | Catalog/update pipeline | IN_PROGRESS |3reviewed image items approved for first delivery/offline verified; live import pending. |
-| S4 | Delivery | BLOCKED | Fixture suite PASS; real USER consent/configuration/read-send scope required. |
-| S5 | Security and browser acceptance | IN_PROGRESS | Critic findings corrected; native/compiled/browser exact-head CI required, then authorized runtime. |
-| S6 | Release and handoff | BLOCKED | Concrete candidate/checklist/artifact readback prepared; exact CI and separate release gate pending. |
+| S0 | Confirm source/runtime and avoid rebuilding | VERIFIED | PR75 merged dc7c66a/tree1ea423a, main CI/Self-host PASS; staging image4d952a/ledger21, one worker. |
+| S1a | ADMIN schedule privacy/time/status | SOURCE_PASS / TARGET_PARTIAL | Exact-head CI PASS; staging ADMIN empty-schedule page PASS. Live reschedule/published case awaits authorized connected USER work. |
+| S1b | Safe password reset | CORE_STAGING_PASS | Actual public HTTP one-use reset, replay410, old-session401/new login; desktop ADMIN controls. Live mobile pending. |
+| S1c | Manual expiry/unlimited access | CORE_STAGING_PASS | Public HTTP expired reads/write403 and unlimited verified. Final provider handoff remains source CI evidence until S4. |
+| S1d | Confirmed complete deletion | CORE_STAGING_PASS | Wrong-email403, UI cancel; exact owned A/B deletion and real worker task/file cleanup0. No real-user deletion. |
+| S2 | Archive/cancel/reuse/MSK | PARTIAL | Staging independent archive/replay/private image/reload/explicit return PASS. Calendar/cancel/reuse handoff still needs native connected USER; source CI PASS. |
+| S3 | Catalog/update pipeline | STARTER_STAGING_PASS | Three Owner-approved posts imported and same-journal replayed, no duplicates; original bytes retained. Full monthly volume not inferred. |
+| S4 | Delivery | BLOCKED_EXTERNAL | Approved egress/CA applied; MAX bot200 but channel numericID/control unresolved; Telegram host/container TCP/TLS failure, exact upstream cause unproven. Native Mini App registration/USER consent and separate sends pending. |
+| S5 | Security and browser acceptance | PARTIAL | PR75 CI/native/browser/self-host PASS; actual public HTTP ADMIN/A/B and desktop PASS, fixtures cleaned. Live mobile/native provider return/Owner acceptance pending. |
+| S6 | Release and handoff | STAGING_RELEASED / HANDOFF_PARTIAL | Backup/restored rehearsal/migrations0017–0020/deploy complete; preserved data. Production/off-VM recovery/provider acceptance unfinished. PR76 follow-up runner fix awaiting its CI/review/merge. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |
 
 Pre-flight: S1c access checks must feed both content mutations and provider handoffs;
 S1b revokes sessions and must preserve existing channel binding safety; S1d must not
 erase uncertain delivery before outcome handling. No new auth or scheduler.
 
-## Evidence
+## Current evidence
+
+Confirmed release/runtime/configuration/catalog/acceptance/cleanup records are in
+[the staging report](../../verification/2026-10-24-saas-staging-release.md).
+Earlier source checkpoint failures and pending labels below are historical;
+they describe their own revision/time and do not override the current queue.
+
+## Historical source checkpoints — before PR75 staging release
 
 Ruling24Oct: current Owner-approved master prompt supersedes the older shared-feed
 DISLIKE/no-copy behavior: new left swipes create an independent ARCHIVED copy,
