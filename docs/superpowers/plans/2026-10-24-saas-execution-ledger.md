@@ -20,16 +20,16 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
 
 | ID | Result | Status | Evidence / next action |
 |---|---|---|---|
-| S0 | Confirm source/runtime and avoid rebuilding | IN_PROGRESS | GitHub/local HEAD5a8a679, PR75; CI40068862698 has one failure, Self-host PASS. Runtime release separate. |
-| S1a | Repair admin schedule privacy/time/status and fixture | IN_PROGRESS | CI1695PASS/1FAIL: valid USER binding missing in fixture; UTC/local conversion reproduced. Add focused RED checks. |
-| S1b | Safe password reset | TODO | Reuse server auth, one-time expiry/revocation; inspect existing invitation infrastructure. |
-| S1c | Manual expiry/unlimited access | TODO | Additive model preserving existing users; enforce server mutations/handoffs. |
-| S1d | Confirmed complete deletion | TODO | Preserve uncertain/in-flight sends; prepare explicit confirmation and durable media cleanup. No real deletion here. |
-| S2 | Archive/cancel/reuse/MSK | IN_PROGRESS | Reuse source already in PR75; inspect shared-feed cancellation and verify after10 policy. |
-| S3 | Catalog/update pipeline | TODO | Inspect existing import and accepted content; do not invent media. |
-| S4 | Delivery | TODO | Fixture checks first; actual USER consent/sends remain gated. |
-| S5 | Security and browser acceptance | TODO | Independent branch Critic, authenticated isolated fixtures then released runtime. |
-| S6 | Release and handoff | TODO | Concrete candidate/rollback; no implied merge/deploy. |
+| S0 | Confirm source/runtime and avoid rebuilding | SOURCE_CONFIRMED | Existing isolated branch/PR75; runtime not changed. Initial2f CI cancelled at test teardown. |
+| S1a | Repair admin schedule privacy/time/status and fixture | SOURCE_IMPLEMENTED | Projection/MSK/409 fixes; valid USER proof fixture and Redis teardown. Native CI pending. |
+| S1b | Safe password reset | SOURCE_IMPLEMENTED | Hashed30min capability; single-use/session revocation; IP+token budgets. Native/browser CI pending. |
+| S1c | Manual expiry/unlimited access | SOURCE_IMPLEMENTED | Null preserves existing access; guarded mutation/final handoff; read/safe cancellation retained. CI pending. |
+| S1d | Confirmed complete deletion | SOURCE_IMPLEMENTED | Exact email; unsafe publication/upload barriers; durable cleanup/readback. No real deletion. CI pending. |
+| S2 | Archive/cancel/reuse/MSK | SOURCE_IMPLEMENTED | Independent archive copy; receipts/reuse preserved; after10MSK verified locally. Native/browser CI pending. |
+| S3 | Catalog/update pipeline | SOURCE_IMPLEMENTED |3reviewed image items offline verified; repeatable journal runner. Live import/video NOT_VERIFIED. |
+| S4 | Delivery | CI_PENDING_LIVE_GATED | Existing scheduler/connector suites plus expiry races; actual USER consent/sends remain gated. |
+| S5 | Security and browser acceptance | IN_PROGRESS | Critic findings corrected; native/compiled/browser exact-head CI required, then authorized runtime. |
+| S6 | Release and handoff | PREPARED_NOT_RELEASED | Concrete candidate/checklist in docs/verification/2026-10-24-saas-candidate.md; immutable identity/checks pending. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |
 
 Pre-flight: S1c access checks must feed both content mutations and provider handoffs;
@@ -38,6 +38,27 @@ erase uncertain delivery before outcome handling. No new auth or scheduler.
 
 ## Evidence
 
+Ruling24Oct: current Owner-approved master prompt supersedes the older shared-feed
+DISLIKE/no-copy behavior: new left swipes create an independent ARCHIVED copy,
+never a Post/job. Historical null-result DISLIKE receipts remain readable unchanged.
+The existing independence/compensation/receipt checks remain; the new archive
+contract additionally checks bytes, private ownership, replay and source unsharing.
+
+Ruling24Oct: ordinary expiry keeps own read access and safe cancellation, but denies
+new mutations/handoffs. Unlimited extension does not lift administrative BLOCKED;
+renewal does not retry expired publications automatically. No invented billing.
+
+Local21focused checks PASS; Moscow UI RED2→GREEN2; archive receipt RED1→GREEN;
+lifecycle control RED2→GREEN2; manual deadline RED2→GREEN2. These are local fixture
+checks, not DB integration or staging/provider acceptance. Native Docker/PostgreSQL
+is unavailable locally; exact-head Linux CI is required for integration/browser proof.
+
+New source migrations:0018 access/reset/durable-deletion schema and0019 archive
+receipt shape, in addition to branch0017 reusable-source uniqueness removal.
+No persistent migration was run. Approved pilot manifest offline validation:3items,
+hash8475d32d19d0ae701995fd5a4b7016b7eb2c9e8d608603ef10437a95e2893e99;
+network/uploads/publications0. Original reviewed text/media bytes unchanged.
+
 - CI40068862698: admin reschedule returned403 instead of200;1695PASS/1FAIL. Existing
   fixture creates an initialized USER/account but no verified social binding/config.
 - UI reproduction in Moscow:07:00Z→datetime-local07:00→04:00Z. This is a code defect.
@@ -45,3 +66,17 @@ erase uncertain delivery before outcome handling. No new auth or scheduler.
 - Published guard throws plain Error→500, although the contract/test requires409.
 
 Product rules are decided above; no speculative timeout/security bypass or test weakening.
+
+Latest local targeted run:29PASS/0FAIL/0SKIP. Typecheck PASS. Full lint PASS
+(0errors/23warnings). Canonical build PASS including ANALYTICS_CSS_OK; subsequent
+backend compensation readback requires exact-head CI build, not that earlier build.
+
+Independent Critic found expiry overwrite race, ignored reset budgets, pending-PUT
+deletion gap, then lost-COMMIT-ack compensation gap. Corrections preserve competing
+claim/results, reject before KDF, register pre-PUT intents/block deletion and read
+actual committed metadata before destructive compensation. New native regressions
+are CI_PENDING, not locally claimed PASS.0020 adds durable upload intents.
+
+CI40070688456 on2f635f7 timed out after admin integration assertions: native code
+still exposed drafts/returned500 and tests retained open Redis queue. Those exact
+paths/teardown are corrected in the candidate; timeout was not increased or rerun.

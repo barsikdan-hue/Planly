@@ -53,12 +53,40 @@ export const users = pgTable('users', {
   displayName: text('display_name').notNull(),
   role: userRoleEnum('role').notNull().default('USER'),
   accessState: userAccessStateEnum('access_state').notNull().default('BLOCKED'),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true, mode: 'date' }),
   passwordHash: text('password_hash'),
   authInitialized: boolean('auth_initialized').notNull().default(false),
   sessionVersion: integer('session_version').notNull().default(0),
   createdAt,
   updatedAt,
 });
+
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt,
+}, table => [index('password_reset_user_idx').on(table.userId)]);
+
+// Survives account deletion until all external objects and queued jobs are gone.
+// Contains technical IDs only; completed tasks are removed rather than retained.
+export const accountDeletionTasks = pgTable('account_deletion_tasks', {
+  id: uuid('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  storageKeys: jsonb('storage_keys').$type<string[]>().notNull(),
+  publicationIds: jsonb('publication_ids').$type<string[]>().notNull(),
+  createdAt,
+});
+
+// Registered before external PUT. Unknown outcomes remain held for readback;
+// only completed PUTs with failed metadata can enter automatic compensation.
+export const mediaUploadIntents = pgTable('media_upload_intents', {
+  id: uuid('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  storageKey: text('storage_key').notNull().unique(),
+  cleanupReady: boolean('cleanup_ready').notNull().default(false),
+  createdAt,
+}, table => [index('media_upload_intents_user_idx').on(table.userId)]);
 
 export const schedulingPlanOperations = pgTable('scheduling_plan_operations', {
   userId: text('user_id').notNull().references(() => users.id, {onDelete:'cascade'}),
@@ -431,5 +459,5 @@ export const sharedFeedDecisions=pgTable('shared_feed_decisions',{
 },table=>[
  primaryKey({columns:[table.userId,table.operationId]}),
  uniqueIndex('shared_feed_owner_source_revision_uq').on(table.userId,table.shareId,table.sourceRevision),
- check('shared_feed_result_shape',sql`(${table.decision}='DISLIKE' AND ${table.personalItemId} IS NULL AND ${table.postId} IS NULL AND ${table.scheduledAt} IS NULL) OR (${table.decision}='LIKE' AND ${table.personalItemId} IS NOT NULL AND ${table.postId} IS NOT NULL AND ${table.scheduledAt} IS NOT NULL)`),
+ check('shared_feed_result_shape',sql`(${table.decision}='DISLIKE' AND ${table.postId} IS NULL AND ${table.scheduledAt} IS NULL) OR (${table.decision}='LIKE' AND ${table.personalItemId} IS NOT NULL AND ${table.postId} IS NOT NULL AND ${table.scheduledAt} IS NOT NULL)`),
 ]);

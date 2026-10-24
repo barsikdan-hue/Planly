@@ -1,4 +1,4 @@
-import test, { after, beforeEach } from 'node:test';
+import test, { after, afterEach, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { getDb, closeDb } from '../db/index.ts';
@@ -6,6 +6,9 @@ import { users, sessions, posts, postTargets, socialAccounts, socialBindings, pu
 import { socialConnectionConfig } from '../lib/server/social-connections/config.ts';
 import { hashOwnerPassword } from '../lib/server/auth/password.ts';
 import { createOwnerSession } from '../lib/server/auth/session.ts';
+import { applyPublicationQueueChanges } from '../lib/server/scheduler/reconcile.ts';
+import { closePublicationQueue } from '../lib/server/scheduler/queue.ts';
+import { closeRedisConnection } from '../lib/server/scheduler/redis.ts';
 
 const isolated = new URL(process.env.DATABASE_URL!);
 assert.ok(['127.0.0.1', 'localhost'].includes(isolated.hostname) && isolated.pathname === '/planly_test', 'Disposable native database required');
@@ -40,7 +43,11 @@ beforeEach(async () => {
   await db.insert(postTargets).values({ id: targetId, postId, socialAccountId: 'admin-posts-account', scheduledAt: new Date('2030-01-02T07:00:00.000Z'), active: true });
 });
 
-after(async () => { await db.delete(users); await closeDb(); });
+afterEach(async () => {
+  const rows = await db.select({ id: publications.id }).from(publications).where(eq(publications.userId, ids.agent));
+  await applyPublicationQueueChanges(rows.map(row => ({ publicationId: row.id, action: 'remove' })));
+});
+after(async () => { await db.delete(users); await closePublicationQueue(); await closeRedisConnection(); await closeDb(); });
 
 test('ADMIN can list an agent schedule without credentials or private media', async () => {
   await db.insert(posts).values({ id: 'private-draft', userId: ids.agent, baseText: 'Private draft must remain private', status: 'DRAFT' });

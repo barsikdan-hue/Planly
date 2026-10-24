@@ -1,27 +1,34 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z, ZodError } from 'zod';
-import { users } from '../../../db/schema.ts';
+import { users, accountDeletionTasks } from '../../../db/schema.ts';
 import { getOwnerEmail } from '../env.ts';
 import { ForbiddenError, rejectIdentityPayload, setUserAccessStateInTransaction } from './access.ts';
 import { withAdmin } from './admin.ts';
 import { UnauthorizedError } from './owner.ts';
+import { issuePasswordReset } from './password-reset.ts';
+import { AccountDeletionConflictError, prepareAccountDeletion } from './account-deletion.ts';
 
-const actionSchema = z.object({ action: z.enum(['block', 'restore']) }).strict();
-const identityColumns = { id: users.id, email: users.email, displayName: users.displayName, accessState: users.accessState, createdAt: users.createdAt };
+export const managedUserActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.enum(['block', 'restore', 'unlimited', 'reset-password']) }).strict(),
+  z.object({ action: z.literal('expire'), expiresAt: z.string().datetime({ offset: true }) }).strict(),
+  z.object({ action: z.literal('delete'), confirmedEmail: z.string().trim().email().max(320).transform(email => email.toLowerCase()) }).strict(),
+]);
+const identityColumns = { id: users.id, email: users.email, displayName: users.displayName, accessState: users.accessState, accessExpiresAt: users.accessExpiresAt, createdAt: users.createdAt };
 function manageableUser(id?: string) {
   return and(id === undefined ? undefined : eq(users.id, id), eq(users.role, 'USER'), eq(users.authInitialized, true), sql`lower(trim(${users.email})) <> ${getOwnerEmail()}`);
 }
 class UserNotFoundError extends Error {}
 
 export async function listManagedUsers(request: Request) {
-  return withAdmin(request, async tx => ({ users: await tx.select(identityColumns).from(users).where(manageableUser()).orderBy(desc(users.createdAt), users.id) }));
+  return withAdmin(request, async tx => ({ users: await tx.select(identityColumns).from(users).where(manageableUser()).orderBy(desc(users.createdAt), users.id), pendingDeletionCount: (await tx.select({ id: accountDeletionTasks.id }).from(accountDeletionTasks)).length }));
 }
 
 export async function changeManagedUserAccess(request: Request, id: string) {
   return withAdmin(request, async (tx, actorId) => {
     const body: unknown = await request.json();
     rejectIdentityPayload(body);
-    const { action } = actionSchema.parse(body);
+    const input = managedUserActionSchema.parse(body);
+    const { action } = input;
     if (id === actorId) throw new ForbiddenError();
     // Only USER rows are eligible for the second lock. Two ADMINs targeting
     // one another never acquire each other's actor locks in reverse order.
@@ -31,7 +38,16 @@ export async function changeManagedUserAccess(request: Request, id: string) {
       if (existing && (existing.role === 'ADMIN' || existing.email.trim().toLowerCase() === getOwnerEmail())) throw new ForbiddenError();
       throw new UserNotFoundError();
     }
-    await setUserAccessStateInTransaction(tx, target.id, action === 'block' ? 'BLOCKED' : 'ACTIVE');
+    if (action === 'delete') {
+      if (input.confirmedEmail !== target.email.trim().toLowerCase()) throw new ForbiddenError();
+      return prepareAccountDeletion(tx, target.id, target.email);
+    }
+    if (action === 'reset-password') return { user: target, ...await issuePasswordReset(tx, target.id) };
+    if (action === 'expire' || action === 'unlimited') {
+      await tx.update(users).set({ accessExpiresAt: action === 'expire' ? new Date(input.expiresAt) : null, updatedAt: new Date() }).where(eq(users.id, target.id));
+    } else {
+      await setUserAccessStateInTransaction(tx, target.id, action === 'block' ? 'BLOCKED' : 'ACTIVE');
+    }
     const [user] = await tx.select(identityColumns).from(users).where(eq(users.id, target.id));
     return { user };
   });
@@ -44,6 +60,7 @@ export function managedUserError(error: unknown) {
   if (error instanceof UnauthorizedError) return managedUserJson({ error: 'Unauthorized' }, 401);
   if (error instanceof ForbiddenError) return managedUserJson({ error: 'Forbidden' }, 403);
   if (error instanceof UserNotFoundError) return managedUserJson({ error: 'Пользователь не найден.' }, 404);
+  if (error instanceof AccountDeletionConflictError) return managedUserJson({ error: error.message }, 409);
   if (error instanceof ZodError) return managedUserJson({ error: 'Проверьте действие.' }, 422);
   if (error instanceof SyntaxError) return managedUserJson({ error: 'Некорректный запрос.' }, 400);
   // Database errors may contain authentication data; never log or echo them.

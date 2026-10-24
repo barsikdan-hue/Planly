@@ -23,3 +23,9 @@ export function samePostInput(left: SavePostInput, right: SavePostInput): boolea
   });
   return canonical(left) === canonical(right);
 }
+
+export function isOnlyPostCancellation(current: SavePostInput, input: SavePostInput): boolean {
+  return current.status === 'READY' && input.status === 'DRAFT' &&
+    input.targets.every(target => target.scheduledAt === null) &&
+    samePostInput(input, { ...current, status: 'DRAFT', targets: current.targets.map(target => ({ ...target, scheduledAt: null })) });
+}

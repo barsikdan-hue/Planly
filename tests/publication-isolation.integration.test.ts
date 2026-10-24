@@ -192,6 +192,35 @@ test('integrity diagnosis cannot overwrite a concurrently committed terminal rec
   }
 });
 
+for (const status of ['PUBLISHING', 'PUBLISHED'] as const) test(`expired preclaim cannot overwrite a competing ${status} outcome`, async () => {
+  await getDb().update(users).set({ accessExpiresAt: new Date(0) }).where(eq(users.id, a));
+  const client = await getPool().connect();
+  const { rows: [{ pid }] } = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+  let pending: ReturnType<typeof processPublication> | undefined;
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE publications SET status=$1, attempt_count=1, provider_remote_id=$2 WHERE id=$3', [status, status === 'PUBLISHED' ? 'competing-receipt' : null, id]);
+    pending = processPublication(id, resolver);
+    let blocked = false;
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const waiting = await getPool().query('SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid)) LIMIT 1', [pid]);
+      if (waiting.rowCount) { blocked = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(blocked, 'expired diagnosis must reach the concurrent publication write');
+    await client.query('COMMIT');
+    assert.deepEqual(await pending, { status, skipped: true });
+    const saved = await row();
+    assert.equal(saved.status, status); assert.equal(saved.providerErrorCode, null);
+    assert.equal(saved.attemptCount, 1);
+    assert.equal(saved.providerRemoteId, status === 'PUBLISHED' ? 'competing-receipt' : null);
+    assert.equal(resolutions + sends + storageReads, 0);
+  } finally {
+    await client.query('ROLLBACK'); client.release(); await pending?.catch(() => {});
+  }
+});
+
 test('QUEUED corrupt graph fails before claim without touching provider credentials', async () => {
   await corruptions['publication provider']();
   await getDb().update(publications).set({ status: 'QUEUED' }).where(eq(publications.id, id));

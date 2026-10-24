@@ -44,7 +44,7 @@ export function SharedFeed({ownerContext,isOwnerCurrent,accounts,onPreview,onSav
   if(outcome.status==='terminal'){setNotice('Результат предыдущего выбора удалён. Повторная копия не создана.');setRefresh(value=>value+1);return {status:'terminal'} as const;}
   setItems(values=>values.filter(value=>value.id!==outcome.receipt.shareId));
   if(recovered&&outcome.receipt.decision==='LIKE')setSlotRevision(value=>value+1);
-  setNotice(outcome.receipt.decision==='DISLIKE'?'Не нравится · скрыто только для тебя.':'Выбор подтверждён. Публикация в личном календаре.');
+  setNotice(outcome.receipt.decision==='DISLIKE'?(outcome.receipt.personalItemId?'Не нравится · сохранено в архив заготовок.':'Не нравится · скрыто только для тебя.'):'Выбор подтверждён. Публикация в личном календаре.');
   try{await onSaved();}catch{if(current())setError('Выбор сохранён. Обнови страницу, чтобы перечитать календарь.');}
   if(!current())return {status:'stale'} as const;
   return outcome.receipt.postId?{id:outcome.receipt.postId,scheduledAt:outcome.receipt.scheduledAt,status:'confirmed' as const}:undefined;

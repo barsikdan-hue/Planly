@@ -13,6 +13,7 @@ import {
   type UpdateLibraryItemInput,
 } from '../contracts/library.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule } from './planner-slots.ts';
+import { requireManualWrite } from './auth/manual-access.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibraryCreationConflictError, LibraryCreationDeletedError, libraryCreationInputHash } from './library-creation.ts';
 import { swipeDislikeSchema, type SwipeDislike } from '../contracts/swipe-feedback.ts';
@@ -60,6 +61,7 @@ export async function createLibraryItem(userId: string, raw: CreateLibraryItemIn
   const input = createLibraryItemInputSchema.parse(raw);
   const id = randomUUID();
   await getDb().transaction(async tx => {
+    await requireManualWrite(tx, userId);
     await validateMedia(tx, userId, input.mediaIds);
     const now = new Date();
     await tx.insert(libraryItems).values({
@@ -103,6 +105,7 @@ export async function createLibraryItemForIntent(userId: string, raw: CreateLibr
 export async function updateLibraryItem(userId: string, id: string, raw: UpdateLibraryItemInput): Promise<LibraryItemDto> {
   const input = updateLibraryItemInputSchema.parse(raw);
   await getDb().transaction(async tx => {
+    await requireManualWrite(tx, userId);
     // Future source-Post creation must serialize on this same Library row.
     const [owned] = await tx.select().from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');

@@ -8,12 +8,14 @@ import { LibraryCreationConflictError, LibraryCreationDeletedError } from './lib
 import { PostEditConflictError } from './post-editability.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, PlannerAccountUnavailableError, PlannerSlotConflictError, SwipeApprovalValidationError } from './planner-slots.ts';
+import { ManualAccessExpiredError } from './auth/manual-access.ts';
 
 export function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers:{'cache-control':'private, no-store'} });
 }
 
 export function apiError(error: unknown): Response {
+  if (error instanceof ManualAccessExpiredError) return json({ error: 'Срок доступа истёк. Обратитесь к администратору для продления.', code: 'ACCESS_EXPIRED' }, 403);
   if(error instanceof ForbiddenError)return json({error:'Forbidden'},403);
   if(error instanceof DecisionResultDeletedError) return json({error:error.message,code:'DECISION_RESULT_DELETED'},410);
   if (error instanceof UnauthorizedError) return json({ error: 'Unauthorized' }, 401);

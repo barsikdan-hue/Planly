@@ -5,6 +5,7 @@ import { users } from '../../../db/schema.ts';
 import { ensureOwnerSocialAccounts } from '../social-accounts.ts';
 import { getOwnerAuthEnv } from '../env.ts';
 import { verifyOwnerPassword } from './password.ts';
+import { hasCurrentManualAccess, ManualAccessExpiredError } from './manual-access.ts';
 import { initializeLegacyOwner, rejectIdentitySelectors, requireSameOriginMutation } from './access.ts';
 import {
   getOwnerBySessionToken,
@@ -88,5 +89,9 @@ export async function requireApiOwner(request: Request): Promise<Owner> {
   // rather than Next's internal reverse-proxy listen URL.
   const vkMutation=['/api/social-accounts/vk/start','/api/social-accounts/vk/disconnect'].includes(new URL(request.url).pathname);
   if(!['GET','HEAD','OPTIONS'].includes(request.method) && !vkMutation)requireSameOriginMutation(request);
+  const path = new URL(request.url).pathname;
+  // Post PATCH checks exact cancellation-only content under the user/Post locks.
+  const safeCancellation = path.endsWith('/cancel-approval') || path === '/api/auth/logout' || request.method === 'PATCH' && /^\/api\/posts\/[^/]+$/.test(path);
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !safeCancellation && !await hasCurrentManualAccess(owner.id)) throw new ManualAccessExpiredError();
   return owner;
 }

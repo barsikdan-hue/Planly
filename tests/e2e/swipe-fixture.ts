@@ -42,6 +42,7 @@ export const test = base.extend<{ swipeFixture: FixtureControl }>({
         if (request.method() === 'GET') return route.continue();
       } else {
         const reply = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+        if (request.method() === 'GET' && url.pathname === '/api/access' && url.search === '') return reply({ expiresAt: null, canPublish: true });
         if (request.method() === 'GET' && url.pathname === '/api/library/batch-consent/preview' && url.search === '') return reply({ eligible: false });
         // This content-workflow fixture grants empty ADMIN sharing metadata;
         // real ADMIN/USER permissions are covered by native and compiled E2E sessions.

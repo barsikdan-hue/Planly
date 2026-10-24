@@ -6,6 +6,7 @@ import { readMediaObjectBytes } from '../storage.ts';
 import { beginOwnerProviderHandoff, hasOwnerProviderAccess } from '../auth/access.ts';
 import { observePublicationAuthorization, beginVerifiedProviderHandoff, markObservedConnectionError, type PublicationAuthorization } from '../social-connections/publication-authorization.ts';
 import type { ConnectorResolver, PublicationErrorType, PublishInput, PublishResult } from '../connectors/types.ts';
+import { hasCurrentManualAccess } from '../auth/manual-access.ts';
 
 export type ProcessPublicationResult = {
   status: 'SCHEDULED' | 'QUEUED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED' | 'CANCELLED' | 'REQUIRES_RECONNECT';
@@ -83,6 +84,20 @@ async function markScopeFailure(
   return { status: latest.publication.status, skipped: true };
 }
 
+async function markAccessExpired(publicationId: string, claimedAttempt?: number): Promise<ProcessPublicationResult> {
+  const [failed] = await getDb().update(publications).set({
+    status: 'FAILED', normalizedErrorType: 'PERMANENT', providerErrorCode: 'ACCESS_EXPIRED',
+    providerErrorMessage: 'Срок доступа истёк. После продления проверьте публикацию перед повторной отправкой.',
+    nextRetryAt: null, updatedAt: new Date(),
+  }).where(and(eq(publications.id, publicationId), claimedAttempt === undefined
+    ? inArray(publications.status, ['SCHEDULED', 'QUEUED'])
+    : and(eq(publications.status, 'PUBLISHING'), eq(publications.attemptCount, claimedAttempt)),
+  )).returning({ id: publications.id });
+  if (failed) return { status: 'FAILED', errorType: 'PERMANENT' };
+  const latest = await readPublication(publicationId);
+  return { status: latest.publication.status, skipped: true };
+}
+
 async function markFailure(
   publicationId: string,
   errorType: PublicationErrorType,
@@ -141,6 +156,7 @@ export async function processPublication(
   }
 
   if (await readScopedMedia(initial) === null) return markScopeFailure(publicationId);
+  if (!await hasCurrentManualAccess(initial.publication.userId)) return markAccessExpired(publicationId);
 
   // Registered USER transport needs its own immutable proof pointer before claim.
   // Existing configured OWNER and injected transport semantics remain separate.
@@ -228,6 +244,7 @@ export async function processPublication(
       const start=()=>{handedOff=true;return connector.publish(input);};
       const started=observed?await beginVerifiedProviderHandoff(observed,input,start):await beginOwnerProviderHandoff(row.publication.userId,start);
       if(!started) {
+        if (!await hasCurrentManualAccess(row.publication.userId)) return markAccessExpired(publicationId, claimed.attemptCount);
         await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
           .where(and(eq(publications.id,publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount)));
         const latest=await readPublication(publicationId);

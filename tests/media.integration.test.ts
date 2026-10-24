@@ -1,7 +1,7 @@
 import test, { after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { sql } from 'drizzle-orm';
-import { closeDb, getDb } from '../db/index.ts';
+import { closeDb, getDb, getPool } from '../db/index.ts';
 import { libraryItems, libraryItemMedia, mediaAssets, postMedia, posts, postTargets, publications, sessions, socialAccounts, users } from '../db/schema.ts';
 import { createMediaAsset, deleteMediaAsset, listMediaAssetsWithPreview } from '../lib/server/media.ts';
 import type { ObjectStorage } from '../lib/server/storage.ts';
@@ -118,7 +118,46 @@ test('cross-owner delete is rejected and attached media cannot be deleted', asyn
 
 test('failed database insert compensates by deleting uploaded object', async()=>{
   const fake=fakeStorage();
+  // Fail after a valid user's upload: missing owners are now rejected before IO.
+  await getDb().execute(sql`CREATE FUNCTION media_insert_fixture_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic media insert failure'; END $$`);
+  await getDb().execute(sql`CREATE TRIGGER media_insert_fixture_failure BEFORE INSERT ON media_assets FOR EACH ROW EXECUTE FUNCTION media_insert_fixture_failure()`);
+  try {
+    await assert.rejects(()=>createMediaAsset(ownerA,new File([png()],'a.png',{type:'image/png'}),fake.storage));
+    assert.equal(fake.puts.length,1);
+    assert.deepEqual(fake.deletes,fake.puts);
+  } finally {
+    await getDb().execute(sql`DROP TRIGGER media_insert_fixture_failure ON media_assets`);
+    await getDb().execute(sql`DROP FUNCTION media_insert_fixture_failure()`);
+  }
+});
+
+test('missing owner is rejected before any object upload', async()=>{
+  const fake=fakeStorage();
   await assert.rejects(()=>createMediaAsset('missing-owner',new File([png()],'a.png',{type:'image/png'}),fake.storage));
-  assert.equal(fake.puts.length,1);
-  assert.deepEqual(fake.deletes,fake.puts);
+  assert.equal(fake.puts.length,0);
+});
+
+test('lost metadata COMMIT acknowledgement reads back saved media and never deletes its object', async t => {
+  const fake = fakeStorage(), pool = getPool(), client = await pool.connect();
+  const originalConnect = pool.connect, originalQuery = client.query;
+  let metadata = false, lost = false;
+  const release = t.mock.method(client, 'release', () => {});
+  const connect = t.mock.method(pool, 'connect', (...args: unknown[]) => args.length
+    ? Reflect.apply(originalConnect, pool, args) : Promise.resolve(client));
+  const query = t.mock.method(client, 'query', async (...args: unknown[]) => {
+    const config = args[0];
+    const text = typeof config === 'string' ? config : config && typeof config === 'object' && 'text' in config ? String(config.text) : '';
+    const result = await Reflect.apply(originalQuery, client, args);
+    if (text.startsWith('insert into "media_assets"')) metadata = true;
+    if (text.toLowerCase() === 'commit' && metadata && !lost) { lost = true; throw new Error('Synthetic lost commit acknowledgement'); }
+    return result;
+  });
+  try {
+    const asset = await createMediaAsset(ownerA, new File([png()], 'committed.png', { type: 'image/png' }), fake.storage);
+    assert.equal(lost, true);
+    assert.equal((await listMediaAssetsWithPreview(ownerA, fake.storage))[0].id, asset.id);
+    assert.equal(fake.puts.length, 1); assert.deepEqual(fake.deletes, []);
+  } finally {
+    query.mock.restore(); connect.mock.restore(); release.mock.restore(); client.release();
+  }
 });

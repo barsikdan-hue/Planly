@@ -17,6 +17,7 @@ async function fixture(context:BrowserContext,page:Page) {
   if(request.method()==='GET' && url.pathname==='/api/library/batch-consent/preview' && url.search==='')return respond({eligible:false});
   if(request.method()==='GET' && url.pathname==='/api/bootstrap')return respond(snapshot);
   if(request.method()==='GET' && url.pathname==='/api/profile')return respond(snapshot.profile);
+  if(request.method()==='GET' && url.pathname==='/api/access')return respond({expiresAt:null,canPublish:true});
   if(request.method()==='GET' && url.pathname==='/api/admin/shared-library')return respond({error:'Forbidden'},403);
   if(request.method()==='POST' && url.pathname==='/api/posts/old-post/targets/old-target/cancel-approval') {
    expect(request.headers()['x-planly-social-connection']).toBe('1');const body=request.postDataJSON();writes.push({path:url.pathname,body});expect(body).toEqual(expected);

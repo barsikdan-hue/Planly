@@ -9,6 +9,8 @@ import { SESSION_COOKIE_NAME, sessionTokenHash } from './auth/session.ts';
 import { withAdmin, type AuthTransaction } from './auth/admin.ts';
 import { getObjectStorage, readMediaObjectBytes } from './storage.ts';
 import { apiError, json } from './http.ts';
+import { hasManualAccess } from '../manual-access.ts';
+import { ManualAccessExpiredError } from './auth/manual-access.ts';
 
 export class SharedLibraryError extends Error {
   readonly status: number;
@@ -28,6 +30,7 @@ export async function withSharedLibraryActor<T>(request: Request, work: (tx: Aut
   return getDb().transaction(async tx=>{
     const [user] = await tx.select().from(users).where(eq(users.id,actor.id)).for('update');
     if(!user?.authInitialized || user.accessState!=='ACTIVE') throw new UnauthorizedError();
+    if (request.method !== 'GET' && !hasManualAccess(user)) throw new ManualAccessExpiredError();
     const [session]=await tx.select({id:sessions.id}).from(sessions).where(and(
       eq(sessions.userId,user.id),eq(sessions.tokenHash,sessionTokenHash(requestCookie(request,SESSION_COOKIE_NAME)??'')),
       eq(sessions.sessionVersion,user.sessionVersion),gt(sessions.expiresAt,new Date()),
@@ -43,6 +46,7 @@ const withActor=withSharedLibraryActor;
 export async function recheckSharedLibraryActor(tx:AuthTransaction,request:Request,userId:string,lock=true):Promise<void>{
   const [user]=await tx.select().from(users).where(eq(users.id,userId));
   if(!user?.authInitialized || user.accessState!=='ACTIVE')throw new UnauthorizedError();
+  if (request.method !== 'GET' && !hasManualAccess(user)) throw new ManualAccessExpiredError();
   const query=tx.select().from(sessions).where(and(eq(sessions.userId,userId),
     eq(sessions.tokenHash,sessionTokenHash(requestCookie(request,SESSION_COOKIE_NAME)??'')),
     eq(sessions.sessionVersion,user.sessionVersion)));
