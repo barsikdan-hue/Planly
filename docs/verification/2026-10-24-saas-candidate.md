@@ -4,6 +4,42 @@ Source candidate: Draft PR75, branch `codex/agent-catalog-decision-loop-20261024
 base `4fc764aa1a7c7185eef1a3712dc6c8b6c59c2525`. This document records source
 work and a release checklist; it is not a deployment or provider-send grant.
 
+## Fresh read-only preflight24October,10:09UTC
+
+Public staging health200/statusok; login200. Pinned-key SSH metadata only, no
+secrets/user content/provider calls/writes. Both staging web and worker use image
+`sha256:6bc0f783eb8c7489eff5b99beec5c325aa37bfe363c1ab8c4f85a46488125719`,
+revision `b7c331e2b5249d8f1dbc7bd11f8e86534171d1d7`, restarts0. Five components
+running; web/PostgreSQL/Redis/storage healthy. This candidate is not deployed.
+
+The DB ledger was read in `BEGIN READ ONLY` with statement5s/lock1s timeouts:
+17 actual rows through0016.0013–0016 hashes/timestamps exactly match this branch.
+Missing candidate files are0017–0020, not0013–0016. Selected candidate SQL hashes:
+
+| Migration | SHA256 of committed LF SQL |
+|---|---|
+|0017_demonic_rocket_raccoon|86cca0fe26d47a9a49dda4990c3d14561b66d3e40f4751344d4e0d00fa35d857|
+|0018_real_tinkerer|1098e40ad764891435656444052c317e1c4825a95ed2f4c7fb8d1fe32c50cb28|
+|0019_robust_microbe|a8aa34f56dfea2fa4e6a20478df4375d3b0e1b661a777c2bf9d13a6255519726|
+|0020_chubby_jack_murdock|472936531319ed6c0ec997b9f371a3f59725cfba43b64895bd017e8e90572ec9|
+
+Both staging services currently have empty/absent TELEGRAM_BOT_TOKEN,
+MAX_BOT_TOKEN, TELEGRAM_MINI_APP_URL, MAX_MINI_APP_URL and PLANLY_PUBLIC_ORIGIN.
+Owner identified existing settings in old Render and explicitly confirmed My
+Workspace. Render service `planly`,srv-dav07le0tbcc73d0gfi0,repo Planly/main,
+autoDeploy=no/triggeroff, last deployed2f13a5acc8a8010bfdc989cc99deb4655b584747.
+Dashboard read-only key inspection found both bot token keys (values stayed
+masked); no Mini App/public-origin keys or linked env groups. Key presence does
+not establish validity, USER consent or working Mini Apps. No export/copy/edit.
+
+Self-host40084634238 on sourceee6695e, tested synthetic merge570dc76307963ff2920724baffbb814acd0a18e7,
+PASS; artifact12556308775,10,598,867bytes,digest
+sha256:1df989acf3fb6ac15afe2eb7710d610c090655275df7903385530f7ff3674af2.
+CI40084634264:1717PASS/9FAIL. Native new race/reset/access/deletion regressions
+passed. Failures:2old DISLIKE/no-copy expectations and7VK mock awaitability.
+Fixtures corrected without changing production/origin assertions; local VK7PASS.
+Full corrected-head CI/browser acceptance remains pending.
+
 ## Requirement → path → acceptance
 
 | Requirement | Existing path plus minimal change | Acceptance |

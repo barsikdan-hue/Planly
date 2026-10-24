@@ -31,7 +31,10 @@ for (const [label, origin, host, redirectUri, status] of [
     const savedEnv = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
     Object.assign(process.env, env); resetServerEnvForTests();
     // Only PostgreSQL/session transport is replaced; owner, config, adapter, guard and intent encryption are real.
-    const chain = { from() { return this; }, innerJoin() { return this; }, where() { return this; }, async limit() { return [{ id: 'origin-owner', email: 'origin@example.test', displayName: 'Origin' }]; } };
+    const ownerRows = [{ id: 'origin-owner', email: 'origin@example.test', displayName: 'Origin', role: 'ADMIN', accessExpiresAt: null }];
+    // Like Drizzle, this fixture must be awaitable both with and without LIMIT:
+    // mutation admission now also reads the current manual-access policy.
+    const chain = { from() { return this; }, innerJoin() { return this; }, where() { return this; }, async limit() { return ownerRows; }, then(resolve: (rows: typeof ownerRows) => unknown) { return Promise.resolve(ownerRows).then(resolve); } };
     const initialization={set(){return this;},async where(){}};
     globals.__planlyDb = { select: () => chain, update:()=>initialization };
     let intentWrites = 0; let connections = 0; let providerCalls = 0;

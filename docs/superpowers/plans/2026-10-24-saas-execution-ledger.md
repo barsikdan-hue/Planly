@@ -80,3 +80,16 @@ are CI_PENDING, not locally claimed PASS.0020 adds durable upload intents.
 CI40070688456 on2f635f7 timed out after admin integration assertions: native code
 still exposed drafts/returned500 and tests retained open Redis queue. Those exact
 paths/teardown are corrected in the candidate; timeout was not increased or rerun.
+
+Checkpointee6695e: Self-host40084634238PASS. CI40084634264 completed1717PASS/9FAIL;
+new native compensation/expiry/deletion/reset regressions PASS.2archive expectations
+and7non-awaitable VK fake-query cases corrected (local VK7PASS); security/origin
+assertions retained. Corrected-head full CI/browser next. Final narrow independent
+Critic found no remaining P1/P2 in compensation readback at ee6695e.
+
+Fresh staging10:09UTC: image6bc0f783/sourceb7c331e retained, ledger17/through0016,
+only0017–0020 missing. Health/login200. Both services lack bot/Mini App/origin
+configuration. Owner identified old Render/My Workspace; read-only confirmed old
+Planly autoDeployOFF and masked bot-token keys present, Mini App/origin keys absent.
+No secret values/export/edit, provider calls or persistent writes. Details and
+hashes are in the candidate release record. Config provisioning and release gated.

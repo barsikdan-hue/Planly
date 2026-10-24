@@ -121,8 +121,10 @@ for(const decision of ['LIKE','DISLIKE'])test(`stale owner A ${decision} intent 
 test('actor precondition wins before historical same-operation replay',async()=>{
  const inputA=intent('DISLIKE'),inputB={...inputA,expectedActorId:other};
  await api.commitSharedFeedDecision(request(other),inputB,options);
+ const before=await counts(),beforePuts=[...puts];
+ assert.deepEqual(before,{posts:0,receipts:1,publications:0,copies:1});assert.equal(beforePuts.length,1);
  await assert.rejects(api.commitSharedFeedDecision(request(other),inputA,options),code('SHARED_FEED_ACTOR_CHANGED'));
- assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+ assert.deepEqual(await counts(),before);assert.deepEqual(puts,beforePuts);assert.deepEqual(mirrors,[]);
 });
 test('HTTP actor precondition permits matching context but rejects a switched cookie without receipt',async()=>{
  const route=await import('../app/api/shared-feed/decisions/route.ts');
@@ -130,6 +132,7 @@ test('HTTP actor precondition permits matching context but rejects a switched co
  const mismatch=await send(inputA);assert.equal(mismatch.status,409);assert.equal((await mismatch.json()).code,'SHARED_FEED_ACTOR_CHANGED');
  assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0});
  const missing=structuredClone(inputA) as Partial<typeof inputA>;delete missing.expectedActorId;assert.equal((await send(missing)).status,422);
- const matching=await send({...inputA,expectedActorId:other});assert.equal(matching.status,201);assert.equal((await matching.json()).receipt.operationId,inputA.operationId);
- assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+ const matching=await send({...inputA,expectedActorId:other});assert.equal(matching.status,201);const receipt=(await matching.json()).receipt;assert.equal(receipt.operationId,inputA.operationId);
+ const [archived]=await db.select().from(schema.libraryItems).where(eq(schema.libraryItems.id,receipt.personalItemId));assert.equal(archived.userId,other);assert.equal(archived.status,'ARCHIVED');
+ assert.equal(puts.length,1);assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:1});assert.deepEqual(mirrors,[]);
 });

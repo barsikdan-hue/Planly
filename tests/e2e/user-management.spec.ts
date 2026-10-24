@@ -68,6 +68,10 @@ test('ADMIN confirms block and restore without gaining USER content or reviving 
     await expect(aRow).toContainText('Test colleague 1'); await expect(aRow).toContainText('Активен');
     await expect(bRow).toContainText('Активен');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (test.info().project.name === 'mobile') {
+      await page.setViewportSize({ width: 320, height: 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
     await aRow.getByRole('button', { name: 'Заблокировать', exact: true }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText(`${ids[1]}@example.test`);
