@@ -14,7 +14,7 @@ export function UsersEntry() {
       .then(response=>{if(!controller.signal.aborted)setAllowed(response.ok);}).catch(()=>{});
     return ()=>controller.abort();
   },[]);
-  return allowed?<p><a href="/admin/users">Пользователи</a></p>:null;
+    return allowed?<p><Link href="/admin/users">Пользователи</Link></p>:null;
 }
 
 export function UserManagement() {
@@ -77,7 +77,7 @@ export function UserManagement() {
     {loading?<p>Загрузка пользователей…</p>:!colleagues.length&&!error?<p>Зарегистрированных коллег пока нет. <Link href="/admin/invitations">Пригласить коллегу</Link></p>:null}
     {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     {colleagues.length>0&&<table role="table" className="users-list"><caption className="users-visually-hidden">Доступ зарегистрированных коллег</caption><thead><tr><th scope="col">Коллега</th><th scope="col">Статус</th><th scope="col">Дата регистрации</th><th scope="col">Действие</th></tr></thead><tbody>{colleagues.map(user=><tr role="row" key={user.id}>
-      <td><strong>{user.email}</strong><span>{user.displayName}</span></td>
+      <td><strong>{user.email}</strong><span><Link href={`/admin/users/${encodeURIComponent(user.id)}`}>{user.displayName}</Link></span></td>
       <td><span className={user.accessState==='ACTIVE'?'user-active':'user-blocked'}>{user.accessState==='ACTIVE'?'Активен':'Заблокирован'}</span></td>
       <td><time dateTime={user.createdAt}>{new Date(user.createdAt).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow'})}</time></td>
       <td><button type="button" disabled={busy} onClick={()=>choose(user)}>{user.accessState==='ACTIVE'?'Заблокировать':'Восстановить доступ'}</button></td>
