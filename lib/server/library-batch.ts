@@ -42,8 +42,10 @@ async function lockActor(tx:Transaction,rawToken:string,options:LibraryBatchOpti
  if(!user||!session)return fail('BATCH_UNAUTHORIZED');
  const actor={user,session};validateActor(actor,options);return actor;
 }
+import { hasManualAccess } from '../manual-access.ts';
 function validateActor(actor:Actor,options:LibraryBatchOptions){
  if(!actor.user.authInitialized||actor.user.accessState!=='ACTIVE'||actor.user.sessionVersion!==actor.session.sessionVersion||actor.session.expiresAt.getTime()<=instant(options).getTime())fail('BATCH_UNAUTHORIZED');
+ if(!hasManualAccess(actor.user,instant(options)))fail('BATCH_FORBIDDEN');
 }
 function freshActor(actor:Actor){if(actor.user.role!=='USER'||actor.user.email===getOwnerEmail())fail('BATCH_FORBIDDEN');}
 async function transaction<T>(run:(tx:Transaction)=>Promise<T>):Promise<T>{try{return await getDb().transaction(run);}catch(error){if(error instanceof LibraryBatchError)throw error;throw new LibraryBatchError('BATCH_RESULT_UNCERTAIN');}}

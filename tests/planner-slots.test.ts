@@ -18,6 +18,10 @@ test('elapsed and occupied minutes are excluded and last day is inclusive', () =
   assert.equal(findNextSlot({...query, endDate:'2030-01-01'}, new Set(), new Date('2030-01-01T07:00:00Z')), null);
   assert.equal(findNextSlot({...query, times:['18:00','10:00'], endDate:'2030-01-01'}, new Set(), new Date('2030-01-01T08:00:00Z')), '2030-01-01T15:00:00.000Z');
 });
+test('after Moscow 10:00 use the next free day and never backdate', () => {
+  assert.equal(findNextSlot(query, new Set(), new Date('2030-01-01T07:01:00Z')), '2030-01-02T07:00:00.000Z');
+});
+
 test('ISO weekday and year/month/leap boundaries', () => {
   const base = {...query, startDate:'2028-02-28',endDate:'2028-03-01',weekdays:[2]};
   assert.equal(findNextSlot(base,new Set(),new Date('2028-02-27T00:00Z')), '2028-02-29T07:00:00.000Z');

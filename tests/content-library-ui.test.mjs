@@ -136,9 +136,9 @@ for (const fails of [false, true]) test(`linked Post deletion acknowledgement=${
   assert.equal(library(h).children.props.posts.length, fails ? 1 : 0);
   assert.equal(h.find('Sheet').props.open, fails);
   assert.deepEqual(library(h).items.find(item => item.id === 'used'), used, 'Keep the server USED copy and provenance cache; derive link availability from Posts');
-  assert.equal(text(card(content, used.title)).includes('Создать публикацию'), false);
+  assert.ok(button(content, 'Создать публикацию', card(content, used.title)));
   assert.ok(button(content, 'Редактировать', card(content, used.title))); assert.ok(button(content, 'Удалить', card(content, used.title)));
-  library(h).createPublication(used); await h.settle(); assert.equal(window.location.hash, '#content');
+  library(h).createPublication(used); await h.settle(); assert.equal(window.location.hash, 'create');
   assert.equal(requests.filter(request => request.init?.method === 'DELETE').length, 1);
   assert.equal(requests.some(request => request.init?.method === 'POST'), false);
 });
@@ -169,12 +169,12 @@ for (const query of ['ОСЕННЯЯ', 'КВАРТИРАХ', 'APARTMENTS.JPG']) 
     if (query !== 'APARTMENTS.JPG') assert.equal(text(h.tree).includes('Использованный материал'), false);
   });
 }
-test('READY, USED and ARCHIVED expose only permitted actions', () => {
+test('READY, USED and ARCHIVED expose lifecycle actions', () => {
   const { h } = ui();
   assert.ok(button(h, 'Создать публикацию', card(h, ready.title)));
   assert.ok(button(h, 'Архивировать', card(h, ready.title)));
   assert.ok(button(h, 'Открыть публикацию', card(h, used.title)));
-  assert.equal(text(card(h, used.title)).includes('Создать публикацию'), false);
+  assert.ok(button(h, 'Создать публикацию', card(h, used.title)));
   assert.equal(text(card(h, used.title)).includes('Архивировать'), false);
   assert.ok(button(h, 'Вернуть из архива', card(h, archived.title)));
   assert.equal(text(card(h, archived.title)).includes('Создать публикацию'), false);
@@ -220,11 +220,11 @@ test('failed editor save keeps entered content and displays the server error', a
   await click(h, 'Редактировать', card(h, ready.title)); await change(h, 'Текст заготовки', 'Keep me'); await click(h, 'Сохранить');
   assert.equal(field(h, 'Текст заготовки').props.value, 'Keep me'); assert.ok(text(h.tree).includes('Server rejected change'));
 });
-test('USED editor sends permitted READY status while server USED response remains authoritative', async () => {
+test('USED editor remains reusable while server USED response remains authoritative', async () => {
   let submitted; const { h } = ui({ saveItem: async (input, id) => { submitted = { input, id }; } });
   await click(h, 'Редактировать', card(h, used.title)); await change(h, 'Название заготовки', 'Edited used'); await click(h, 'Сохранить');
   assert.equal(submitted.id, 'used'); assert.equal(submitted.input.status, 'READY');
-  assert.equal(text(card(h, used.title)).includes('Создать публикацию'), false);
+  assert.ok(button(h, 'Создать публикацию', card(h, used.title)));
 });
 test('archive/restore and confirmed deletion use their item IDs; failures remain visible', async () => {
   const operations = []; const { h } = ui({ saveItem: async (input, id) => { operations.push([id, input.status]); }, deleteItem: async id => { operations.push(['delete', id]); throw Error('Cannot delete'); } });
@@ -234,10 +234,10 @@ test('archive/restore and confirmed deletion use their item IDs; failures remain
   await click(h, 'Подтвердить удаление'); assert.deepEqual(operations[2], ['delete', 'ready']);
   assert.ok(text(h.tree).includes('Cannot delete')); assert.ok(card(h, ready.title));
 });
-test('USED without a linked Post offers no publication action', () => {
+test('USED without a linked Post still offers reuse', () => {
   const { h } = ui({ items: [{ ...used, sourcePostId: null }] });
   assert.equal(text(h.tree).includes('Открыть публикацию'), false);
-  assert.equal(text(h.tree).includes('Создать публикацию'), false);
+  assert.ok(text(h.tree).includes('Создать публикацию'));
 });
 test('create updates Planner data only after server acknowledgement', async () => {
   let resolve; const { h } = await app({ mutation: () => new Promise(done => { resolve = done; }) });
@@ -270,7 +270,7 @@ test('USED server response stays USED after editing its Library copy', async () 
   await library(h).saveItem({ title: 'Edited copy', text: used.text, mediaIds: used.mediaIds, status: 'READY' }, 'used'); await h.settle();
   const saved = library(h).items.find(item => item.id === 'used'); assert.equal(saved.status, 'USED'); assert.equal(saved.sourcePostId, 'linked');
   assert.equal(JSON.parse(requests[1].init.body).status, 'READY');
-  library(h).createPublication(saved); await h.settle(); assert.equal(window.location.hash, '#content');
+  library(h).createPublication(saved); await h.settle(); assert.equal(window.location.hash, 'create');
 });
 test('in-flight bootstrap polling cannot overwrite acknowledged Library mutations with stale items', async () => {
   let poll; globalThis.setInterval = callback => { poll = callback; return 1; }; globalThis.clearInterval = () => {};
@@ -291,11 +291,12 @@ test('READY opens an unsaved Composer with source and ordered references, withou
   assert.equal(draft.sourceLibraryItemId, 'ready'); assert.deepEqual(draft.networks, ['telegram']); assert.equal(draft.time, '10:00'); assert.match(draft.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(requests.length, 1); assert.equal(window.location.hash, 'create');
 });
-test('dirty Composer guard protects replacement and USED/ARCHIVED cannot convert', async () => {
+test('dirty Composer guard protects replacement while ARCHIVED cannot convert', async () => {
   const { h, route } = await app(); await route('#create'); h.composer().setDraft(current => ({ ...current, text: 'Unsaved work' })); await h.settle(); await route('#content');
   let confirmations = 0; window.confirm = () => { confirmations++; return false; };
   library(h).createPublication(ready); await h.settle(); assert.equal(confirmations, 1); await route('#create'); assert.equal(h.composer().draft.text, 'Unsaved work');
-  await route('#content'); library(h).createPublication(used); library(h).createPublication(archived); await h.settle(); assert.equal(window.location.hash, '#content');
+  await route('#content'); library(h).createPublication(used); await h.settle(); assert.equal(window.location.hash, '#content');
+  await route('#content'); library(h).createPublication(archived); await h.settle(); assert.equal(window.location.hash, '#content');
 });
 test('USED opens the linked existing Post', async () => {
   const { h } = await app(); library(h).openPublication('linked'); await h.settle();

@@ -42,7 +42,8 @@ const test = base.extend<{ loginFixture: LoginFixture }>({
           [...url.searchParams.keys()].sort().join(',') === 'page,period,provider' &&
           ['max', 'telegram'].includes(url.searchParams.get('provider') ?? '') &&
           url.searchParams.get('period') === '7' && url.searchParams.get('page') === '0';
-        if (request.method() !== 'GET' || !(bootstrap || analytics)) {
+        const access = url.pathname === '/api/access' && url.search === '';
+        if (request.method() !== 'GET' || !(bootstrap || analytics || access)) {
           unexpected.push('Unexpected API operation'); return route.abort('blockedbyclient');
         }
         counts.apiReads++;

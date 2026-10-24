@@ -151,7 +151,7 @@ test('queue scheduled approvals enforce connected accounts while legacy manual c
   await createPost(owner, input, noMirror);
 });
 
-test('idempotency and linked-source replay precede elapsed/stale/occupied validation', async t => {
+test('idempotency replay precedes stale validation while fresh keys remain source-validated', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2029-12-31T00:00:00Z') });
   const opts = { ...await options(), creationKey: '11111111-1111-4111-8111-111111111111' };
   const created = await createPost(owner, input, opts);
@@ -159,7 +159,7 @@ test('idempotency and linked-source replay precede elapsed/stale/occupied valida
   await getDb().update(libraryItems).set({ updatedAt: new Date('2031-01-01'), status: 'ARCHIVED' }).where(eq(libraryItems.id, opts.sourceLibraryItemId));
   await getDb().update(socialAccounts).set({ enabled: false }).where(eq(socialAccounts.id, 'slot-tg'));
   assert.equal((await createPost(owner, input, opts)).id, created.id);
-  assert.equal((await createPost(owner, { ...input, targets: [{ ...input.targets[0], scheduledAt: '2000-01-01T07:00:00Z' }] }, { ...opts, creationKey: undefined })).id, created.id);
+  await assert.rejects(() => createPost(owner, { ...input, targets: [{ ...input.targets[0], scheduledAt: '2000-01-01T07:00:00Z' }] }, { ...opts, creationKey: undefined }), { name: 'LibrarySourceStaleError' });
   await assert.rejects(() => createPost(owner, input, { ...opts, requireFreeSlot: false }), { name: 'CreationConflictError' });
 });
 
@@ -268,7 +268,7 @@ test('marked cutoff accepts exactly sixty seconds and rejects fifty-nine; scoped
   await getDb().update(socialAccounts).set({enabled:false}).where(eq(socialAccounts.id,'slot-tg'));
   assert.equal((await createPost(owner,input,opts)).id,saved.id);
   await assert.rejects(()=>createPost(owner,input,{...opts,swipeReview:{inputMethod:'keyboard'}}),{name:'CreationConflictError'});
-  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:'88888888-8888-4888-8888-888888888888'}),{name:'LibrarySourceConflictError'});
+  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:'88888888-8888-4888-8888-888888888888'}),{name:'PlannerAccountUnavailableError'});
 });
 
 async function waitForLock(gate: Client, table: string) {

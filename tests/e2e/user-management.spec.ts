@@ -68,6 +68,10 @@ test('ADMIN confirms block and restore without gaining USER content or reviving 
     await expect(aRow).toContainText('Test colleague 1'); await expect(aRow).toContainText('Активен');
     await expect(bRow).toContainText('Активен');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (test.info().project.name === 'mobile') {
+      await page.setViewportSize({ width: 320, height: 844 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
     await aRow.getByRole('button', { name: 'Заблокировать', exact: true }).click();
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toContainText(`${ids[1]}@example.test`);
@@ -93,7 +97,41 @@ test('ADMIN confirms block and restore without gaining USER content or reviving 
     expect((await api('/admin/users', newA)).status).toBe(307);
     // The server exposes only access-management fields to this administrator.
     const list = await page.evaluate(async () => (await (await fetch('/api/admin/users')).json()).users as Record<string, unknown>[]);
-    expect(list.every(row => Object.keys(row).sort().join(',') === 'accessState,createdAt,displayName,email,id')).toBe(true);
+    expect(list.every(row => Object.keys(row).sort().join(',') === 'accessExpiresAt,accessState,createdAt,displayName,email,id')).toBe(true);
+    // Exercise the new access/reset/deletion UI against the compiled real server.
+    await aRow.getByLabel(`Срок доступа ${ids[1]}@example.test (МСК)`, { exact: true }).fill('2030-01-02T10:00');
+    const deadlineResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/api/admin/users/${ids[1]}` && response.request().method() === 'POST');
+    await aRow.getByRole('button', { name: 'Сохранить срок', exact: true }).click();
+    expect((await deadlineResponse).status()).toBe(200);
+    await expect(aRow).toContainText('Доступ до');
+    expect((await (await api('/api/access', newA)).json()).expiresAt).toBe('2030-01-02T07:00:00.000Z');
+    const unlimitedResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/api/admin/users/${ids[1]}` && response.request().method() === 'POST');
+    await aRow.getByRole('button', { name: 'Бессрочный доступ', exact: true }).click();
+    expect((await unlimitedResponse).status()).toBe(200);
+    await expect(aRow.getByRole('status')).toContainText('Срок доступа обновлён');
+    expect((await (await api('/api/access', newA)).json()).expiresAt).toBe(null);
+    await bRow.getByRole('button', { name: 'Сбросить пароль', exact: true }).click();
+    const resetLink = bRow.getByLabel('Одноразовая ссылка сброса', { exact: true });
+    await expect(resetLink).toBeVisible();
+    const resetContext = await context.browser()!.newContext();
+    try {
+      const resetPage = await resetContext.newPage();
+      await resetPage.goto(await resetLink.inputValue());
+      await expect(resetPage).toHaveURL(`${base}/reset-password`);
+      await resetPage.getByLabel('Новый пароль', { exact: true }).fill('browser-reset-new-password');
+      await resetPage.getByLabel('Повторите пароль', { exact: true }).fill('browser-reset-new-password');
+      await resetPage.getByRole('button', { name: 'Изменить пароль', exact: true }).click();
+      await expect(resetPage.getByRole('status')).toContainText('Пароль изменён');
+      expect((await api('/api/profile', b)).status).toBe(401);
+      expect(await resetPage.evaluate(async () => (await fetch('/api/profile')).status)).toBe(401);
+    } finally { await resetContext.close(); }
+    await bRow.getByRole('button', { name: 'Удалить агента', exact: true }).click();
+    const deleteDialog = bRow.getByRole('alertdialog');
+    await deleteDialog.getByLabel('Email для подтверждения удаления', { exact: true }).fill('incorrect@example.test');
+    await expect(deleteDialog.getByRole('button', { name: 'Подтвердить удаление', exact: true })).toBeDisabled();
+    await deleteDialog.getByLabel('Email для подтверждения удаления', { exact: true }).fill(`${ids[2]}@example.test`);
+    await deleteDialog.getByRole('button', { name: 'Подтвердить удаление', exact: true }).click();
+    await expect(bRow).toHaveCount(0);
     // Expire this nonce-owned administrator's actual server session and reload.
     await db.update(sessions).set({ expiresAt: new Date(0) }).where(eq(sessions.userId, ids[0]));
     await page.reload(); await expect(page).toHaveURL(`${base}/login`);

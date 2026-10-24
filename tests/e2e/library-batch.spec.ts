@@ -25,6 +25,7 @@ async function fixture(context:BrowserContext,page:Page){
   if(!path.startsWith('/api/'))return route.continue();
   if(req.method()==='GET'&&path==='/api/bootstrap')return respond(snapshot);
   if(req.method()==='GET'&&path==='/api/profile')return respond(snapshot.profile);
+  if(req.method()==='GET'&&path==='/api/access')return respond({expiresAt:null,canPublish:true});
   if(path==='/api/admin/shared-library'){expectedResource(path,403);return respond({error:'Forbidden'},403);}
   if(path==='/api/shared-library'&&req.method()==='GET')return respond({items:[]});
   if(path==='/api/library/batch-consent/preview'&&req.method()==='GET'){if(flags.eligibilityFail){expectedResource(path,503);return respond({code:'BATCH_RESULT_UNCERTAIN'},503);}return respond({eligible:flags.eligible});}

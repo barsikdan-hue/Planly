@@ -1,0 +1,1 @@
+DROP INDEX "posts_source_library_item_uidx";

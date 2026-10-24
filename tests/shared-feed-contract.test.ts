@@ -20,6 +20,13 @@ test('decision binds the displayed actor without accepting an identity override'
  assert.equal(parse.safeParse({...intentBase,decision:'DISLIKE',expectedActorId:'x'.repeat(200)}).success,true);
  assert.equal(parse.safeParse({...intentBase,decision:'DISLIKE',userId:'owner-b'}).success,false);
 });
+test('new archive receipt identifies its personal copy and still cannot create a Post',()=>{
+ assert.ok(contract?.sharedFeedDecisionReceiptSchema);
+ const receipt={...base,decision:'DISLIKE',personalItemId:'private-archive-copy',postId:null,scheduledAt:null};
+ assert.equal(contract.sharedFeedDecisionReceiptSchema.safeParse(receipt).success,true);
+ assert.equal(contract.sharedFeedDecisionReceiptSchema.safeParse({...receipt,postId:'forbidden-post'}).success,false);
+});
+
 test('receipt schema rejects partial and inconsistent durable results',()=>{
  assert.ok(contract?.sharedFeedDecisionReceiptSchema,'shared feed receipt schema must exist');
  const parse=contract.sharedFeedDecisionReceiptSchema;

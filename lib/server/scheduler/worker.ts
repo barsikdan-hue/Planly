@@ -5,6 +5,8 @@ import { PUBLICATION_MAX_ATTEMPTS, PUBLICATION_QUEUE_NAME, type PublicationJob }
 import { reconcileScheduledJobs } from './reconcile.ts';
 import { DEFAULT_RETRY_DELAYS_MS, prepareTemporaryPublicationRetry, retryDelayMs } from './retry.ts';
 import { getRedisConnection } from './redis.ts';
+import { processAccountDeletionTasks } from '../auth/account-deletion.ts';
+import { processPendingMediaCleanup } from '../media.ts';
 
 export type PublicationWorkerOptions = {
   retryDelaysMs?: readonly number[];
@@ -39,6 +41,8 @@ export async function startPublicationWorker(
 ): Promise<PublicationWorkerRuntime> {
   const retryDelays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
   await reconcileScheduledJobs();
+  await processAccountDeletionTasks();
+  await processPendingMediaCleanup();
 
   const worker = new Worker<PublicationJob>(
     PUBLICATION_QUEUE_NAME,
@@ -58,6 +62,8 @@ export async function startPublicationWorker(
       void reconcileScheduledJobs().catch(error => {
         console.error('Scheduler reconciliation failed', error instanceof Error ? error.message : 'unknown error');
       });
+      void processAccountDeletionTasks().catch(() => { console.warn('Account deletion reconciliation pending'); });
+      void processPendingMediaCleanup().catch(() => { console.warn('Media cleanup reconciliation pending'); });
     }, reconcileIntervalMs);
     interval.unref?.();
   }

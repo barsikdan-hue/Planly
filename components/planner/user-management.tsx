@@ -2,8 +2,9 @@
 
 import {useEffect, useRef, useState} from 'react';
 import Link from 'next/link.js';
+import { ManagedUserLifecycle } from './managed-user-lifecycle';
 
-type Colleague = {id:string; email:string; displayName:string; accessState:'ACTIVE'|'BLOCKED'; createdAt:string};
+type Colleague = {id:string; email:string; displayName:string; accessState:'ACTIVE'|'BLOCKED'; accessExpiresAt?:string|null; createdAt:string};
 type Selection = {user:Colleague; action:'block'|'restore'};
 
 export function UsersEntry() {
@@ -14,7 +15,7 @@ export function UsersEntry() {
       .then(response=>{if(!controller.signal.aborted)setAllowed(response.ok);}).catch(()=>{});
     return ()=>controller.abort();
   },[]);
-  return allowed?<p><a href="/admin/users">Пользователи</a></p>:null;
+    return allowed?<p><Link href="/admin/users">Пользователи</Link></p>:null;
 }
 
 export function UserManagement() {
@@ -40,7 +41,7 @@ export function UserManagement() {
         if(controller.signal.aborted)return;
         if(denied(response.status))return;
         if(!response.ok)throw new Error('Не удалось загрузить пользователей.');
-        const body=await response.json();if(!controller.signal.aborted)setColleagues(body.users);
+        const body=await response.json();if(!controller.signal.aborted){setColleagues(body.users);if(body.pendingDeletionCount)setNotice(`Фоновая очистка удалённых аккаунтов: ${body.pendingDeletionCount}. Она ещё не завершена.`);}
       }).catch(()=>{if(!controller.signal.aborted)setError('Не удалось загрузить пользователей. Обнови страницу.');})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
@@ -77,10 +78,10 @@ export function UserManagement() {
     {loading?<p>Загрузка пользователей…</p>:!colleagues.length&&!error?<p>Зарегистрированных коллег пока нет. <Link href="/admin/invitations">Пригласить коллегу</Link></p>:null}
     {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     {colleagues.length>0&&<table role="table" className="users-list"><caption className="users-visually-hidden">Доступ зарегистрированных коллег</caption><thead><tr><th scope="col">Коллега</th><th scope="col">Статус</th><th scope="col">Дата регистрации</th><th scope="col">Действие</th></tr></thead><tbody>{colleagues.map(user=><tr role="row" key={user.id}>
-      <td><strong>{user.email}</strong><span>{user.displayName}</span></td>
+      <td><strong>{user.email}</strong><span><Link href={`/admin/users/${encodeURIComponent(user.id)}`}>{user.displayName}</Link></span></td>
       <td><span className={user.accessState==='ACTIVE'?'user-active':'user-blocked'}>{user.accessState==='ACTIVE'?'Активен':'Заблокирован'}</span></td>
       <td><time dateTime={user.createdAt}>{new Date(user.createdAt).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow'})}</time></td>
-      <td><button type="button" disabled={busy} onClick={()=>choose(user)}>{user.accessState==='ACTIVE'?'Заблокировать':'Восстановить доступ'}</button></td>
+      <td><button type="button" disabled={busy} onClick={()=>choose(user)}>{user.accessState==='ACTIVE'?'Заблокировать':'Восстановить доступ'}</button><ManagedUserLifecycle user={user} onChanged={updated=>setColleagues(current=>current.map(row=>row.id===updated.id?{...row,...updated}:row))} onDeleted={()=>{setColleagues(current=>current.filter(row=>row.id!==user.id));setNotice('Аккаунт удалён. Фоновая очистка файлов и очереди ещё не подтверждена.');}} /></td>
     </tr>)}</tbody></table>}
     {selection&&<dialog ref={dialog} role="alertdialog" aria-labelledby="user-action-title" aria-describedby="user-action-description" onCancel={event=>{event.preventDefault();if(!mutation.current)setSelection(null);}}>
       <h2 id="user-action-title">{selection.action==='block'?'Заблокировать пользователя?':'Восстановить доступ?'}</h2>

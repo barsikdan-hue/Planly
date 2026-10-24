@@ -28,6 +28,10 @@ async function readStored(tx:AuthTransaction,userId:string,operationId:string){
 }
 async function replay(tx:AuthTransaction,userId:string,row:Stored,inputHash?:string):Promise<SharedFeedDecisionResult>{
  if(inputHash!==undefined&&row.inputHash!==inputHash)failure(409,'SHARED_FEED_OPERATION_CONFLICT','Operation was already used with different intent');
+ if(row.decision==='DISLIKE' && row.personalItemId){
+  const [item]=await tx.select({id:libraryItems.id}).from(libraryItems).where(and(eq(libraryItems.userId,userId),eq(libraryItems.id,row.personalItemId))).for('share');
+  if(!item)failure(410,'SHARED_FEED_RESULT_DELETED','The archived result of this decision was deleted');
+ }
  if(row.decision==='LIKE'){
   // Same order as ordinary source deletion: personal source, then Post.
   const [item]=await tx.select({id:libraryItems.id}).from(libraryItems).where(and(eq(libraryItems.userId,userId),eq(libraryItems.id,row.personalItemId!))).for('share');
@@ -96,6 +100,10 @@ export async function commitSharedFeedDecision(request:Request,raw:unknown,optio
     // Personal feedback uses a private operation namespace; the shared receipt
     // remains the externally recoverable consent identity.
     await recordSwipeDecision(tx,{...snapshot,userId,operationId:randomUUID(),requestHash:inputHash,decision:'LIKE',origin:'swipe-planner',inputMethod:approval.inputMethod,confirmedAt:now,providers:approval.providers,scheduledAt,resultPostId:postId});
+   }else{
+    const [copy]=await copySharedLibrarySources(tx,userId,[source],destinations,()=>deadline=AbortSignal.timeout(60_000));
+    personalItemId=copy.id;
+    await tx.update(libraryItems).set({status:'ARCHIVED'}).where(eq(libraryItems.id,copy.id));
    }
    const [stored]=await tx.insert(sharedFeedDecisions).values({userId,operationId:input.operationId,inputHash,shareId:input.shareId,sourceRevision:new Date(input.sourceRevision),decision:input.decision,personalItemId,postId,scheduledAt}).returning();
    const saved=await replay(tx,userId,stored);

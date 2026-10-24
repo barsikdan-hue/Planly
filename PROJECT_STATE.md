@@ -1,5 +1,20 @@
 # Lentaro — current project state
 
+## Active candidate — 24 October 2026
+
+Owner accepted the delivery master prompt. Work continues in isolated branch
+`codex/agent-catalog-decision-loop-20261024`, PR75, base4fc764a. This entrypoint
+records this candidate; older source/runtime tables below are historical.
+Current queue and decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).
+Candidate scope: admin schedule privacy/Moscow time; single-use password reset;
+manual expiry/unlimited; confirmed account deletion with durable external cleanup;
+reusable personal content and actual personal archive from shared-feed rejection;
+bounded repeatable catalog import. Source tests/CI/review remain separate gates.
+Existing staging is not changed by this source work. Merge, persistent migrations,
+deploy, secrets/infra and real provider sends are not authorized by this checkpoint.
+Owner decisions: after10MSK use next free10MSK; full account/data deletion only
+after confirmation of the specific target. No live account was deleted.
+
 Updated 2026-10-19. Read this entrypoint and its environment boundaries before work; check relevant drift and existing code/active PRs. The completed audit is historical evidence, not a task to repeat.
 
 ## Product and authorization

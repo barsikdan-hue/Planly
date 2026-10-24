@@ -1,0 +1,47 @@
+{
+  "period": "2026-10",
+  "items": [
+    {
+      "id": "L01-r1",
+      "title": "20 ночей — два разных остатка",
+      "text": {
+        "path": "materials/L01-r1.txt",
+        "sha256": "5124851952a9bd875523918b8408757268cc568594e21c8e84b0b7cf3559ac75"
+      },
+      "media": [
+        {
+          "path": "assets/final/L01-r1-portrait.jpg",
+          "sha256": "4c1ff13f42d7a38b77313b8e124ba87c48c5075a669ca4a0681335f5dc94b2c2"
+        }
+      ]
+    },
+    {
+      "id": "L02-r1",
+      "title": "Поместилась кровать. А вы?",
+      "text": {
+        "path": "materials/L02-r1.txt",
+        "sha256": "9a191117461c2fe4deb94e8afdc0cfa98e45b321abaaac52c55abfc4e8fee809"
+      },
+      "media": [
+        {
+          "path": "assets/final/L02-r1-portrait.jpg",
+          "sha256": "a0ca59ac6267db405cce56af26a6723952cfa30c9dbb5377a80d3931868f42da"
+        }
+      ]
+    },
+    {
+      "id": "L03-r1",
+      "title": "Парк рядом. А с собакой куда?",
+      "text": {
+        "path": "materials/L03-r1.txt",
+        "sha256": "9345f177eee84e1bb8b4acb8cf996fe64b6d668efb05fdabc08e381ce30f0678"
+      },
+      "media": [
+        {
+          "path": "assets/final/L03-r1-portrait.jpg",
+          "sha256": "755001a8ee9311dfed8c2ee382d30db7ac1cce20227f585948ace8376f4e6059"
+        }
+      ]
+    }
+  ]
+}

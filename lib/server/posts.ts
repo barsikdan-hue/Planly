@@ -16,7 +16,8 @@ import { applyPublicationQueueChanges } from './scheduler/reconcile.ts';
 import { validatePostRelations } from './post-relations.ts';
 import { insertPostRelations } from './post-relations-insert.ts';
 import { CreationConflictError, creationInputHash, creationKeySchema } from './post-idempotency.ts';
-import { postEditBlockedReason, PostEditConflictError, samePostInput } from './post-editability.ts';
+import { postEditBlockedReason, PostEditConflictError, samePostInput, isOnlyPostCancellation } from './post-editability.ts';
+import { requireManualWrite } from './auth/manual-access.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule, occupiedSlotMinutes, PlannerSlotConflictError, requirePlannerAccounts, SwipeApprovalValidationError } from './planner-slots.ts';
 import { slotMinuteKey } from '../planner-slots.ts';
@@ -26,6 +27,7 @@ import { captureSwipeSource, readSwipeReceipt, recordSwipeDecision, DecisionResu
 const providerOrder = { telegram: 0, max: 1, vk: 2 } as const;
 
 type PostPersistenceOptions = {
+  rescheduleOnly?: { provider: SavePostInput['targets'][number]['provider']; scheduledAt: string };
   mirrorQueue?: (changes: PublicationQueueChange[]) => Promise<void>;
   creationKey?: string;
   sourceLibraryItemId?: string;
@@ -160,17 +162,8 @@ export async function createPost(
         if (sourceLibraryUpdatedAt !== undefined) throw new LibrarySourceStaleError();
         throw new Error('Library item not found');
       }
-      const [linked] = await tx.select({ id: posts.id }).from(posts)
-        .where(and(eq(posts.sourceLibraryItemId, sourceLibraryItemId), eq(posts.userId, userId))).limit(1);
-      // Returning a USED source is a lookup: preserve the canonical key/hash and
-      // leave any fresh key unreserved, as decided by the owner.
-      if (linked) {
-        if (swipeReview) throw new LibrarySourceConflictError('Library source already converted');
-        return { postId: linked.id, changes: [] as PublicationQueueChange[], created: false };
-      }
       if (sourceLibraryUpdatedAt !== undefined && source.updatedAt.getTime() !== Date.parse(sourceLibraryUpdatedAt)) throw new LibrarySourceStaleError();
       if (source.status === 'ARCHIVED') throw new LibrarySourceConflictError('Archived library item cannot create a Post');
-      if (source.status === 'USED') throw new LibrarySourceConflictError('Used library item cannot create another Post');
       if(swipeReview) snapshot=await captureSwipeSource(tx,userId,source);
     }
     const schedules = input.targets.map(target => target.scheduledAt);
@@ -229,11 +222,11 @@ export async function updatePost(
   rawInput: SavePostInput,
   options: PostPersistenceOptions = {},
 ): Promise<PostDto> {
-  const input = savePostInputSchema.parse(rawInput);
+  let input = savePostInputSchema.parse(rawInput);
   const db = getDb();
 
   const result = await db.transaction(async tx => {
-    await lockOwnerSchedule(tx, userId);
+    await lockOwnerSchedule(tx, userId, true);
     const [owned] = await tx.select().from(posts)
       .where(and(eq(posts.id, postId), eq(posts.userId, userId))).limit(1).for('update');
     if (!owned) throw new Error('Post not found');
@@ -252,6 +245,12 @@ export async function updatePost(
         provider: fromDbProvider(provider), textOverride: target.textOverride,
         scheduledAt: target.scheduledAt?.toISOString() ?? null,
       })), mediaIds: existingMedia.map(row => row.mediaId) };
+    if (!isOnlyPostCancellation(current, input)) await requireManualWrite(tx, userId);
+    if (options.rescheduleOnly) {
+      const { provider, scheduledAt } = options.rescheduleOnly;
+      if (current.status !== 'READY' || !current.targets.some(target => target.provider === provider && target.scheduledAt)) throw new Error('Scheduled target not found');
+      input = savePostInputSchema.parse({ ...current, targets: current.targets.map(target => target.provider === provider ? { ...target, scheduledAt } : target) });
+    }
     if (samePostInput(input, current)) return { changed: false, changes: [] as PublicationQueueChange[] };
     const blockedReason = postEditBlockedReason(history);
     if (blockedReason) throw new PostEditConflictError(blockedReason);

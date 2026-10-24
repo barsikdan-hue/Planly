@@ -8,6 +8,7 @@ import { createMaxConnector } from '../connectors/max.ts';
 import type { PublishInput } from '../connectors/types.ts';
 import { socialConnectionConfig } from './config.ts';
 import type { ConnectionTransaction } from './state.ts';
+import { hasManualAccess } from '../../manual-access.ts';
 
 type Pointer={socialBindingRevision:number|null;socialBindingDestinationId:string|null};
 export type PublicationAuthorization={userId:string;accountId:string;provider:'TELEGRAM'|'MAX';sessionVersion:number;generation:number;revision:number;destinationId:string;humanId:string;botId:string;configRevision:string};
@@ -15,7 +16,7 @@ export type PublicationAuthorization={userId:string;accountId:string;provider:'T
 // Callers already hold the user lock. Admission and lifecycle use user → account.
 async function currentBinding(tx:ConnectionTransaction,user:typeof users.$inferSelect,accountId:string):Promise<PublicationAuthorization|null> {
   const [account]=await tx.select().from(socialAccounts).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,user.id))).for('update');
-  if(!account || account.provider==='VK' || !user.authInitialized || user.accessState!=='ACTIVE' || !account.enabled || account.connectionStatus!=='CONNECTED')return null;
+  if(!account || account.provider==='VK' || !user.authInitialized || user.accessState!=='ACTIVE' || !hasManualAccess(user) || !account.enabled || account.connectionStatus!=='CONNECTED')return null;
   const [binding]=await tx.select().from(socialBindings).where(eq(socialBindings.accountId,accountId));
   let config;try{config=socialConnectionConfig(account.provider);}catch{return null;}
   if(!binding || binding.userId!==user.id || binding.provider!==account.provider || binding.destinationId!==account.providerAccountId || binding.revision!==account.bindingRevision || binding.sessionVersion!==user.sessionVersion || binding.configRevision!==config.revision)return null;

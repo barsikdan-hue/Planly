@@ -13,7 +13,7 @@ export const sharedFeedDecisionInputSchema=z.discriminatedUnion('decision',[
 ]);
 export type SharedFeedDecisionInput=z.infer<typeof sharedFeedDecisionInputSchema>;
 export const sharedFeedDecisionReceiptSchema=z.discriminatedUnion('decision',[
- z.object({...identity,decision:z.literal('DISLIKE'),personalItemId:z.null(),postId:z.null(),scheduledAt:z.null()}).strict(),
+ z.object({...identity,decision:z.literal('DISLIKE'),personalItemId:z.string().min(1).nullable(),postId:z.null(),scheduledAt:z.null()}).strict(),
  z.object({...identity,decision:z.literal('LIKE'),personalItemId:z.string().min(1),postId:z.string().min(1),scheduledAt:minute}).strict(),
 ]);
 export type SharedFeedDecisionReceipt=z.infer<typeof sharedFeedDecisionReceiptSchema>;

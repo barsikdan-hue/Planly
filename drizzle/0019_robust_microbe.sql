@@ -1,0 +1,2 @@
+ALTER TABLE "shared_feed_decisions" DROP CONSTRAINT "shared_feed_result_shape";--> statement-breakpoint
+ALTER TABLE "shared_feed_decisions" ADD CONSTRAINT "shared_feed_result_shape" CHECK (("shared_feed_decisions"."decision"='DISLIKE' AND "shared_feed_decisions"."post_id" IS NULL AND "shared_feed_decisions"."scheduled_at" IS NULL) OR ("shared_feed_decisions"."decision"='LIKE' AND "shared_feed_decisions"."personal_item_id" IS NOT NULL AND "shared_feed_decisions"."post_id" IS NOT NULL AND "shared_feed_decisions"."scheduled_at" IS NOT NULL));

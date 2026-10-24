@@ -37,6 +37,7 @@ const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
   if(request.method()==='GET'&&url.search===''){
    if(path==='/api/bootstrap')return reply({profile:profile(),posts:[...(f.posts.get(f.owner)??[]),...(f.pollSentinel?[sentinel()]:[])],media:f.privateMedia.get(f.owner)??[],socialAccounts:accounts(),libraryItems:f.privateItems.get(f.owner)??[]});
    if(path==='/api/profile')return reply(profile());
+   if(path==='/api/access')return reply({expiresAt:null,canPublish:true});
    if(path==='/api/library-items')return reply(f.privateItems.get(f.owner)??[]);
    if(path==='/api/media')return reply(f.privateMedia.get(f.owner)??[]);
    if(path==='/api/shared-feed'){f.feedReads++;return reply({items:ownItems()});}
@@ -64,7 +65,8 @@ const test=base.extend<{feed:Fixture}>({feed:[async({context,page},use)=>{
    const source=f.items.find(item=>item.id===input.shareId);expect(source).toBeDefined();expect(input.sourceRevision).toBe(source!.updatedAt);
    expect(ownedResults().some(value=>value.receipt.shareId===input.shareId&&value.receipt.sourceRevision===input.sourceRevision)).toBe(false);
    const identity={operationId:input.operationId,shareId:input.shareId,sourceRevision:input.sourceRevision};
-   const receipt=sharedFeedDecisionReceiptSchema.parse(input.decision==='LIKE'?{...identity,decision:'LIKE',personalItemId:`personal-${owner}-${input.shareId}`,postId:`post-${owner}-${input.shareId}`,scheduledAt:input.approval.scheduledAt}:{...identity,decision:'DISLIKE',personalItemId:null,postId:null,scheduledAt:null});
+   const receipt=sharedFeedDecisionReceiptSchema.parse(input.decision==='LIKE'?{...identity,decision:'LIKE',personalItemId:`personal-${owner}-${input.shareId}`,postId:`post-${owner}-${input.shareId}`,scheduledAt:input.approval.scheduledAt}:{...identity,decision:'DISLIKE',personalItemId:`archive-${owner}-${input.shareId}`,postId:null,scheduledAt:null});
+   if(input.decision==='DISLIKE')f.privateItems.get(owner)!.push({id:receipt.personalItemId!,title:source!.title,text:source!.text,mediaIds:[],status:'ARCHIVED',sourcePostId:null,createdAt:stamp,updatedAt:stamp});
    if(input.decision==='LIKE'){
     expect(Date.parse(input.approval.scheduledAt)).toBeGreaterThan(Date.now()+59_000);
     const copiedMedia=source!.media.map((asset,index):MediaAssetWithPreview=>({id:`private-${owner}-${input.shareId}-${index}`,originalName:asset.name,mimeType:asset.mimeType,previewUrl:`/fixture-private-${owner}.png`,byteSize:100,width:160,height:90,durationMs:null,source:'UPLOAD',createdAt:stamp}));
@@ -109,10 +111,11 @@ test('direct shared LIKE waits for acknowledgement and creates exactly one perso
  await page.getByRole('tab',{name:'Месяц',exact:true}).click();await expect(page.locator('.calendar-event')).toHaveCount(1);expect(feed.requests).toHaveLength(1);await noOverflow(page);
 });
 
-test('DISLIKE hides only for A; B sees the unchanged original and creates an independent result',async({page,feed})=>{
+test('DISLIKE archives only for A; B sees the unchanged original and creates an independent result',async({page,feed})=>{
  const original=structuredClone(feed.items);await openFeed(page);await begin(page);await page.getByRole('button',{name:'Не нравится',exact:true}).click();
- await expect(page.getByText('Не нравится · скрыто только для тебя.',{exact:true})).toBeVisible();expect(feed.posts.get('feed-a')).toEqual([]);expect(feed.items).toEqual(original);
- const aJournal=await journal(page);expect(aJournal[0].receipt).toMatchObject({decision:'DISLIKE',personalItemId:null,postId:null});
+ await expect(page.getByText('Не нравится · сохранено в архив заготовок.',{exact:true})).toBeVisible();expect(feed.posts.get('feed-a')).toEqual([]);expect(feed.items).toEqual(original);
+ const aJournal=await journal(page);expect(aJournal[0].receipt).toMatchObject({decision:'DISLIKE',personalItemId:`archive-feed-a-${shareIds[0]}`,postId:null});
+ expect(feed.privateItems.get('feed-a')![0].status).toBe('ARCHIVED');
  feed.owner='feed-b';await openFeed(page);await begin(page);await expect(page.locator('.swipe-card')).toContainText('Общий материал 1');await page.getByRole('button',{name:'В календарь',exact:true}).click();
  await expect(page.getByText('Выбор подтверждён. Публикация в личном календаре.',{exact:true})).toBeVisible();expect(feed.posts.get('feed-b')).toHaveLength(1);expect(feed.posts.get('feed-a')).toHaveLength(0);expect(await journal(page)).toEqual(aJournal);expect(feed.items).toEqual(original);
  feed.owner='feed-a';await openFeed(page);await begin(page);await expect(page.locator('.swipe-card')).toContainText('Общий материал 2');expect(feed.requests).toHaveLength(2);

@@ -42,7 +42,10 @@ export async function runSharedFeedHttpSmoke(){
   assert.equal(await post(b,receipt.postId),undefined);assert.equal(await post(admin,receipt.postId),undefined);
   assert.ok(!(await feed(a)).some(row=>row.id===item.id));assert.ok((await feed(b)).some(row=>row.id===item.id));
   const reject=decision(item,'DISLIKE',undefined,ids[2]),postCount=(await db.select().from(posts).where(eq(posts.userId,ids[2]))).length;
-  const rejected=await read(await decide(b,reject),201);assert.equal(rejected.receipt.postId,null);assert.equal(rejected.receipt.personalItemId,null);
+  const rejected=await read(await decide(b,reject),201);assert.equal(rejected.receipt.postId,null);assert.ok(rejected.receipt.personalItemId);
+  const [archived]=await db.select().from(libraryItems).where(eq(libraryItems.id,rejected.receipt.personalItemId));
+  assert.equal(archived.userId,ids[2]);assert.equal(archived.status,'ARCHIVED');assert.equal(archived.bodyText,text);
+  assert.deepEqual((await read(await decide(b,reject),201)).receipt,rejected.receipt);
   assert.equal((await db.select().from(posts).where(eq(posts.userId,ids[2]))).length,postCount);assert.ok(!(await feed(b)).some(row=>row.id===item.id));
   const own=await post(a,receipt.postId);assert.equal(own.baseText,text);assert.equal(own.mediaIds.length,1);assert.notEqual(own.mediaIds[0],uploaded.id);
   const bootstrap=await read(await api('/api/bootstrap',a),200);assert.ok(bootstrap.posts.some(post=>post.id===receipt.postId));

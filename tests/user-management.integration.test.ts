@@ -76,10 +76,12 @@ after(async () => {
 test('ADMIN sees only registered USER identity and access DTO without private content or credentials', async () => {
   const response = await routes.GET(request('/api/admin/users', tokens[1]));
   assert.equal(response.status, 200); assert.match(response.headers.get('cache-control') ?? '', /no-store/);
-  const body = await response.json(); assert.deepEqual(Object.keys(body), ['users']);
+  const body = await response.json(); assert.deepEqual(Object.keys(body).sort(), ['pendingDeletionCount', 'users']);
+  assert.equal(body.pendingDeletionCount, 0);
   assert.deepEqual(new Set(body.users.map((user: { id: string }) => user.id)), new Set([ids[2], ids[3]]));
   for (const user of body.users) {
-    assert.deepEqual(Object.keys(user).sort(), ['accessState', 'createdAt', 'displayName', 'email', 'id']);
+    assert.deepEqual(Object.keys(user).sort(), ['accessExpiresAt', 'accessState', 'createdAt', 'displayName', 'email', 'id']);
+    assert.equal(user.accessExpiresAt, null);
     assert.equal(user.accessState, 'ACTIVE'); assert.ok(Number.isFinite(Date.parse(user.createdAt)));
   }
   const serialized = JSON.stringify(body);

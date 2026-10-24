@@ -65,7 +65,7 @@ try {
   const list = (await listed.json()).users;
   assert.ok(list.some(row => row.id === ids[1]) && list.some(row => row.id === ids[2]), 'Registered colleagues included');
   assert.ok(!list.some(row => [owner.id, ids[0], ids[3]].includes(row.id)), 'Owner and ADMIN excluded');
-  for (const row of list) assert.deepEqual(Object.keys(row).sort(), ['accessState', 'createdAt', 'displayName', 'email', 'id'], 'Minimal access-only DTO');
+  for (const row of list) assert.deepEqual(Object.keys(row).sort(), ['accessExpiresAt', 'accessState', 'createdAt', 'displayName', 'email', 'id'], 'Minimal access-only DTO');
   for (const id of [ids[0], ids[3], owner.id]) await status(await api(targetPath(id), admin, 'POST', { action: 'block' }), 403, 'Protected target');
   await status(await api(targetPath(`missing-${suffix}`), admin, 'POST', { action: 'block' }), 404, 'Unknown target');
   for (const forged of [{ userId: ids[1] }, { role: 'ADMIN' }, { accessState: 'ACTIVE' }]) await status(await api(targetPath(ids[2]), admin, 'POST', { action: 'block', ...forged }), 403, 'Forged mutation');

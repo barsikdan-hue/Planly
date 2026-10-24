@@ -13,6 +13,7 @@ import {
   type UpdateLibraryItemInput,
 } from '../contracts/library.ts';
 import { LibrarySourceStaleError, lockOwnerSchedule } from './planner-slots.ts';
+import { requireManualWrite } from './auth/manual-access.ts';
 import { LibrarySourceConflictError } from './library-conversion-error.ts';
 import { LibraryCreationConflictError, LibraryCreationDeletedError, libraryCreationInputHash } from './library-creation.ts';
 import { swipeDislikeSchema, type SwipeDislike } from '../contracts/swipe-feedback.ts';
@@ -60,6 +61,7 @@ export async function createLibraryItem(userId: string, raw: CreateLibraryItemIn
   const input = createLibraryItemInputSchema.parse(raw);
   const id = randomUUID();
   await getDb().transaction(async tx => {
+    await requireManualWrite(tx, userId);
     await validateMedia(tx, userId, input.mediaIds);
     const now = new Date();
     await tx.insert(libraryItems).values({
@@ -103,6 +105,7 @@ export async function createLibraryItemForIntent(userId: string, raw: CreateLibr
 export async function updateLibraryItem(userId: string, id: string, raw: UpdateLibraryItemInput): Promise<LibraryItemDto> {
   const input = updateLibraryItemInputSchema.parse(raw);
   await getDb().transaction(async tx => {
+    await requireManualWrite(tx, userId);
     // Future source-Post creation must serialize on this same Library row.
     const [owned] = await tx.select().from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
@@ -158,10 +161,7 @@ export async function archiveLibraryItem(userId: string, id: string, expectedUpd
     const [owned] = await tx.select().from(libraryItems)
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId))).limit(1).for('update');
     if (!owned || owned.updatedAt.getTime() !== Date.parse(input.expectedUpdatedAt)) throw new LibrarySourceStaleError();
-    if (owned.status !== 'READY') throw new LibrarySourceConflictError('Only READY library items can be rejected');
-    const [linked] = await tx.select({ id: posts.id }).from(posts)
-      .where(and(eq(posts.sourceLibraryItemId, id), eq(posts.userId, userId))).limit(1);
-    if (linked) throw new LibrarySourceConflictError('Used library item cannot be rejected');
+    if (owned.status !== 'READY' && owned.status !== 'USED') throw new LibrarySourceConflictError('Only selectable library items can be rejected');
     const snapshot=intent ? await captureSwipeSource(tx,userId,owned) : undefined;
     await tx.update(libraryItems).set({ status: 'ARCHIVED', updatedAt: new Date(Math.max(Date.now(), owned.updatedAt.getTime() + 1)) })
       .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, userId)));

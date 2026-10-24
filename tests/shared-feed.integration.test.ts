@@ -41,7 +41,15 @@ test('one direct LIKE atomically copies bytes, creates personal Post, binding pu
  assert.equal((await db.select().from(schema.swipeDecisionReceipts)).length,1);for(const p of await db.select().from(schema.publications))assert.equal(p.socialBindingRevision,1);
  assert.equal((await api.listSharedFeed(request(owner,'GET'))).length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);
 });
-test('DISLIKE is private and writes no copy, Post, bytes or job; other USER remains independent',async()=>{await decide(intent('DISLIKE'));assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.equal(puts.length,0);assert.equal(mirrors.length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);await decide(intent('DISLIKE',other),other);assert.equal((await counts()).receipts,2);});
+test('DISLIKE creates an independent private archive but no Post, publication or job',async()=>{
+ const input=intent('DISLIKE'),saved=await decide(input);assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:1});assert.equal(puts.length,1);assert.equal(mirrors.length,0);
+ const [copy]=await db.select().from(schema.libraryItems).where(eq(schema.libraryItems.id,saved.receipt.personalItemId!));assert.equal(copy.userId,owner);assert.equal(copy.status,'ARCHIVED');
+ assert.deepEqual((await decide(input)).receipt,saved.receipt);assert.equal(puts.length,1);
+ assert.equal((await api.listSharedFeed(request(owner,'GET'))).length,0);assert.equal((await api.listSharedFeed(request(other,'GET'))).length,1);
+ await decide(intent('DISLIKE',other),other);assert.equal((await counts()).receipts,2);assert.equal((await counts()).copies,2);
+ await db.delete(schema.sharedLibraryItems).where(eq(schema.sharedLibraryItems.id,shareId));
+ assert.equal((await db.select().from(schema.libraryItems).where(eq(schema.libraryItems.id,copy.id)))[0].status,'ARCHIVED');
+});
 test('same operation concurrent replay is identical; changed payload and different key conflict',async()=>{const input=intent();const [a,b]=await Promise.all([decide(input),decide(input)]);assert.deepEqual(a.receipt,b.receipt);assert.equal(Number(a.replayed)+Number(b.replayed),1);await assert.rejects(decide({expectedActorId:input.expectedActorId,operationId:input.operationId,shareId:input.shareId,sourceRevision:input.sourceRevision,decision:'DISLIKE'}),code('SHARED_FEED_OPERATION_CONFLICT'));await assert.rejects(decide({...input,operationId:randomUUID()}),code('SHARED_FEED_ALREADY_DECIDED'));assert.equal((await counts()).posts,1);assert.equal(puts.length,1);});
 test('different concurrent keys produce exactly one outcome',async()=>{const results=await Promise.allSettled([decide(),decide()]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal((await counts()).posts,1);assert.equal(puts.length,1);});
 test('stale revision and unshared opaque source fail before copy; historical replay survives source deletion',async()=>{await assert.rejects(decide({...intent(),sourceRevision:'2026-10-18T10:00:00.000Z'}),code('SHARED_FEED_SOURCE_STALE'));const input=intent(),saved=await decide(input);await db.delete(schema.libraryItems).where(eq(schema.libraryItems.id,'shared-source'));assert.deepEqual((await decide(input)).receipt,saved.receipt);await assert.rejects(decide(intent('DISLIKE',other),other),code('SHARED_SOURCE_UNAVAILABLE'));assert.equal(puts.length,1);});
@@ -113,8 +121,10 @@ for(const decision of ['LIKE','DISLIKE'])test(`stale owner A ${decision} intent 
 test('actor precondition wins before historical same-operation replay',async()=>{
  const inputA=intent('DISLIKE'),inputB={...inputA,expectedActorId:other};
  await api.commitSharedFeedDecision(request(other),inputB,options);
+ const before=await counts(),beforePuts=[...puts];
+ assert.deepEqual(before,{posts:0,receipts:1,publications:0,copies:1});assert.equal(beforePuts.length,1);
  await assert.rejects(api.commitSharedFeedDecision(request(other),inputA,options),code('SHARED_FEED_ACTOR_CHANGED'));
- assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:0});assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+ assert.deepEqual(await counts(),before);assert.deepEqual(puts,beforePuts);assert.deepEqual(mirrors,[]);
 });
 test('HTTP actor precondition permits matching context but rejects a switched cookie without receipt',async()=>{
  const route=await import('../app/api/shared-feed/decisions/route.ts');
@@ -122,6 +132,7 @@ test('HTTP actor precondition permits matching context but rejects a switched co
  const mismatch=await send(inputA);assert.equal(mismatch.status,409);assert.equal((await mismatch.json()).code,'SHARED_FEED_ACTOR_CHANGED');
  assert.deepEqual(await counts(),{posts:0,receipts:0,publications:0,copies:0});
  const missing=structuredClone(inputA) as Partial<typeof inputA>;delete missing.expectedActorId;assert.equal((await send(missing)).status,422);
- const matching=await send({...inputA,expectedActorId:other});assert.equal(matching.status,201);assert.equal((await matching.json()).receipt.operationId,inputA.operationId);
- assert.deepEqual(puts,[]);assert.deepEqual(mirrors,[]);
+ const matching=await send({...inputA,expectedActorId:other});assert.equal(matching.status,201);const receipt=(await matching.json()).receipt;assert.equal(receipt.operationId,inputA.operationId);
+ const [archived]=await db.select().from(schema.libraryItems).where(eq(schema.libraryItems.id,receipt.personalItemId));assert.equal(archived.userId,other);assert.equal(archived.status,'ARCHIVED');
+ assert.equal(puts.length,1);assert.deepEqual(await counts(),{posts:0,receipts:1,publications:0,copies:1});assert.deepEqual(mirrors,[]);
 });

@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '../../../db/index.ts';
 import { sessions, users } from '../../../db/schema.ts';
 import { getOwnerEmail } from '../env.ts';
+import { hasManualAccess } from '../../manual-access.ts';
 
 export class ForbiddenError extends Error {
   constructor() { super('Forbidden'); this.name = 'ForbiddenError'; }
@@ -59,7 +60,7 @@ export async function hasOwnerProviderAccess(userId: string): Promise<boolean> {
 export async function beginOwnerProviderHandoff<T>(userId:string,start:()=>Promise<T>) {
   return getDb().transaction(async tx=>{
     const [user]=await tx.select().from(users).where(eq(users.id,userId)).for('update');
-    if(!user || user.email!==getOwnerEmail() || !user.authInitialized || user.accessState!=='ACTIVE') return null;
+    if(!user || user.email!==getOwnerEmail() || !user.authInitialized || user.accessState!=='ACTIVE' || !hasManualAccess(user)) return null;
     const outcome=start().then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
     return {outcome};
   });

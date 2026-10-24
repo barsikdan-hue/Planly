@@ -19,6 +19,7 @@ async function fixture(context:BrowserContext,page:Page) {
   if(!url.pathname.startsWith('/api/'))return route.continue();
   const respond=(body:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'cache-control':'private, no-store'}});
   if(request.method()==='GET' && url.pathname==='/api/bootstrap')return respond(snapshot);
+  if(request.method()==='GET' && url.pathname==='/api/access')return respond({expiresAt:null,canPublish:true});
   if(request.method()==='GET' && ['/api/admin/invitations','/api/admin/users'].includes(url.pathname))return respond({error:'Forbidden'},403);
   if(request.method()==='POST' && /^\/api\/social-connections\/(accounts\/fixture-(telegram|max)\/(start|enable|pause|release)|providers\/(telegram|max)\/proof|preview|confirm)$/.test(url.pathname)) {
    expect(request.headers()['x-planly-social-connection']).toBe('1');expect(request.headers()['content-type']).toContain('application/json');

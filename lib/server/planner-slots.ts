@@ -1,10 +1,12 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../../db/index.ts';
-import { posts, postTargets, publications, socialAccounts, users } from '../../db/schema.ts';
+import { posts, postTargets, publications, socialAccounts } from '../../db/schema.ts';
 import { toDbProvider, type Provider } from '../contracts/planner.ts';
 import { slotQuerySchema, type SlotQuery } from '../contracts/swipe-planner.ts';
 import { findNextSlot, slotMinuteKey } from '../planner-slots.ts';
 import { ZodError } from 'zod';
+import { requireManualWrite } from './auth/manual-access.ts';
+import { users } from '../../db/schema.ts';
 
 export type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 // Construct only at a known precommit validation boundary, never from a generic catch.
@@ -21,8 +23,9 @@ export class PlannerAccountUnavailableError extends Error {
 }
 
 // One lock order for every Post create/update: owner → source/Post → publication.
-export async function lockOwnerSchedule(tx: Transaction, userId: string): Promise<void> {
-  const [owner] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1).for('update');
+export async function lockOwnerSchedule(tx: Transaction, userId: string, allowCancellation = false): Promise<void> {
+  if (!allowCancellation) { await requireManualWrite(tx, userId); return; }
+  const [owner] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
   if (!owner) throw new Error('Owner not found');
 }
 
