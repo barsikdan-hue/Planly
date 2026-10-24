@@ -1,19 +1,33 @@
 # Lentaro — current project state
 
-## Active candidate — 24 October 2026
+## Current staging — 24 October 2026
 
-Owner accepted the delivery master prompt. Work continues in isolated branch
-`codex/agent-catalog-decision-loop-20261024`, PR75, base4fc764a. This entrypoint
-records this candidate; older source/runtime tables below are historical.
-Current queue and decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).
-Candidate scope: admin schedule privacy/Moscow time; single-use password reset;
-manual expiry/unlimited; confirmed account deletion with durable external cleanup;
-reusable personal content and actual personal archive from shared-feed rejection;
-bounded repeatable catalog import. Source tests/CI/review remain separate gates.
-Existing staging is not changed by this source work. Merge, persistent migrations,
-deploy, secrets/infra and real provider sends are not authorized by this checkpoint.
-Owner decisions: after10MSK use next free10MSK; full account/data deletion only
-after confirmation of the specific target. No live account was deleted.
+Owner confirmed the bounded staging release packet. PR75 merged as
+`dc7c66a8c3a06e11baafe10f1fcd410b2d3ad55f`; its tree equals tested source1ea423a.
+Main CI40087206182 and Self-host40087206247 SUCCESS. Existing VPS staging now runs
+image `sha256:4d952a060f2829562004fedc3422777776553004e37c8ccb6bf2fd0862921c6b`,
+source1ea423a, one web/one worker. Backup, isolated restored migration rehearsal,
+actual migrations0017–0020 once and data/schema/sequence preservation verified.
+Ledger21, three approved catalog posts imported/replayed without duplicates.
+Public HTTP ADMIN+two USER core acceptance and IAB desktop flows passed. Exact
+synthetic actors/files cleaned; prior users/sessions preserved; publications0.
+Two bot tokens and supplied bot URLs/public origin wired without exposing values.
+Full native connection/send/Owner acceptance is unfinished; no production or send.
+
+A real importer403 behind TLS proxy was reproduced with the existing origin guard;
+one runner metadata header fixes it, regression4/4 PASS. Follow-up source branch
+`codex/saas-staging-acceptance-20261024` is based on mergedmain, not the old root.
+Fresh provider DNS failure proved existing Docker network internal=true; Owner
+then explicitly authorized extra egress only for web/worker and read-only checks
+of the two named bots/channels. Egress applied, private DB/storage network intact;
+Owner also separately approved the verified public MAX CA read-only mount and
+NODE_EXTRA_CA_CERTS. Standard Node MAX/me200 confirms bot identity/TLS. Telegram
+TCP/TLS fails from host and container; MAXchannel alias404 remains unresolved,
+and native Mini App registration/USER control/send remain unverified.
+
+Fresh evidence and remaining gates: [staging release](docs/verification/2026-10-24-saas-staging-release.md).
+Queue/decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).
+The source/runtime tables below are historical and must not override this entry.
 
 Updated 2026-10-19. Read this entrypoint and its environment boundaries before work; check relevant drift and existing code/active PRs. The completed audit is historical evidence, not a task to repeat.
 

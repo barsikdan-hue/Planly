@@ -55,3 +55,20 @@ test('unknown upload outcome is retained and cannot be blindly uploaded again', 
   await assert.rejects(importer.runCatalogImport(options), /UPLOAD_OUTCOME_UNKNOWN/);
   assert.equal(uploads, 1);
 });
+
+// A deployed Next server behind TLS termination has an internal listen URL.
+test('catalog mutations satisfy the existing reverse-proxy same-origin guard', async () => {
+  const { requireSameOriginMutation } = await import('../lib/server/auth/access.ts');
+  const f = await fixture(); const writes = [];
+  await importer.runCatalogImport({ ...f, apply: true, baseUrl: 'https://stage.example.test', session: 'synthetic-admin-session', fetchImpl: async (url, init = {}) => {
+    const path = new URL(url).pathname;
+    assert.equal(new URL(url).origin, 'https://stage.example.test');
+    assert.equal(init.redirect, 'error');
+    if (init.method !== 'POST') return Response.json(path === '/api/profile' ? { id: 'admin' } : { users: [] });
+    try { requireSameOriginMutation(new Request('http://0.0.0.0:3000' + path, { method: init.method, headers: init.headers })); }
+    catch { return Response.json({ error: 'Forbidden' }, { status: 403 }); }
+    writes.push(path);
+    return Response.json(path === '/api/media' ? { id: 'media' } : path === '/api/library-items' ? { id: 'item' } : { shared: true });
+  } });
+  assert.deepEqual(writes, ['/api/media', '/api/library-items', '/api/admin/shared-library/item']);
+});

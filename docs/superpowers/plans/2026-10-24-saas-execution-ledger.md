@@ -1,6 +1,13 @@
 # SaaS execution ledger — master prompt 24 October 2026
 
-Authority: direct Owner acceptance of the master prompt in this chat. Source work,
+Current24October release: Owner separately confirmed PR75 merge, backup/rehearsal,
+0017–0020/staging rollout, private two-token transfer/Mini App config, three-post
+import and nonce-owned ADMIN+two USER acceptance. These executed operations are
+recorded in the [staging report](../../verification/2026-10-24-saas-staging-release.md).
+Owner additionally approved web/worker provider egress and named bot/channel
+read-only checks; production and sends remain gated.
+
+Initial source authority: direct Owner acceptance of the master prompt in this chat. Source work,
 tests, commit/push and Draft PR updates are authorized; merge, persistent migrations,
 deploy, secrets/infra and real provider operations retain separate gates.
 
