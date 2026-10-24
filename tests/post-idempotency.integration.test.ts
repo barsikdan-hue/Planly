@@ -38,7 +38,7 @@ test('concurrent POST retries with one key create one post and one publication',
   const bodies = await Promise.all(responses.map(response => response.json()));
   assert.ok(responses.every(response => response.status === 201));
   assert.equal(new Set(bodies.map(body => body.id)).size, 1);
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
+  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
   assert.equal((await getDb().select().from(publications)).filter(post => post.userId === owner).length, 1);
 });
 
@@ -82,7 +82,7 @@ test('a rejected first request can be corrected using its uncommitted key', asyn
 
 test('malformed creation key is rejected before persistence', async () => {
   assert.equal((await POST(request(original, 'not-a-uuid'))).status, 422);
-  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 1);
+  assert.equal((await getDb().select().from(posts)).filter(post => post.userId === owner).length, 0);
 });
 
 test('replaying creation does not repeat queue reconciliation or mirroring', async () => {
@@ -169,15 +169,18 @@ test('a fresh key returning a USED source creates an independent Post and remain
   assert.equal(firstPost.creationKey, key);
   assert.ok(firstPost.creationInputHash);
   const newKey = '674bb716-4d57-4c2d-ad57-7c74d416a880';
+  let newPostId = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     const replay = await POST(request(body, newKey));
     assert.equal(replay.status, 201);
-    assert.equal((await replay.json()).id, first.id);
+    const replayBody = await replay.json();
+    if (!newPostId) newPostId = replayBody.id;
+    assert.equal(replayBody.id, newPostId);
   }
   const postsAfterReplay = (await getDb().select().from(posts)).filter(post => post.userId === owner);
   assert.equal(postsAfterReplay.length, 2);
   assert.ok(postsAfterReplay.some(post => post.id === first.id && post.creationKey === key));
-  assert.ok(postsAfterReplay.some(post => post.id !== first.id && post.creationKey === newKey));
+  assert.ok(newPostId !== first.id && postsAfterReplay.some(post => post.id === newPostId && post.creationKey === newKey));
   assert.equal((await getDb().select().from(libraryItems)).find(item => item.id === 'idempotency-source-b')?.status, 'READY');
   assert.equal((await POST(request({ ...body, baseText: 'Changed canonical request' }))).status, 409);
   assert.equal((await POST(request({ ...body, sourceLibraryItemId: 'idempotency-source-b' }))).status, 409);

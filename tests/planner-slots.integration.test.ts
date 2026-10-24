@@ -268,7 +268,7 @@ test('marked cutoff accepts exactly sixty seconds and rejects fifty-nine; scoped
   await getDb().update(socialAccounts).set({enabled:false}).where(eq(socialAccounts.id,'slot-tg'));
   assert.equal((await createPost(owner,input,opts)).id,saved.id);
   await assert.rejects(()=>createPost(owner,input,{...opts,swipeReview:{inputMethod:'keyboard'}}),{name:'CreationConflictError'});
-  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:'88888888-8888-4888-8888-888888888888'}),{name:'LibrarySourceConflictError'});
+  await assert.rejects(()=>createPost(owner,input,{...opts,creationKey:'88888888-8888-4888-8888-888888888888'}),{name:'PlannerAccountUnavailableError'});
 });
 
 async function waitForLock(gate: Client, table: string) {

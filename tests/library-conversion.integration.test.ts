@@ -139,7 +139,7 @@ test('USED source whose Post was deleted can create a second source Post', async
   const second = await createPost(owner, input, { ...noMirror, sourceLibraryItemId: item.id });
   assert.notEqual(second.id, first.id);
   assert.equal((await listLibraryItems(owner))[0].status, 'USED');
-  assert.equal((await listLibraryItems(owner))[0].sourcePostId, null);
+  assert.equal((await listLibraryItems(owner))[0].sourcePostId, second.id);
   assert.deepEqual((await ownerPosts()).map(post => post.id), [second.id]);
 });
 
@@ -157,7 +157,7 @@ test('two concurrent conversions with different keys produce two source Posts', 
   const keys = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
   assert.ok(rows.every(row => keys.includes(row.creationKey!) && row.creationInputHash && row.sourceLibraryItemId === item.id));
   assert.equal((await listLibraryItems(owner))[0].status, 'USED');
-  assert.equal((await getDb().select().from(publications)).length, 0);
+  assert.equal((await getDb().select().from(publications)).length, 2);
   assert.equal(mirrors, 2);
 });
 

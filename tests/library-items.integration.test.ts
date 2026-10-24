@@ -151,6 +151,6 @@ test('conditional Library archive preserves ordered media and allows USED source
   const [used] = await listLibraryItems(ownerA);
   const archivedUsed = await archiveLibraryItem(ownerA, used.id, used.updatedAt);
   assert.equal(archivedUsed.status, 'ARCHIVED');
-  assert.deepEqual(await listLibraryItems(ownerA), []);
+  assert.deepEqual(await listLibraryItems(ownerA), [archivedUsed]);
   assert.deepEqual(await getDb().select().from(posts), []);
 });
