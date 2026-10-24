@@ -70,7 +70,7 @@ test('opposite concurrent decisions commit one vote and one receipt',async()=>{
 });
 test('legacy conversion and reusable fresh-key creation fabricate no feedback',async()=>{
  const item=await source(),opts=like(item);const post=await createPost(owner,input,{...opts,swipeReview:undefined});assert.equal((await summary()).aggregate.total,0);
- const [currentItem]=await listLibraryItems(owner);const second=await createPost(owner,input,like(currentItem));assert.notEqual(second.id,post.id);assert.equal((await summary()).aggregate.total,0);
+ const [currentItem]=await listLibraryItems(owner);const second=await createPost(owner,input,{...like(currentItem),requireFreeSlot:false});assert.notEqual(second.id,post.id);assert.equal((await summary()).aggregate.total,0);
  // Simulate Task2's marked Post before receipts existed, without inventing history.
  const {creationInputHash}=await import('../lib/server/post-idempotency.ts');
  await getDb().update(posts).set({creationInputHash:creationInputHash(input,item.id,opts)}).where(eq(posts.id,post.id));
