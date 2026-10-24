@@ -8,7 +8,7 @@ Owner additionally approved web/worker provider egress and named bot/channel
 read-only checks, then verified public MAX CA configuration. Both operations
 executed with no-send preconditions; MAX bot/TLS200 and canonical channel bot rights
 validated. One separately approved MAX Mini App URL save persisted; Published
-status retained. Native human consent/return and sends remain unverified. Current follow-up branch: codex/saas-staging-acceptance-20261024, PR76.
+status retained. Native MAX USER consent/return and separately approved enable now PASS on staging; real sends remain unverified. Current follow-up branch: codex/saas-staging-acceptance-20261024, PR76.
 Production and sends remain gated.
 
 Initial source authority: direct Owner acceptance of the master prompt in this chat. Source work,
@@ -41,7 +41,7 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
 | S1d | Confirmed complete deletion | CORE_STAGING_PASS | Wrong-email403, UI cancel; exact owned A/B deletion and real worker task/file cleanup0. No real-user deletion. |
 | S2 | Archive/cancel/reuse/MSK | PARTIAL | Staging independent archive/replay/private image/reload/explicit return PASS. Calendar/cancel/reuse handoff still needs native connected USER; source CI PASS. |
 | S3 | Catalog/update pipeline | STARTER_STAGING_PASS | Three Owner-approved posts imported and same-journal replayed, no duplicates; original bytes retained. Full monthly volume not inferred. |
-| S4 | Delivery | BLOCKED_EXTERNAL | Approved egress/CA applied; MAX bot200 and canonical channel bot-rights validation PASS; MAX Mini App URL saved once with approval. Telegram VPS TCP/TLS fails while Windows same-IP TLS passes; exact upstream cause unproven. Native USER consent/return and separate sends pending. |
+| S4 | Delivery | BLOCKED_EXTERNAL | Approved egress/CA applied; MAX bot200 and canonical channel bot-rights validation PASS; MAX Mini App URL saved once with approval. Telegram VPS TCP/TLS fails while Windows same-IP TLS passes; exact upstream cause unproven. MAX real USER native consent/return/enable PASS. Telegram and separately approved send acceptance pending. |
 | S5 | Security and browser acceptance | PARTIAL | PR75 CI/native/browser/self-host PASS; actual public HTTP ADMIN/A/B and desktop PASS, fixtures cleaned. Live mobile/native provider return/Owner acceptance pending. |
 | S6 | Release and handoff | STAGING_RELEASED / HANDOFF_PARTIAL | Backup/restored rehearsal/migrations0017–0020/deploy complete; preserved data. Production/off-VM recovery/provider acceptance unfinished. PR76 runner fix reviewed; c4e75b CI40105645605/Self-host40105645580 SUCCESS. Later evidence-only update retains separate exact-head checks; merge pending. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |

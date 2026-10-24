@@ -26,8 +26,9 @@ TCP/TLS fails from host and container, while the owner Windows client verifies T
 to the same IP. MAX canonical channel -78857616977254 was found in project scripts
 and the old authenticated UI; the actual staging connector validates bot rights.
 Owner approved one MAX Mini App URL save: the stage /social-connections/miniapp/max
-URL persists and the bot remains Published. Native USER consent/return and sends
-remain unverified. Follow-up c4e75b CI40105645605 and Self-host40105645580 SUCCESS.
+URL persists and the bot remains Published. Real USER invitation/activation,
+native MAX consent/return, reload persistence and separately approved enable PASS.
+No sends or scheduled publications created; real delivery remains unverified. Follow-up c4e75b CI40105645605 and Self-host40105645580 SUCCESS.
 
 Fresh evidence and remaining gates: [staging release](docs/verification/2026-10-24-saas-staging-release.md).
 Queue/decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).

@@ -205,3 +205,23 @@ Remaining: approved working VPS-to-Telegram connectivity; original-session
 native USER consent/enable and return; Telegram cabinet registration readback.
 Real sends remain a later exact destination/material/limit gate. Live mobile and
 production acceptance are still not claimed.
+
+## Native MAX agent connection acceptance
+
+Owner selected a separate real agent email; standard one-use invitation was
+created without email transmission. Owner entered credentials and activated
+the account personally. The ordinary USER settings expose verified-user Mini App
+flow; the legacy owner account was not used as a substitute.
+
+Staging start validated canonical MAX channel -78857616977254 and opened the
+provider launch. Owner completed actual MAX authentication and native consent.
+The finish document confirms the correct agent, human and channel with
+VERIFIED_DISABLED. Return to the original staging session and settings reload
+retained confirmed-disabled state. Owner then explicitly authorized enabling
+this exact MAX channel without sends. One switch operation rechecked rights
+and returned Enabled. No message or scheduled publication was created.
+
+This proves native onboarding/return/enable for one real USER on staging, not
+real delivery, two-user channel transfer, Telegram, mobile layouts or production.
+Real sends remain separately gated. Head cbb3179 CI40107130009 and
+Self-host40107130045 both completed SUCCESS before this evidence-only update.
