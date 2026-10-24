@@ -22,8 +22,12 @@ then explicitly authorized extra egress only for web/worker and read-only checks
 of the two named bots/channels. Egress applied, private DB/storage network intact;
 Owner also separately approved the verified public MAX CA read-only mount and
 NODE_EXTRA_CA_CERTS. Standard Node MAX/me200 confirms bot identity/TLS. Telegram
-TCP/TLS fails from host and container; MAXchannel alias404 remains unresolved,
-and native Mini App registration/USER control/send remain unverified.
+TCP/TLS fails from host and container, while the owner Windows client verifies TLS
+to the same IP. MAX canonical channel -78857616977254 was found in project scripts
+and the old authenticated UI; the actual staging connector validates bot rights.
+Owner approved one MAX Mini App URL save: the stage /social-connections/miniapp/max
+URL persists and the bot remains Published. Native USER consent/return and sends
+remain unverified. Follow-up c4e75b CI40105645605 and Self-host40105645580 SUCCESS.
 
 Fresh evidence and remaining gates: [staging release](docs/verification/2026-10-24-saas-staging-release.md).
 Queue/decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).

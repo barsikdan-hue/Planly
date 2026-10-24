@@ -176,13 +176,32 @@ and TLS evidence, not USER/channel/native/send acceptance.
 Latest web913bdf5ba9c19cc6a40e4985897088bd8608bc00cb0145e2566e09d8a5d6b42a;
 worker553251bd8a4a27f2555d2ffa1ff11e5fab1029e38824b279ffc2bf6fe0767e3f.
 Both retain exact4d952a image. No provider sends, uploads or subscription mutations.
-MAX public-link probes with/without@ returned404. IAB public page confirmed
-«Данил | Недвижимость у моря» at the exact supplied link;404 alone cannot establish
-bot membership, rights or channel absence. Need the numeric channel ID and current
-native Mini App setup. No broad chat/event polling or fabricated USER proof.
+MAX public-link probes with/without@ returned404; this was resolved using the
+canonical numeric channel ID rather than changing the connector. Project scripts
+scripts/max-live-planly-e2e.mjs:24, max-live-text.mjs:5 and max-live-media.mjs:6
+contain -78857616977254. These send scripts were only read, never executed.
+The old authenticated Planly settings independently show this MAX channel and
+Telegram -1004390954741. Actual staging createMaxConnector.validate against
+-78857616977254 returned ok:true and the expected channel display name. This
+confirms bot/channel rights, not native human consent or message delivery.
 
-Remaining: establish a working approved VPS→Telegram route, obtain MAXnumericID
-and actual bot/human channel control, read back existing Mini App registrations
-before switching their URLs, then original-session native USER consent/enable.
+MAX business cabinet initially showed an empty Mini App URL and warned that
+changes require repeat moderation. Owner explicitly approved ONE save of
+https://stage.lentaro.ru/social-connections/miniapp/max. Save was clicked exactly
+once. Reload/reopening settings confirms the exact URL, disabled Save and bot
+status Published. Existing button/group-invite settings retained. No token,
+webhook, subscription, role or message changes. Native signed launch/consent/
+return in the original Planly session remains unverified.
+
+An independent owner Windows TLS connection to the same Telegram IPv4
+149.154.166.110 succeeded with certificate verification. VPS host/container fail
+to connect to this IP. Exact upstream cause remains unproven; no speculative
+proxy, firewall, timeout or application change was made.
+
+Follow-up source c4e75b: CI40105645605 and Self-host40105645580 SUCCESS.
+This later report update changes evidence only; exact-head CI is tracked on PR76.
+
+Remaining: approved working VPS-to-Telegram connectivity; original-session
+native USER consent/enable and return; Telegram cabinet registration readback.
 Real sends remain a later exact destination/material/limit gate. Live mobile and
 production acceptance are still not claimed.
