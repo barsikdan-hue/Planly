@@ -80,8 +80,34 @@ The phase statuses and evidence below describe the historical single-owner MVP a
 | 8 | Analytics | PARTIALLY ACCEPTED / TELEGRAM HOLD; MAX two-post collection and CSS verified in production; Telegram deferred by Owner 2026-10-09 |
 | 9 | Scheduling automation | DONE / PRODUCTION ACCEPTED 2026-10-09; atomic two-draft production receipt, reload, duplicate 0, provider sends 0 and safe cleanup PASS |
 | 10 | Target hosting optimization | Only when proven necessary; separate owner gate for infrastructure changes |
+| 11 | Planly Team 100: isolated user accounts and shared content library | FUTURE / CONTENT-SHARING MODEL APPROVED 2026-10-12; design and implementation require separate Owner gates after current product stabilization |
 
 AI is REMOVED from the product roadmap, not deferred or optional.
+
+
+## Future Phase 11 — Planly Team 100 (decision 2026-10-12)
+
+**Status:** FUTURE / NOT STARTED. Owner approved the **shared-library model**, not the full technical design, implementation, migrations, release or infrastructure changes. This is a planning record only; current milestone and existing HOLD decisions remain unchanged.
+
+**Product goal:** extend the existing single-owner Planly into one private application for up to approximately 100 colleagues, with separate personal workspaces and one centrally maintained library of reusable content. Do not create 100 installations, duplicate sites or a corporate SaaS platform.
+
+**Approved content-sharing behavior:**
+- An administrator publishes and periodically refreshes common content selections (for example, one monthly batch). Eligible users see the same shared library entries in a dedicated area.
+- Viewing or adding items to the shared library does **not** generate 100 personal posts, drafts or scheduled jobs. No automatic mass publication or automatic posting on a user's behalf.
+- Each colleague explicitly selects a shared item to use. Only then is an independent personal draft/snapshot created for editing, per-network adaptation and manual or individually approved scheduling through the existing Planly workflow.
+- Updating, withdrawing or versioning shared content must not silently overwrite a user's existing draft, scheduled post, published post or historical metrics. Define precise version/media behavior in the subsequent design before implementation.
+
+**Target capabilities to design (not yet approved for implementation):**
+- Invitation/onboarding and account lifecycle for up to 100 users; start with minimal ADMIN and USER access, not teams or complex RBAC.
+- Server-enforced isolation of each user's credentials, social connections, posts, drafts, personal library, calendar, schedule/jobs, private media and analytics; no cross-user access through API, URLs, media previews, queue or reporting.
+- A lightweight admin dashboard for users, shared content, invitations, and privacy-safe operational status. No blanket access to colleagues' private credentials or unpublished content.
+- Reuse the current PostgreSQL, publication connectors, scheduler/worker and media infrastructure where viable; prove multi-user suitability from actual code, not assumptions. No new infrastructure solely because the target is 100 accounts.
+- Load and isolation acceptance in progressive cohorts (5 → 20 → 50 → 100 accounts), covering concurrent publishing, provider rate limits, retries, duplicate protection, session security, recovery, backups and resource/cost estimates.
+
+**Design decisions still requiring explicit owner approval:** invitations and account recovery; exactly what administrators can see of personal account health/metrics; shared-library editing/moderation and media/version rights; user-visible content attribution; quotas/retention; deployment capacity and costs; terms/privacy. Do not infer these from approval of the content-sharing model.
+
+**Entry gate:** after the personal Planly core is stable and the Owner selects Phase 11 as the next milestone. Follow AGENTS.md Harness, inspect current auth/schema/API/worker/media paths, write a scoped spec and migration/rollback plan, prove isolation tests and load test hypotheses; obtain separate human gates for product rules, database changes, secrets, infrastructure, merge and deploy.
+
 
 ## Production analytics acceptance and deferred work — 2026-10-09
 
