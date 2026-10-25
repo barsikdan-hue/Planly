@@ -55,10 +55,31 @@ function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | 
 }
 
 function webpDimensions(bytes: Uint8Array): { width: number; height: number } | null {
-  if (bytes.length < 30 || ascii(bytes, 12, 4) !== 'VP8X') return null;
-  const width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
-  const height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
-  return { width, height };
+  if (bytes.length < 20) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const riffSize = view.getUint32(4, true);
+  const chunkSize = view.getUint32(16, true);
+  const chunkEnd = 20 + chunkSize;
+  if (riffSize + 8 !== bytes.length || (riffSize & 1) !== 0 || chunkEnd + (chunkSize & 1) > bytes.length) return null;
+  if ((chunkSize & 1) !== 0 && bytes[chunkEnd] !== 0) return null;
+  const format = ascii(bytes, 12, 4);
+  if (format === 'VP8X') {
+    if (chunkSize !== 10) return null;
+    return {
+      width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+      height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16),
+    };
+  }
+  if (format === 'VP8 ') {
+    if (chunkSize < 10 || (bytes[20] & 1) !== 0 || bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    return { width: view.getUint16(26, true) & 0x3fff, height: view.getUint16(28, true) & 0x3fff };
+  }
+  if (format === 'VP8L') {
+    if (chunkSize < 5 || bytes[20] !== 0x2f || (bytes[24] & 0xe0) !== 0) return null;
+    const dimensions = view.getUint32(21, true);
+    return { width: 1 + (dimensions & 0x3fff), height: 1 + ((dimensions >>> 14) & 0x3fff) };
+  }
+  return null;
 }
 
 function matchesSignature(type: AllowedMime, bytes: Uint8Array): boolean {
