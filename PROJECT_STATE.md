@@ -1,5 +1,15 @@
 # Lentaro — current project state
 
+## Telegram network handoff - 26 October 2026
+
+Fresh host packet capture: SYN leaves ens3 toTelegram149.154.166.110:443,
+no inbound reply; Windows same-IP verifiedTLS1.3. Exact dropping operator remains
+unproven. Actual provider NewVPS confirmed by Owner and authenticated service
+Start#1319/vm1319/IP62.173.149.73. One separately authorized technical ticket35
+registered07:45:37MSK, Under consideration. No server/network/code changes,
+new provider sends or paid operations. Telegram remains unfinished.
+Evidence: [network incident/ticket](docs/verification/2026-10-26-telegram-vps-network.md).
+
 ## Follow-up acceptance - 26 October 2026
 
 ADMIN real-agent reschedule10:00 to07:36MSK/reload PASS; published fields locked,
