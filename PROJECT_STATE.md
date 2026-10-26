@@ -1,5 +1,23 @@
 # Lentaro — current project state
 
+## Mobile ADMIN follow-up - 26 October 2026
+
+Staging owner browser at 320x740: mobile menu -> Settings -> Admin -> Users
+renders readable controls. Opening Delete agent for barsikdan showed irreversible
+warning, email confirmation and disabled submit; Cancel closed confirmation and
+agent remained listed. No reset, deletion, access update or invitation issued.
+Invitations page readable at 320x740 and 390x844, existing activated invitation
+visible; console error/warn list empty. These checks cover presentation/navigation
+and safe cancellation, not new password-reset/expiry/deletion execution or native
+mobile provider consent.
+
+Found onboarding copy still describing left swipe as hide, contrary to approved
+archive behavior. Minimal source-only correction in lentaro-start.tsx changes
+that sentence to archive; no handlers/schema/provider changes. Staging still runs
+prior image and has not received this copy correction. Telegram work paused by
+Owner while independent SaaS acceptance continues.
+
+
 ## Telegram network handoff - 26 October 2026
 
 Fresh host packet capture: SYN leaves ens3 toTelegram149.154.166.110:443,

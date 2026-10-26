@@ -134,3 +134,12 @@ only existing pg symlink. This proves artifact contents, not staging deployment.
 26October follow-up: [ADMIN, mobile and scheduled MAX](../../verification/2026-10-26-saas-admin-scheduled-mobile.md). No implementation/deploy changes.
 
 Telegram26Oct: actual providerNewVPS identified (RIPE registration alone was not billing authority); one Owner-authorized ticket35 registered07:45:37MSK/Under consideration. SYN-only capture onens3 and Windows same-IP TLS control attached as text. No fix/infrastructure mutation. [Evidence](../../verification/2026-10-26-telegram-vps-network.md).
+
+26October next S5 slice: owner mobile320 navigation/settings/ADMIN user controls,
+Delete confirmation disabled without email and safe Cancel PASS; invitation page
+320/390 readable, console clear. No mutations to agents/invitations or provider
+sends. Password-reset/expiry/deletion execution and native mobile consent remain
+separate from this presentation check. One source-only onboarding sentence now
+says left swipe archives; staging has not been redeployed.
+
+Copy correction: targeted ESLint PASS, typecheck PASS, git diff --check PASS; independent read-only Critic: no findings. No separate test added for a text-only correction. Exact-head Linux build/CI and deployed copy acceptance remain separate.
