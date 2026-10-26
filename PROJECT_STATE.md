@@ -1,6 +1,15 @@
 # Lentaro — current project state
 
-## Current staging — 24 October 2026
+## Fresh acceptance - 26 October 2026
+
+Real USER staging calendar27Oct10:00MSK retained after reload; Save draft cancelled
+its publication with attempt0. USED-source reuse created a second draft. Owner then
+approved exactly one real MAX image post; PUBLISHED receipt/attempt1 and actual
+public page confirm delivery. Nonterminal publications0, catalog3, runtime unchanged.
+Telegram VPS timeout persists. Production and additional sends remain gated.
+Evidence: [calendar and real MAX](docs/verification/2026-10-26-saas-calendar-max-live.md).
+
+## Historical staging - 24 October 2026
 
 Owner confirmed the bounded staging release packet. PR75 merged as
 `dc7c66a8c3a06e11baafe10f1fcd410b2d3ad55f`; its tree equals tested source1ea423a.

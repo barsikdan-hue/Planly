@@ -39,10 +39,10 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
 | S1b | Safe password reset | CORE_STAGING_PASS | Actual public HTTP one-use reset, replay410, old-session401/new login; desktop ADMIN controls. Live mobile pending. |
 | S1c | Manual expiry/unlimited access | CORE_STAGING_PASS | Public HTTP expired reads/write403 and unlimited verified. Final provider handoff remains source CI evidence until S4. |
 | S1d | Confirmed complete deletion | CORE_STAGING_PASS | Wrong-email403, UI cancel; exact owned A/B deletion and real worker task/file cleanup0. No real-user deletion. |
-| S2 | Archive/cancel/reuse/MSK | PARTIAL | Staging independent archive/replay/private image/reload/explicit return PASS. Calendar/cancel/reuse handoff still needs native connected USER; source CI PASS. |
+| S2 | Archive/cancel/reuse/MSK | PARTIAL | Staging independent archive/replay/private image/reload/explicit return PASS. 26Oct real USER manual calendar/reload, Save-draft cancellation (CANCELLED/attempt0), USED-source reuse PASS. Nearest-free-slot target case remains. |
 | S3 | Catalog/update pipeline | STARTER_STAGING_PASS | Three Owner-approved posts imported and same-journal replayed, no duplicates; original bytes retained. Full monthly volume not inferred. |
-| S4 | Delivery | BLOCKED_EXTERNAL | Approved egress/CA applied; MAX bot200 and canonical channel bot-rights validation PASS; MAX Mini App URL saved once with approval. Telegram VPS TCP/TLS fails while Windows same-IP TLS passes; exact upstream cause unproven. MAX real USER native consent/return/enable PASS. Telegram and separately approved send acceptance pending. |
-| S5 | Security and browser acceptance | PARTIAL | PR75 CI/native/browser/self-host PASS; actual public HTTP ADMIN/A/B and desktop PASS, fixtures cleaned. Live mobile/native provider return/Owner acceptance pending. |
+| S4 | Delivery | BLOCKED_EXTERNAL | Approved egress/CA applied; MAX bot200 and canonical channel bot-rights validation PASS; MAX Mini App URL saved once with approval. Telegram VPS TCP/TLS fails while Windows same-IP TLS passes; exact upstream cause unproven. MAX real USER native consent/return/enable PASS. 26Oct separately approved one MAX image publication PASS: real public link, PUBLISHED/attempt1, nonterminal0. Send grant consumed; Telegram and scheduled delivery pending. |
+| S5 | Security and browser acceptance | PARTIAL | PR75 CI/native/browser/self-host PASS; actual public HTTP ADMIN/A/B and desktop PASS, fixtures cleaned. Native MAX USER return PASS; live mobile and final Owner acceptance pending. |
 | S6 | Release and handoff | STAGING_RELEASED / HANDOFF_PARTIAL | Backup/restored rehearsal/migrations0017–0020/deploy complete; preserved data. Production/off-VM recovery/provider acceptance unfinished. PR76 runner fix reviewed; c4e75b CI40105645605/Self-host40105645580 SUCCESS. Later evidence-only update retains separate exact-head checks; merge pending. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |
 
@@ -128,3 +128,5 @@ production shutdown changes or first()-selector masking. Corrected-head CI next.
 Artifact12557285113 verified locally without extraction: ZIP SHA9025378b…, TGZ
 SHAf8561049…, all788source blobs matchcfc45f9,945compiled entries/BUILD_ID present;
 only existing pg symlink. This proves artifact contents, not staging deployment.
+
+26October evidence: [calendar and one real MAX delivery](../../verification/2026-10-26-saas-calendar-max-live.md). No new implementation or deploy.
