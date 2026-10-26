@@ -160,3 +160,5 @@ provider request/send, deletion, deploy or infrastructure mutation. L03 delibera
 retained as user's READY personal copy; no destructive cleanup. This closes the
 bounded real-user mobile archive/return/persistence slice, not all S5 or a new
 mobile cancellation/send test. Telegram remains deferred by Owner.
+
+26Oct S6: fresh off-VPS backup copied to owner-only local Windows folder; all transferred files match hashes. Actual isolated local PG17 restore from downloaded dump PASS; counts/ledger match, all7 referenced media sizes/SHA256 match. Local instance stopped/port closed, staging health200, sender0. Full application disaster-recovery launch and production cutover remain unverified/gated. See 2026-10-26-off-vps-backup.md for provenance and exact limits.

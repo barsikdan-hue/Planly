@@ -66,3 +66,45 @@ found; WSL invocation returned help/error and did not establish a usable Linux
 runtime. No installation performed. Next: choose isolated local restore runtime,
 restore this downloaded dump and verify DB/media references without sender access.
 Do not equate file integrity with independent recoverability or production acceptance.
+
+## Selected independent restore runtime
+
+Windows portable PostgreSQL17.11-5, official EDB binary ZIP (no installer,
+Windows service, Docker/WSL installation, system PATH or firewall change).
+Vendor archive SHA25680379b2c04d51c30225532e0ae04509899141e9957ed096fe749d7fd9df8f82f.
+Sources: https://www.postgresql.org/download/windows/ and
+https://github.com/EnterpriseDB/edb-installers/issues/731 ; vendor sidecar:
+https://get.enterprisedb.com/postgresql/postgresql-17.11-5-windows-x64-binaries.zip.sha256 .
+Extract only after archive digest matches. Local rehearsal data remains inside
+owner-only backup parent, listens only127.0.0.1:55487 with SCRAM/random password.
+No restored app, Redis queue, sender or provider credentials are executed.
+Restore in a single transaction; compare saved counts and all7 logical-media
+size/SHA256 from restored media_assets against copied archive object parts.
+Candidate decoding is accepted only if exact size and stored SHA256 match;
+otherwise stop with media validation incomplete. Always stop exact local PG data
+directory and verify closed port/no PID before reporting success. Independent
+read-only script review found no blocker; failures require immediate stop readback.
+
+## Independent local restore - 26 October 2026
+
+Downloaded off-VPS backup saas-20261026-1793002809 restored transactionally into
+portable PostgreSQL17.11 on the Owner Windows computer, independent of VPS.
+Official EDB381,531,864-byte ZIP matched vendor SHA25680379b2c04d51c30225532e0ae04509899141e9957ed096fe749d7fd9df8f82f.
+Local cluster loopback127.0.0.1:55487/SCRAM/random password, no Windows service,
+Docker/WSL installation, application, worker or provider access. Restored counts
+exactly users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0.
+All7 referenced logical media match database byte size and SHA256 using copied
+object parts. Raw archive hashes also match. This proves independent DB and
+referenced-media recovery from the downloaded copy, not a full app/cutover drill.
+
+Local PG stopped in finally; PID absent and port closed confirmed independently.
+Staging public health200 after rehearsal; staging untouched. Private logs/data
+retained under owner-only ACL parent, no database rows/credentials committed.
+Initial launcher probe hit inherited output-pipe wait after PG ready; exact local
+cluster stopped. Launcher redirected pg_ctl output to private file, retained90s
+bound, used fresh rehearsal directory; full restore then PASS without timeout
+increase. Final result: restore-rehearsal2/result.json in private backup parent.
+
+OFF_VPS_DB_MEDIA_RESTORE_PASS. Config archive is preserved/hash verified; full
+application/MinIO startup after total VPS loss, production cutover and Owner
+acceptance remain separate. Telegram remains deferred by Owner.

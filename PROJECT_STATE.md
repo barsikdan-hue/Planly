@@ -1,5 +1,30 @@
 # Lentaro — current project state
 
+## Independent local restore - 26 October 2026
+
+Downloaded off-VPS backup saas-20261026-1793002809 restored transactionally into
+portable PostgreSQL17.11 on the Owner Windows computer, independent of VPS.
+Official EDB381,531,864-byte ZIP matched vendor SHA25680379b2c04d51c30225532e0ae04509899141e9957ed096fe749d7fd9df8f82f.
+Local cluster loopback127.0.0.1:55487/SCRAM/random password, no Windows service,
+Docker/WSL installation, application, worker or provider access. Restored counts
+exactly users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0.
+All7 referenced logical media match database byte size and SHA256 using copied
+object parts. Raw archive hashes also match. This proves independent DB and
+referenced-media recovery from the downloaded copy, not a full app/cutover drill.
+
+Local PG stopped in finally; PID absent and port closed confirmed independently.
+Staging public health200 after rehearsal; staging untouched. Private logs/data
+retained under owner-only ACL parent, no database rows/credentials committed.
+Initial launcher probe hit inherited output-pipe wait after PG ready; exact local
+cluster stopped. Launcher redirected pg_ctl output to private file, retained90s
+bound, used fresh rehearsal directory; full restore then PASS without timeout
+increase. Final result: restore-rehearsal2/result.json in private backup parent.
+
+OFF_VPS_DB_MEDIA_RESTORE_PASS. Config archive is preserved/hash verified; full
+application/MinIO startup after total VPS loss, production cutover and Owner
+acceptance remain separate. Telegram remains deferred by Owner.
+
+
 ## Fresh off-VPS backup - 26 October 2026
 
 Owner-approved fresh backup completed with brief stop/restart of only web/worker.
