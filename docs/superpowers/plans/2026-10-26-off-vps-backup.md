@@ -41,3 +41,28 @@ ACLs, matching hashes and unchanged healthy runtime. RESTORE_PASS is separate an
 requires actual isolated restoration from that copy. Production remains gated
 until independently recoverable backup and exact cutover approval. A restore on
 the original VPS can prove dump validity but not independence from VPS loss.
+
+## Fresh off-VPS backup - 26 October 2026
+
+Owner-approved fresh backup completed with brief stop/restart of only web/worker.
+Server: /opt/planly-staging/backups/saas-20261026-1793002809.
+Owner-only local copy outside Git:
+C:/Users/EliteSochi/.codex/private/planly-backups/2026-10-26/saas-20261026-1793002809.
+All5 manifest file sizes/SHA256 match after SSH transfer; archive282 files and all32
+media-volume files individually hash-verified. Total transferred5,353,508 bytes.
+DB counts users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0.
+Local ACL grants only current Windows owner. Old backups retained.
+
+Dump SHA25666bb518147fba2e133b5cf872c30ab2395e32110b05d2813b0bd9a48b8738b53;
+media/config SHA2569a85c4307156d4e9224e29e6c2e43cf77faa877622d5481098c93b8769955a23.
+Same original container IDs/images preserved; web healthy, worker running,
+restart counts0, counts unchanged, public health200. No deploy/migration/provider
+calls. Redis live queue intentionally not restored. Independent pre-execution
+review found no blocker after adding per-container restart handling. A read-only
+preflight table-name mismatch was corrected before any service stop.
+
+OFF_VPS_COPY_HASHES_PASS; RESTORE_NOT_VERIFIED. No local Docker/pg_restore runtime
+found; WSL invocation returned help/error and did not establish a usable Linux
+runtime. No installation performed. Next: choose isolated local restore runtime,
+restore this downloaded dump and verify DB/media references without sender access.
+Do not equate file integrity with independent recoverability or production acceptance.
