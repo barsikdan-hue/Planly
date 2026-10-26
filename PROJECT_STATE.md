@@ -1,6 +1,17 @@
 # Lentaro — current project state
 
-## Fresh acceptance - 26 October 2026
+## Follow-up acceptance - 26 October 2026
+
+ADMIN real-agent reschedule10:00 to07:36MSK/reload PASS; published fields locked,
+private DRAFT excluded. Live ADMIN390/320 and USER review/settings/approval390/320
+PASS, console clear, viewport restored. Nearest-free10MSK and next-day advancement
+observed. Separately approved scheduled L02 delivered at07:36:01.569MSK,
+PUBLISHED/attempt1 and real MAX public text/photo verified. Nonterminal0/catalog3.
+No source behavior, deployment, infrastructure or migration changes. Further sends
+remain gated; Telegram network blocker persists.
+Evidence: [ADMIN/mobile/scheduled](docs/verification/2026-10-26-saas-admin-scheduled-mobile.md).
+
+## Earlier acceptance - 26 October 2026
 
 Real USER staging calendar27Oct10:00MSK retained after reload; Save draft cancelled
 its publication with attempt0. USED-source reuse created a second draft. Owner then
