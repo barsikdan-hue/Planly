@@ -1,5 +1,16 @@
 # Lentaro — current project state
 
+## Release checks and handoff - 26 October 2026
+
+Exact 28bd578431ec8f7428bc6c67be946b27bda7dab3 GitHub CI40274571083
+and Self-host40274571104 completed SUCCESS, freshly read from GitHub.
+No merge/deploy performed. Owner explicitly deferred Telegram pending their own
+solution. Remaining real-agent mobile lifecycle acceptance waits for personal
+barsikdan login; current owner session was signed out normally, login form ready.
+Quick-start draft: docs/saas-quickstart.md; distinguishes real scheduling/sends,
+manual access and error handling from remaining production/recovery gates.
+
+
 ## Mobile ADMIN follow-up - 26 October 2026
 
 Staging owner browser at 320x740: mobile menu -> Settings -> Admin -> Users
