@@ -51,7 +51,7 @@ export async function runCatalogImport({ manifestPath, journalPath, apply = fals
   const path = resolve(journalPath), lock = await open(`${path}.lock`, 'wx');
   try {
     async function request(route, options = {}) {
-      const response = await fetchImpl(new URL(route, base), { redirect: 'error', ...options, headers: { cookie: `planly_session=${session}`, origin: base.origin, ...options.headers } });
+      const response = await fetchImpl(new URL(route, base), { redirect: 'error', ...options, headers: { cookie: `planly_session=${session}`, origin: base.origin, 'sec-fetch-site': 'same-origin', ...options.headers } });
       if (!response.ok) throw new Error(`CATALOG_HTTP_${response.status}`);
       return response.json();
     }

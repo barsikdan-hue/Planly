@@ -1,19 +1,166 @@
 # Lentaro — current project state
 
-## Active candidate — 24 October 2026
+## Independent local restore - 26 October 2026
 
-Owner accepted the delivery master prompt. Work continues in isolated branch
-`codex/agent-catalog-decision-loop-20261024`, PR75, base4fc764a. This entrypoint
-records this candidate; older source/runtime tables below are historical.
-Current queue and decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).
-Candidate scope: admin schedule privacy/Moscow time; single-use password reset;
-manual expiry/unlimited; confirmed account deletion with durable external cleanup;
-reusable personal content and actual personal archive from shared-feed rejection;
-bounded repeatable catalog import. Source tests/CI/review remain separate gates.
-Existing staging is not changed by this source work. Merge, persistent migrations,
-deploy, secrets/infra and real provider sends are not authorized by this checkpoint.
-Owner decisions: after10MSK use next free10MSK; full account/data deletion only
-after confirmation of the specific target. No live account was deleted.
+Downloaded off-VPS backup saas-20261026-1793002809 restored transactionally into
+portable PostgreSQL17.11 on the Owner Windows computer, independent of VPS.
+Official EDB381,531,864-byte ZIP matched vendor SHA25680379b2c04d51c30225532e0ae04509899141e9957ed096fe749d7fd9df8f82f.
+Local cluster loopback127.0.0.1:55487/SCRAM/random password, no Windows service,
+Docker/WSL installation, application, worker or provider access. Restored counts
+exactly users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0.
+All7 referenced logical media match database byte size and SHA256 using copied
+object parts. Raw archive hashes also match. This proves independent DB and
+referenced-media recovery from the downloaded copy, not a full app/cutover drill.
+
+Local PG stopped in finally; PID absent and port closed confirmed independently.
+Staging public health200 after rehearsal; staging untouched. Private logs/data
+retained under owner-only ACL parent, no database rows/credentials committed.
+Initial launcher probe hit inherited output-pipe wait after PG ready; exact local
+cluster stopped. Launcher redirected pg_ctl output to private file, retained90s
+bound, used fresh rehearsal directory; full restore then PASS without timeout
+increase. Final result: restore-rehearsal2/result.json in private backup parent.
+
+OFF_VPS_DB_MEDIA_RESTORE_PASS. Config archive is preserved/hash verified; full
+application/MinIO startup after total VPS loss, production cutover and Owner
+acceptance remain separate. Telegram remains deferred by Owner.
+
+
+## Fresh off-VPS backup - 26 October 2026
+
+Owner-approved fresh backup completed with brief stop/restart of only web/worker.
+Server: /opt/planly-staging/backups/saas-20261026-1793002809.
+Owner-only local copy outside Git:
+C:/Users/EliteSochi/.codex/private/planly-backups/2026-10-26/saas-20261026-1793002809.
+All5 manifest file sizes/SHA256 match after SSH transfer; archive282 files and all32
+media-volume files individually hash-verified. Total transferred5,353,508 bytes.
+DB counts users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0.
+Local ACL grants only current Windows owner. Old backups retained.
+
+Dump SHA25666bb518147fba2e133b5cf872c30ab2395e32110b05d2813b0bd9a48b8738b53;
+media/config SHA2569a85c4307156d4e9224e29e6c2e43cf77faa877622d5481098c93b8769955a23.
+Same original container IDs/images preserved; web healthy, worker running,
+restart counts0, counts unchanged, public health200. No deploy/migration/provider
+calls. Redis live queue intentionally not restored. Independent pre-execution
+review found no blocker after adding per-container restart handling. A read-only
+preflight table-name mismatch was corrected before any service stop.
+
+OFF_VPS_COPY_HASHES_PASS; RESTORE_NOT_VERIFIED. No local Docker/pg_restore runtime
+found; WSL invocation returned help/error and did not establish a usable Linux
+runtime. No installation performed. Next: choose isolated local restore runtime,
+restore this downloaded dump and verify DB/media references without sender access.
+Do not equate file integrity with independent recoverability or production acceptance.
+
+
+## Agent archive lifecycle - 26 October 2026
+
+Real barsikdan staging browser: at320x740, empty archive baseline; shared L03
+left/reject with no networks selected (Calendar disabled) created personal archived
+copy. Library archive persisted after full reload. Explicit Return from archive
+removed it from archive and showed READY; second reload preserved READY with text
+and image. Library390 and daily calendar390 checked, both existing MAX publications
+visible at07:17/07:36MSK, console warn/error empty; viewport reset.
+
+Fresh read-only VPS DB/runtime after actions: original receipts unchanged
+(PUBLISHED2/attempt1 each, CANCELLED1/attempt0), nonterminal0, catalog3;
+web healthy, worker running/restarts0, image4d952a unchanged. No new post scheduling,
+provider request/send, deletion, deploy or infrastructure mutation. L03 deliberately
+retained as user's READY personal copy; no destructive cleanup. This closes the
+bounded real-user mobile archive/return/persistence slice, not all S5 or a new
+mobile cancellation/send test. Telegram remains deferred by Owner.
+
+
+## Release checks and handoff - 26 October 2026
+
+Exact 28bd578431ec8f7428bc6c67be946b27bda7dab3 GitHub CI40274571083
+and Self-host40274571104 completed SUCCESS, freshly read from GitHub.
+No merge/deploy performed. Owner explicitly deferred Telegram pending their own
+solution. Remaining real-agent mobile lifecycle acceptance waits for personal
+barsikdan login; current owner session was signed out normally, login form ready.
+Quick-start draft: docs/saas-quickstart.md; distinguishes real scheduling/sends,
+manual access and error handling from remaining production/recovery gates.
+
+
+## Mobile ADMIN follow-up - 26 October 2026
+
+Staging owner browser at 320x740: mobile menu -> Settings -> Admin -> Users
+renders readable controls. Opening Delete agent for barsikdan showed irreversible
+warning, email confirmation and disabled submit; Cancel closed confirmation and
+agent remained listed. No reset, deletion, access update or invitation issued.
+Invitations page readable at 320x740 and 390x844, existing activated invitation
+visible; console error/warn list empty. These checks cover presentation/navigation
+and safe cancellation, not new password-reset/expiry/deletion execution or native
+mobile provider consent.
+
+Found onboarding copy still describing left swipe as hide, contrary to approved
+archive behavior. Minimal source-only correction in lentaro-start.tsx changes
+that sentence to archive; no handlers/schema/provider changes. Staging still runs
+prior image and has not received this copy correction. Telegram work paused by
+Owner while independent SaaS acceptance continues.
+
+
+## Telegram network handoff - 26 October 2026
+
+Fresh host packet capture: SYN leaves ens3 toTelegram149.154.166.110:443,
+no inbound reply; Windows same-IP verifiedTLS1.3. Exact dropping operator remains
+unproven. Actual provider NewVPS confirmed by Owner and authenticated service
+Start#1319/vm1319/IP62.173.149.73. One separately authorized technical ticket35
+registered07:45:37MSK, Under consideration. No server/network/code changes,
+new provider sends or paid operations. Telegram remains unfinished.
+Evidence: [network incident/ticket](docs/verification/2026-10-26-telegram-vps-network.md).
+
+## Follow-up acceptance - 26 October 2026
+
+ADMIN real-agent reschedule10:00 to07:36MSK/reload PASS; published fields locked,
+private DRAFT excluded. Live ADMIN390/320 and USER review/settings/approval390/320
+PASS, console clear, viewport restored. Nearest-free10MSK and next-day advancement
+observed. Separately approved scheduled L02 delivered at07:36:01.569MSK,
+PUBLISHED/attempt1 and real MAX public text/photo verified. Nonterminal0/catalog3.
+No source behavior, deployment, infrastructure or migration changes. Further sends
+remain gated; Telegram network blocker persists.
+Evidence: [ADMIN/mobile/scheduled](docs/verification/2026-10-26-saas-admin-scheduled-mobile.md).
+
+## Earlier acceptance - 26 October 2026
+
+Real USER staging calendar27Oct10:00MSK retained after reload; Save draft cancelled
+its publication with attempt0. USED-source reuse created a second draft. Owner then
+approved exactly one real MAX image post; PUBLISHED receipt/attempt1 and actual
+public page confirm delivery. Nonterminal publications0, catalog3, runtime unchanged.
+Telegram VPS timeout persists. Production and additional sends remain gated.
+Evidence: [calendar and real MAX](docs/verification/2026-10-26-saas-calendar-max-live.md).
+
+## Historical staging - 24 October 2026
+
+Owner confirmed the bounded staging release packet. PR75 merged as
+`dc7c66a8c3a06e11baafe10f1fcd410b2d3ad55f`; its tree equals tested source1ea423a.
+Main CI40087206182 and Self-host40087206247 SUCCESS. Existing VPS staging now runs
+image `sha256:4d952a060f2829562004fedc3422777776553004e37c8ccb6bf2fd0862921c6b`,
+source1ea423a, one web/one worker. Backup, isolated restored migration rehearsal,
+actual migrations0017–0020 once and data/schema/sequence preservation verified.
+Ledger21, three approved catalog posts imported/replayed without duplicates.
+Public HTTP ADMIN+two USER core acceptance and IAB desktop flows passed. Exact
+synthetic actors/files cleaned; prior users/sessions preserved; publications0.
+Two bot tokens and supplied bot URLs/public origin wired without exposing values.
+Full native connection/send/Owner acceptance is unfinished; no production or send.
+
+A real importer403 behind TLS proxy was reproduced with the existing origin guard;
+one runner metadata header fixes it, regression4/4 PASS. Follow-up source branch
+`codex/saas-staging-acceptance-20261024` is based on mergedmain, not the old root.
+Fresh provider DNS failure proved existing Docker network internal=true; Owner
+then explicitly authorized extra egress only for web/worker and read-only checks
+of the two named bots/channels. Egress applied, private DB/storage network intact;
+Owner also separately approved the verified public MAX CA read-only mount and
+NODE_EXTRA_CA_CERTS. Standard Node MAX/me200 confirms bot identity/TLS. Telegram
+TCP/TLS fails from host and container, while the owner Windows client verifies TLS
+to the same IP. MAX canonical channel -78857616977254 was found in project scripts
+and the old authenticated UI; the actual staging connector validates bot rights.
+Owner approved one MAX Mini App URL save: the stage /social-connections/miniapp/max
+URL persists and the bot remains Published. Real USER invitation/activation,
+native MAX consent/return, reload persistence and separately approved enable PASS.
+No sends or scheduled publications created; real delivery remains unverified. Follow-up c4e75b CI40105645605 and Self-host40105645580 SUCCESS.
+
+Fresh evidence and remaining gates: [staging release](docs/verification/2026-10-24-saas-staging-release.md).
+Queue/decisions: [execution ledger](docs/superpowers/plans/2026-10-24-saas-execution-ledger.md).
+The source/runtime tables below are historical and must not override this entry.
 
 Updated 2026-10-19. Read this entrypoint and its environment boundaries before work; check relevant drift and existing code/active PRs. The completed audit is historical evidence, not a task to repeat.
 
