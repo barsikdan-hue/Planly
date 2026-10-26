@@ -143,3 +143,21 @@ separate from this presentation check. One source-only onboarding sentence now
 says left swipe archives; staging has not been redeployed.
 
 Copy correction: targeted ESLint PASS, typecheck PASS, git diff --check PASS; independent read-only Critic: no findings. No separate test added for a text-only correction. Exact-head Linux build/CI and deployed copy acceptance remain separate.
+
+## Agent archive lifecycle - 26 October 2026
+
+Real barsikdan staging browser: at320x740, empty archive baseline; shared L03
+left/reject with no networks selected (Calendar disabled) created personal archived
+copy. Library archive persisted after full reload. Explicit Return from archive
+removed it from archive and showed READY; second reload preserved READY with text
+and image. Library390 and daily calendar390 checked, both existing MAX publications
+visible at07:17/07:36MSK, console warn/error empty; viewport reset.
+
+Fresh read-only VPS DB/runtime after actions: original receipts unchanged
+(PUBLISHED2/attempt1 each, CANCELLED1/attempt0), nonterminal0, catalog3;
+web healthy, worker running/restarts0, image4d952a unchanged. No new post scheduling,
+provider request/send, deletion, deploy or infrastructure mutation. L03 deliberately
+retained as user's READY personal copy; no destructive cleanup. This closes the
+bounded real-user mobile archive/return/persistence slice, not all S5 or a new
+mobile cancellation/send test. Telegram remains deferred by Owner.
+
