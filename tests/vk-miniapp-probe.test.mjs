@@ -169,3 +169,17 @@ test('reset discards late readback without restoring old state',async()=>{
   const pending=f.probe.readbackTest();f.probe.reset();resolve({response:{count:0,items:[]}});await pending;
   assert.equal(f.probe.snapshot().readback,null);assert.equal(f.probe.snapshot().phase,'READY');
 });
+
+test('upload-only controller performs control reads and one upload but no save or post API',async()=>{
+  const f=fixture();const send=f.bridge.send;
+  f.bridge.send=async(method,params)=>{
+    const result=await send(method,params);
+    return params?.method==='photos.getWallUploadServer'?{response:{upload_url:'https://pu.vk.ru/upload'}}:result;
+  };
+  await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();let uploads=0;
+  await f.probe.uploadOnlyTest({makeImage:async()=>new Blob(['test'],{type:'image/png'}),claim:()=>true,
+    fetchImpl:async()=>{uploads++;return new Response(JSON.stringify({server:1,photo:'private',hash:'private'}));}});
+  assert.equal(uploads,1);assert.equal(f.probe.snapshot().uploadOnly.status,'UPLOAD_CONFIRMED');
+  assert.deepEqual(f.calls.filter(c=>c.method==='VKWebAppCallAPIMethod').map(c=>c.params.method),['groups.get','photos.getWallUploadServer','groups.get','photos.getWallUploadServer']);
+  f.probe.reset();assert.equal(f.probe.snapshot().uploadOnly,null);
+});

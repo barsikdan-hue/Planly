@@ -1,5 +1,21 @@
 # One owner-authorized new-photo publication spike
 
+## Separately authorized upload-only diagnostic
+
+Owner readonly screenshots8a9989b5/3fe30509 show NO_MATCH_IN_SAMPLE and original
+ATTEMPTED marker, actual readback accepted. No retrospective stage available.
+Owner twice authorized one diagnostic file upload WITHOUT photo save/post.
+Add upload-only module/button with separate fixed nonsecret marker while preserving
+original publication marker. Same Web Lock serializes operations across tabs.
+Fresh current-token groups proof/upload endpoint, same host/image/URL guards and
+reset/image epoch fences. One multipart POST (no token fields/credentials/redirects),
+30s bounded abort; no saveWallPhoto/wall.post calls or fallback/automatic retry.
+Return only HTTP status + fixed outcome/error-name enums. Body data/URL/hash/photo
+stay private, discarded after shape validation. TypeError is unconfirmed transport,
+not proof of CORS. Test unsafe targets, marker separation, exactly one fetch,
+no API writes, HTTP/JSON/error categorization and reset. Deployment separately gated;
+Nginx/CSP unchanged. Human must explicitly click new button after sourceCI/release.
+
 ## Unknown real attempt: no-retry investigation
 
 Screenshotf10cccad after READY/AVAILABLE shows TEST_OUTCOME_UNKNOWN; Owner wall

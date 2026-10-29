@@ -1,4 +1,5 @@
 import {publishOne,inspectPreconditions,safeUploadHost,readTestResult} from './single-photo-test.mjs';
+import {uploadOnly} from './upload-only.mjs';
 const APP_ID=54809413;
 const GROUP_ID=242095689;
 const API_VERSION='5.199';
@@ -25,9 +26,9 @@ async function boundedSend(bridge,method,params){
 /** Closure-only credentials. Reads and one-shot publication require explicit actions. */
 export function createProbe(bridge,context,onChange=()=>{}){
   let token=null,uploadUrl=null,initialized=false,epoch=0;
-  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null};
+  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null};
   const validContext=context?.appId===String(APP_ID);
-  const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,scopes:{...state.scopes},readback:state.readback?{...state.readback}:null,preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
+  const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,scopes:{...state.scopes},uploadOnly:state.uploadOnly?{...state.uploadOnly}:null,readback:state.readback?{...state.readback}:null,preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
   const emit=()=>onChange(snapshot());
   const update=next=>{state={...state,...next};emit();};
   async function run(work,failurePhase){
@@ -42,7 +43,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   }
   function reset(){
     epoch++;token=null;uploadUrl=null;
-    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null};
+    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null};
     emit();return snapshot();
   }
   async function initialize(){
@@ -55,7 +56,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   async function requestAccess(){
     if(!initialized)return snapshot();
     return run(async active=>{
-      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,preflight:null,readback:null,stage:null});
+      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null});
       const grant=await boundedSend(bridge,'VKWebAppGetAuthToken',{app_id:APP_ID,scope:'wall,photos,groups'});
       if(!active())return;
       if(!isRecord(grant)||typeof grant.scope!=='string'||typeof grant.access_token!=='string'||!/^[-A-Za-z0-9_.]{20,16000}$/.test(grant.access_token))throw {};
@@ -71,7 +72,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     return run(async active=>{
       const currentToken=token;
       uploadUrl=null;
-      update({communityDiagnostic:null,preflight:null,readback:null,stage:null});
+      update({communityDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null});
       const groups=unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method:'groups.get',params:{access_token:currentToken,v:API_VERSION,filter:'editor',extended:0,count:1000,offset:0},
       }));
@@ -134,5 +135,17 @@ export function createProbe(bridge,context,onChange=()=>{}){
       if(active())update({readback:result});
     },'TEST_READBACK_FAILED');
   }
-  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,reset};
+  async function uploadOnlyTest(options){
+    if(state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token)return snapshot();
+    const startedEpoch=epoch;
+    await checkPhoto();
+    if(epoch!==startedEpoch||state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token||!uploadUrl)return snapshot();
+    return run(async active=>{
+      const currentToken=token;
+      const image=await options.makeImage();if(!active())return;
+      const result=await uploadOnly({...options,image,active,uploadUrl,sensitiveToken:currentToken});
+      if(active())update({uploadOnly:result});
+    },'UPLOAD_ONLY_FAILED');
+  }
+  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,uploadOnlyTest,reset};
 }

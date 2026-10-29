@@ -1,5 +1,14 @@
 # VK Mini App diagnostic spike
 
+Prepared upload-only test: Owner explicitly authorized one file upload without
+saving photo or posting. Separate UPLOAD_ONLY_OPERATION persistent marker; original
+TEST_OPERATION remains untouched. Same Web Lock, fresh control proof/endpoint,
+epoch/image fences and current upload guards. One bounded multipart fetch; no
+saveWallPhoto/wall.post methods in upload-only flow. UI exposes only fixed outcome,
+HTTP status and bounded error category; no private body/URL/token. Unconfirmed
+fetch does not by itself prove CORS and forbids automatic retry. Original test is
+still ATTEMPTED. Source preparation does not deploy or perform an actual upload.
+
 Current prepared investigation: actual43a88da attempt returned unknown; no stage
 was recorded and wall screenshot shows no new test. Preserve ATTEMPTED marker.
 Add separate readonly wall.get last5ownerposts button/currentgrant/fixedgroup,
