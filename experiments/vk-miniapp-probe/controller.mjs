@@ -1,4 +1,4 @@
-import {publishOne,inspectPreconditions,safeUploadHost} from './single-photo-test.mjs';
+import {publishOne,inspectPreconditions,safeUploadHost,readTestResult} from './single-photo-test.mjs';
 const APP_ID=54809413;
 const GROUP_ID=242095689;
 const API_VERSION='5.199';
@@ -25,9 +25,9 @@ async function boundedSend(bridge,method,params){
 /** Closure-only credentials. Reads and one-shot publication require explicit actions. */
 export function createProbe(bridge,context,onChange=()=>{}){
   let token=null,uploadUrl=null,initialized=false,epoch=0;
-  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null};
+  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null};
   const validContext=context?.appId===String(APP_ID);
-  const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,scopes:{...state.scopes},preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
+  const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,scopes:{...state.scopes},readback:state.readback?{...state.readback}:null,preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
   const emit=()=>onChange(snapshot());
   const update=next=>{state={...state,...next};emit();};
   async function run(work,failurePhase){
@@ -42,7 +42,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   }
   function reset(){
     epoch++;token=null;uploadUrl=null;
-    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null};
+    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,preflight:null,readback:null,stage:null};
     emit();return snapshot();
   }
   async function initialize(){
@@ -55,7 +55,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   async function requestAccess(){
     if(!initialized)return snapshot();
     return run(async active=>{
-      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,preflight:null});
+      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,preflight:null,readback:null,stage:null});
       const grant=await boundedSend(bridge,'VKWebAppGetAuthToken',{app_id:APP_ID,scope:'wall,photos,groups'});
       if(!active())return;
       if(!isRecord(grant)||typeof grant.scope!=='string'||typeof grant.access_token!=='string'||!/^[-A-Za-z0-9_.]{20,16000}$/.test(grant.access_token))throw {};
@@ -71,7 +71,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     return run(async active=>{
       const currentToken=token;
       uploadUrl=null;
-      update({communityDiagnostic:null,preflight:null});
+      update({communityDiagnostic:null,preflight:null,readback:null,stage:null});
       const groups=unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method:'groups.get',params:{access_token:currentToken,v:API_VERSION,filter:'editor',extended:0,count:1000,offset:0},
       }));
@@ -123,5 +123,16 @@ export function createProbe(bridge,context,onChange=()=>{}){
       update({preflight:{reason,storage,host:safeUploadHost(uploadUrl,token)}});
     },'TEST_DIAGNOSTIC_FAILED');
   }
-  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,reset};
+  async function readbackTest(){
+    if(state.busy||!token||!initialized)return snapshot();
+    return run(async active=>{
+      const currentToken=token;
+      update({readback:null});
+      const result=await readTestResult(async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
+        method,params:{...params,access_token:currentToken,v:API_VERSION},
+      })));
+      if(active())update({readback:result});
+    },'TEST_READBACK_FAILED');
+  }
+  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,reset};
 }

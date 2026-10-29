@@ -152,3 +152,20 @@ test('local preflight inspection does not call VK or mutate operation marker',as
   assert.deepEqual(f.probe.snapshot().preflight,{reason:'UPLOAD_HOST',storage:'AVAILABLE',host:'REDACTED'});
   f.probe.reset();assert.equal(f.probe.snapshot().preflight,null);
 });
+
+test('readback requires a grant, reads once and never starts publication',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.readbackTest();assert.equal(f.calls.length,1);
+  await f.probe.requestAccess();let requests=0;
+  f.bridge.send=async(method,params)=>{requests++;assert.equal(method,'VKWebAppCallAPIMethod');assert.equal(params.method,'wall.get');return {response:{count:0,items:[]}};};
+  await f.probe.readbackTest();assert.equal(requests,1);
+  assert.deepEqual(f.probe.snapshot().readback,{status:'NO_MATCH_IN_SAMPLE'});
+  assert.equal(f.probe.snapshot().phase,'AUTHORIZED');
+  f.probe.reset();assert.equal(f.probe.snapshot().readback,null);
+});
+
+test('reset discards late readback without restoring old state',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();let resolve;
+  f.bridge.send=()=>new Promise(done=>{resolve=done;});
+  const pending=f.probe.readbackTest();f.probe.reset();resolve({response:{count:0,items:[]}});await pending;
+  assert.equal(f.probe.snapshot().readback,null);assert.equal(f.probe.snapshot().phase,'READY');
+});

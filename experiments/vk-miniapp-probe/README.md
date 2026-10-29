@@ -1,5 +1,13 @@
 # VK Mini App diagnostic spike
 
+Current prepared investigation: actual43a88da attempt returned unknown; no stage
+was recorded and wall screenshot shows no new test. Preserve ATTEMPTED marker.
+Add separate readonly wall.get last5ownerposts button/currentgrant/fixedgroup,
+return only exact-text+photo match/publicpostID or bounded unavailable/no-match.
+No-match is not proof of non-delivery or retry authorization. Future unknown errors
+carry fixed reached-stage enum + safe numeric VK code; old stage cannot be recovered.
+No raw payload/error reflection or storage writes in readback. No new send/deploy.
+
 Current prepared correction: actual Owner dry-run reports upload host pu.vk.ru.
 Original pu[digits].vk.com-only guard caused UPLOAD_HOST before any mutation.
 Only exact pu.vk.ru is added to the static test guard/meta CSP; HTTPS, credentials,

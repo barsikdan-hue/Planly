@@ -1,5 +1,21 @@
 # One owner-authorized new-photo publication spike
 
+## Unknown real attempt: no-retry investigation
+
+Screenshotf10cccad after READY/AVAILABLE shows TEST_OUTCOME_UNKNOWN; Owner wall
+screenshot498f5416 shows old AI Copilot post, no new test visible. Existing marker
+is ATTEMPTED; old code retained no upload/save/post stage. Do not reconstruct or
+guess it, clear latch or resend. Owner approved checking existing result and stage
+instrumentation. Add explicit readonly button using current grant wall.get,
+domainclub242095689/filterowner/count5/offset0/extended0, one call no pagination.
+Emit only match-status/publicpostID for exactfixedtext/group/photo; absence in sample
+does not prove global non-delivery or permit retry. Hide all other payload data.
+Source schema supports wall.get with user token; actual acceptance remains unknown.
+Future publish errors expose fixed reached-stage enums and bounded numeric APIcode,
+not raw errors/URLs/credentials. Does not recover old attempt. No persistent stage
+journal is introduced. Run TDD/build/lint/independentreview/CI, then separate deploy
+gate. No new upload/save/post or marker modification authorized by investigation.
+
 ## Proven host mismatch: exact pu.vk.ru correction
 
 Owner screenshot a09c1d5c shows provider-returned pu.vk.ru, UPLOAD_HOST and storage

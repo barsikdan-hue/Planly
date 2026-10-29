@@ -17,12 +17,22 @@ const labels={
   TEST_OUTCOME_UNKNOWN:'Исход тестовой операции не подтверждён. Не повторяйте отправку: сначала нужна проверка результата.',
   TEST_POST_CONFIRMED:'VK подтвердил создание одного тестового поста с новой картинкой.',
   TEST_DIAGNOSTIC_FAILED:'Не удалось выполнить локальную проверку условий. Загрузок и отправок не было.',
+  TEST_READBACK_FAILED:'Чтение результата недоступно. Повторная отправка не разрешена.',
 };
 const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchParams.get('vk_app_id')},state=>{
   doc.querySelector('#status').textContent=labels[state.phase]??'Проверка не завершена.';
   doc.querySelector('#scopes').textContent=`wall: ${state.scopes.wall?'выдано':'не выдано'} · photos: ${state.scopes.photos?'выдано':'не выдано'} · groups: ${state.scopes.groups?'выдано':'не выдано'}`;
   doc.querySelector('#expiry').textContent=state.expiresIn===null?'Срок действия: API не сообщил. Фоновая работа не подтверждена.':`Сообщённый срок действия: ${state.expiresIn} секунд. Обновление токена ещё не проверено.`;
   doc.querySelector('#error').textContent=state.errorCode===null?'':`Код VK: ${state.errorCode}`;
+  const stages={UPLOAD_STARTED:'Запрос загрузки начат; результат не подтверждён.',UPLOAD_RESPONSE_RECEIVED:'Ответ загрузчика получен, но дальнейшие условия не подтверждены.',SAVE_STARTED:'Запрос сохранения фото начат; результат не подтверждён.',SAVE_RESPONSE_RECEIVED:'Ответ сохранения фото получен, но дальнейшие условия не подтверждены.',POST_STARTED:'Запрос создания поста начат; результат не подтверждён.',POST_RESPONSE_RECEIVED:'Ответ создания поста получен, но корректная квитанция не подтверждена.'};
+  doc.querySelector('#test-stage').textContent=state.phase==='TEST_OUTCOME_UNKNOWN'?(stages[state.stage]??'Для прошлой попытки этап не записан.'):'';
+  doc.querySelector('#readback-test').disabled=state.busy||!state.scopes.wall||!state.scopes.photos||!state.scopes.groups;
+  const rb=state.readback;
+  const rlabels={MATCH_FOUND:'Найден пост с точным тестовым текстом и фотографией. Откройте его для проверки.',NO_MATCH_IN_SAMPLE:'Среди последних пяти постов совпадения нет. Это не разрешение на повторную отправку.',READ_UNAVAILABLE:'VK не подтвердил чтение стены. Повторная отправка не разрешена.'};
+  doc.querySelector('#readback-result').textContent=rb?(rlabels[rb.status]??'Результат чтения неизвестен.'):'';
+  const rlink=doc.querySelector('#readback-link');
+  rlink.textContent=rb?.status==='MATCH_FOUND'?`Открыть найденный пост №${rb.postId}`:'';
+  if(rb?.status==='MATCH_FOUND')rlink.href=`https://vk.ru/wall-242095689_${rb.postId}`;else rlink.removeAttribute('href');
   const d=state.communityDiagnostic;
   doc.querySelector('#community-diagnostic').textContent=d?`Проверка управления: форма=${d.shape}; нужная группа найдена среди редакторских/администраторских=${d.matched}; список полный=${d.complete}.`:'';
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
@@ -49,6 +59,7 @@ ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{probe.reset();});
+doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackTest();});
 doc.querySelector('#inspect-test').addEventListener('click',()=>{void probe.inspectTest({
   makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),
   storageStatus:()=>globalThis.localStorage.getItem(TEST_OPERATION)===null?'AVAILABLE':'ATTEMPTED',

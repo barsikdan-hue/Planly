@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION,inspectPreconditions,safeUploadHost} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
+import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION,inspectPreconditions,safeUploadHost,readTestResult} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
 function fixture(){
   const calls=[];let claimed=false;
   const o={active:()=>true,claim:()=>{if(claimed)return false;claimed=true;return true;},
@@ -80,4 +80,25 @@ test('actual VK-returned pu.vk.ru host passes without admitting other vk.ru host
     const g=fixture();g.o.uploadUrl=`https://${host}/upload`;
     assert.equal(inspectPreconditions(g.o),'UPLOAD_HOST');assert.equal(g.calls.length,0);
   }
+});
+
+test('readback performs one bounded read and returns only a matching public post ID',async()=>{
+  const calls=[];
+  const result=await readTestResult(async(method,params)=>{calls.push({method,params});return {count:2,items:[{id:5,owner_id:-242095689,text:TEST_MESSAGE,attachments:[{type:'photo',photo:{id:7,owner_id:-242095689}}]},{id:3,owner_id:-242095689,text:'private response'}]};});
+  assert.deepEqual(calls,[{method:'wall.get',params:{domain:'club242095689',count:5,offset:0,filter:'owner',extended:0}}]);
+  assert.deepEqual(result,{status:'MATCH_FOUND',postId:5});
+  assert.equal(JSON.stringify(result).includes('private'),false);
+});
+test('readback never turns absence or failure into permission to resend',async()=>{
+  assert.deepEqual(await readTestResult(async()=>({count:10,items:[]})),{status:'NO_MATCH_IN_SAMPLE'});
+  assert.deepEqual(await readTestResult(async()=>{throw Error('secret');}),{status:'READ_UNAVAILABLE'});
+  assert.deepEqual(await readTestResult(async()=>({items:'secret'})),{status:'READ_UNAVAILABLE'});
+});
+test('failed mutation reports last reached stage without exposing transport errors',async()=>{
+  const f=fixture();f.o.upload=async()=>{throw Error('private-upload-url');};
+  assert.deepEqual(await publishOne(f.o),{phase:'TEST_OUTCOME_UNKNOWN',stage:'UPLOAD_STARTED',errorCode:null});
+  const g=fixture();g.o.api=async()=>{throw {error_code:15,error_msg:'private-token'};};
+  assert.deepEqual(await publishOne(g.o),{phase:'TEST_OUTCOME_UNKNOWN',stage:'SAVE_STARTED',errorCode:15});
+  const h=fixture();h.o.api=async()=>{throw {error_data:{error_code:27,error_description:'private-token'}};};
+  assert.deepEqual(await publishOne(h.o),{phase:'TEST_OUTCOME_UNKNOWN',stage:'SAVE_STARTED',errorCode:27});
 });

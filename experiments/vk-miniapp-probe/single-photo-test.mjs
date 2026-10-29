@@ -27,16 +27,35 @@ export async function publishOne(options){
   const {active,claim,uploadUrl,image,upload,api}=options;
   if(inspectPreconditions(options)!=='READY')return {phase:'TEST_PRECONDITION_FAILED'};
   try{if(!claim())return {phase:'TEST_ALREADY_ATTEMPTED'};}catch{return {phase:'TEST_PRECONDITION_FAILED'};}
+  let stage='UPLOAD_STARTED';
   try{
     const raw=await upload(new URL(uploadUrl).toString(),image);
+    stage='UPLOAD_RESPONSE_RECEIVED';
     if(!active()||!positive(raw?.server)||!text(raw.photo,1_048_576)||raw.photo.trim()==='[]'||!text(raw.hash,8192))throw {};
+    stage='SAVE_STARTED';
     const saved=await api('photos.saveWallPhoto',{group_id:242095689,server:raw.server,photo:raw.photo,hash:raw.hash});
+    stage='SAVE_RESPONSE_RECEIVED';
     if(!active()||!Array.isArray(saved)||saved.length!==1||saved[0]?.owner_id!==-242095689||!positive(saved[0]?.id))throw {};
+    stage='POST_STARTED';
     const receipt=await api('wall.post',{owner_id:-242095689,from_group:1,message:TEST_MESSAGE,
       attachments:`photo-242095689_${saved[0].id}`,guid:TEST_OPERATION});
+    stage='POST_RESPONSE_RECEIVED';
     if(!positive(receipt?.post_id))throw {};
     return {phase:'TEST_POST_CONFIRMED',postId:receipt.post_id};
-  }catch{return {phase:'TEST_OUTCOME_UNKNOWN'};}
+  }catch(error){
+    const code=error?.error_data?.error_code??error?.error_code;
+    return {phase:'TEST_OUTCOME_UNKNOWN',stage,errorCode:Number.isSafeInteger(code)&&code>=0&&code<1_000_000?code:null};
+  }
+}
+
+export async function readTestResult(api){
+  try{
+    const result=await api('wall.get',{domain:'club242095689',count:5,offset:0,filter:'owner',extended:0});
+    if(!result||!Number.isSafeInteger(result.count)||result.count<0||!Array.isArray(result.items)||result.items.length>5)throw {};
+    const match=result.items.find(post=>positive(post?.id)&&post.owner_id===-242095689&&post.text===TEST_MESSAGE
+      &&Array.isArray(post.attachments)&&post.attachments.some(a=>a?.type==='photo'&&a.photo?.owner_id===-242095689&&positive(a.photo?.id)));
+    return match?{status:'MATCH_FOUND',postId:match.id}:{status:'NO_MATCH_IN_SAMPLE'};
+  }catch{return {status:'READ_UNAVAILABLE'};}
 }
 
 export async function uploadPhoto(url,image){
