@@ -102,7 +102,7 @@ def windows_acl(path, created=False, directory=False):
         result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive',
                                  '-Command', script], env=env, capture_output=True, timeout=30)
         if result.returncode:
-            raise BackupError('PRIVATE_ACL_REQUIRED')
+            raise BackupError('PRIVATE_ACL_REQUIRED_' + str(result.returncode))
 
 
 def private_dir(path):

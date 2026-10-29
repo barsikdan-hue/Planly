@@ -31,3 +31,6 @@ jobs:
           python-version: '3.11'
       - name: Verify synthetic snapshot safety (no SSH or real secrets)
         run: python -B -m unittest discover -s tests/backup -v
+      - name: Diagnose synthetic Windows ownership on failure
+        if: failure() && runner.os == 'Windows'
+        run: python -B tests/backup/windows_acl_diagnostic.py
