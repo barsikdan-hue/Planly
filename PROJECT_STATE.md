@@ -1,5 +1,37 @@
 # Lentaro — current project state
 
+## Read-only continuation — 29 October 2026
+
+Staging source466a30e/imageb0292141 confirmed healthy after pause. Counts users4/
+posts4/media7/publications3/catalog3/ledger21/nonterminal0/deletionTasks0 unchanged;
+worker running/restarts0, restore containers0, publichealth200. Preserved26October
+mobile lifecycle and full-app restore outcomes verified from private evidence.
+No tests/deploy/provider sends replayed. Final acceptance evidence is being saved
+on codex/saas-final-acceptance-20261026; production and recurring backup remain open.
+
+
+## Final mobile acceptance and recovery - 26 October 2026
+
+STAGING_CORE_ACCEPTANCE_PASS on source466a30e/imageb0292141. Real owner mobile320
+set past/future MSK deadlines, blocked/restored an owned empty USER and applied
+unlimited access while blocked. Actual HTTPS/DB readbacks: expiry keeps reads,
+mutation403; future date27Oct10MSK=07Z; block revokes session401; unlimited does not
+unblock. Mobile reset issuance30min plus HTTP consume/replay410/oldsession401/new
+login PASS. Separately confirmed exact test-account deletion at390; worker cleanup0,
+original4user rows unchanged in full, fixture-owned rows absent/session401.
+
+Full app recovery rehearsal from off-VPS copy PASS in separate networknone namespace
+on same VPS: PG restored, empty Redis, actual MinIO, web without worker/providerkeys;
+synthetic ADMIN login and two restored-owner reads, all7 signed S3 media GETs match
+size/SHA256 (4,339,718 bytes). All32 raw files hash-verified before MinIO start.
+All4temporary containers removed; working IDs/images/start times unchanged.
+This complements independent Windows DB/media restore; no new-host full-stack
+rebuild or real provider send claimed. Final publichealth200, webhealthy/workerstable,
+users4/posts4/media7/publications3/catalog3/ledger21/nonterminal0/deletionTasks0.
+No production release or recurring-backup installation. Telegram remains deferred.
+Details: docs/verification/2026-10-26-saas-final-acceptance-recovery.md.
+
+
 ## Independent local restore - 26 October 2026
 
 Downloaded off-VPS backup saas-20261026-1793002809 restored transactionally into

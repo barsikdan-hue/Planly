@@ -1,5 +1,7 @@
 # SaaS execution ledger — master prompt 24 October 2026
 
+26Oct latest: main466a30e is deployed to staging/imageb0292141. Mobile lifecycle and isolated full-app restore passed; see docs/verification/2026-10-26-saas-final-acceptance-recovery.md. Earlier dated paragraphs retain historical scope.
+
 Current24October release: Owner separately confirmed PR75 merge, backup/rehearsal,
 0017–0020/staging rollout, private two-token transfer/Mini App config, three-post
 import and nonce-owned ADMIN+two USER acceptance. These executed operations are
@@ -42,8 +44,8 @@ PR75 exists; tree clean before this work. Root prototype is not the implementati
 | S2 | Archive/cancel/reuse/MSK | PARTIAL | Staging independent archive/replay/private image/reload/explicit return PASS. 26Oct real USER manual calendar/reload, Save-draft cancellation (CANCELLED/attempt0), USED-source reuse PASS. Real USER nearest-free26Oct10:00 then next27Oct10:00 PASS via mobile320; one authorized L02 scheduled delivery PASS at07:36:01MSK/attempt1. |
 | S3 | Catalog/update pipeline | STARTER_STAGING_PASS | Three Owner-approved posts imported and same-journal replayed, no duplicates; original bytes retained. Full monthly volume not inferred. |
 | S4 | Delivery | MAX_STAGING_PASS / TELEGRAM_WAIT_HOST | Approved egress/CA applied; MAX bot200 and canonical channel bot-rights validation PASS; MAX Mini App URL saved once with approval. Telegram VPS TCP/TLS fails while Windows same-IP TLS passes; exact upstream cause unproven. MAX real USER native consent/return/enable PASS. 26Oct separately approved one MAX image publication PASS: real public link, PUBLISHED/attempt1, nonterminal0. Immediate grant consumed. Separately approved scheduled L02 PASS at07:36:01MSK/attempt1 with actual provider page; nonterminal0. Scheduled grant consumed; Telegram pending. |
-| S5 | Security and browser acceptance | PARTIAL | PR75 CI/native/browser/self-host PASS; actual public HTTP ADMIN/A/B and desktop PASS, fixtures cleaned. Native MAX USER return PASS; live ADMIN390/320 and USER card/settings/approval390/320 PASS. Remaining mobile lifecycle/native screens and final Owner acceptance pending. |
-| S6 | Release and handoff | STAGING_RELEASED / HANDOFF_PARTIAL | Backup/restored rehearsal/migrations0017–0020/deploy complete; preserved data. Production/off-VM recovery/provider acceptance unfinished. PR76 runner fix reviewed; c4e75b CI40105645605/Self-host40105645580 SUCCESS. Later evidence-only update retains separate exact-head checks; merge pending. |
+| S5 | Security and browser acceptance | CORE_STAGING_PASS / OWNER_REVIEW_PENDING | Existing HTTP/isolation/native MAX return; real mobile320 expiry/renewal/block/unlimited/restore/reset issuance,390confirmed fixture deletion and cleanup PASS. Reset consume/replay/session revocation checked over HTTPS. Native mobile provider launch not inferred. |
+| S6 | Release and handoff | STAGING_CURRENT / RESTORE_REHEARSED | PR76 merged466a30e, imageb0292141 deployed; independent local DB/media restore and same-VPS isolated app/MinIO recovery PASS; guide written. Recurring backup, final Owner acceptance and production gates remain. |
 | S7 | Commercial payment launch | OUT_OF_SCOPE | Current contract uses manual access. |
 
 Pre-flight: S1c access checks must feed both content mutations and provider handoffs;
