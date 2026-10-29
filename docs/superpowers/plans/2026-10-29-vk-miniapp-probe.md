@@ -1,5 +1,19 @@
 # VK Mini App feasibility probe
 
+## Owner-approved preparation update: groups editor list
+
+Actual diagnostic response had one correctly identified group, but no is_admin or
+admin_level. Management UI available to owner is separate evidence; API role cause
+remains unknown. Owner authorized source preparation of groups consent + groups.get
+filter editor. Replace first read only; preserve second photo-endpoint read, token
+privacy, no sends, reset/late-response fence. Accept positive integer target only
+from current-token editor list, extended0/count1000/offset0/no user_id. Malformed
+lists deny; absent target in partial list stops without pagination. Require all
+three actually granted scopes. TDD: new expectations observed failing first; add
+missing-scope, malformed/foreign/incomplete list and no-reflection regression cases.
+Run build/lint/targeted tests, independent review, then push existing Draft PR79.
+No deployment/provider calls/settings changes authorized by this preparation gate.
+
 Owner selected this isolated feasibility spike and confirmed ownership of
 Mini App54809413. Web VK ID54809575 is a different application and stays unchanged.
 Use the existing isolated checkout, new branch codex/vk-miniapp-probe-20261029

@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProbe } from '../experiments/vk-miniapp-probe/controller.mjs';
 
-function fixture({scope='wall,photos',admin=true,photoError=false}={}) {
+function fixture({scope='wall,photos,groups',admin=true,photoError=false}={}) {
   const calls=[];
   const token='synthetic-private-token-never-render';
   const bridge={send:async(method,params)=>{
     calls.push({method,params});
     if(method==='VKWebAppInit')return {};
     if(method==='VKWebAppGetAuthToken')return {access_token:token,scope};
-    if(params.method==='groups.getById')return {response:{groups:[{id:242095689,is_admin:admin?1:0,admin_level:admin?3:0}]}};
+    if(params.method==='groups.get')return {response:{count:admin?1:0,items:admin?[242095689]:[]}};
     if(photoError)throw {error_data:{error_code:27,error_description:token}};
     return {response:{upload_url:'https://upload.example.test/private-session'}};
   }};
@@ -30,7 +30,7 @@ test('init alone does not request permissions or contact API',async()=>{
 });
 test('explicit grant uses confirmed Mini App, scopes and no token UI',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
-  assert.deepEqual(f.calls[1],{method:'VKWebAppGetAuthToken',params:{app_id:54809413,scope:'wall,photos'}});
+  assert.deepEqual(f.calls[1],{method:'VKWebAppGetAuthToken',params:{app_id:54809413,scope:'wall,photos,groups'}});
   assert.equal(f.probe.snapshot().phase,'AUTHORIZED');
   assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
   assert.equal(f.probe.snapshot().expiresIn,null);
@@ -42,7 +42,7 @@ test('missing real grant scope prohibits API probes',async()=>{
 });
 test('successful photo probe performs exactly two reads, never uploads or sends',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
-  assert.deepEqual(f.calls.filter(x=>x.method==='VKWebAppCallAPIMethod').map(x=>x.params.method),['groups.getById','photos.getWallUploadServer']);
+  assert.deepEqual(f.calls.filter(x=>x.method==='VKWebAppCallAPIMethod').map(x=>x.params.method),['groups.get','photos.getWallUploadServer']);
   assert.equal(f.calls[3].params.params.access_token,f.token);
   assert.equal(f.probe.snapshot().phase,'PHOTO_ENDPOINT_AVAILABLE');
   const visible=JSON.stringify(f.probe.snapshot());
@@ -60,7 +60,7 @@ test('provider errors never reflect private error text',async()=>{
 test('reset ignores a late grant and never restores private state',async()=>{
   const f=fixture();await f.probe.initialize();let resolve;
   f.bridge.send=()=>new Promise(done=>{resolve=done;});
-  const pending=f.probe.requestAccess();f.probe.reset();resolve({access_token:f.token,scope:'wall,photos'});await pending;
+  const pending=f.probe.requestAccess();f.probe.reset();resolve({access_token:f.token,scope:'wall,photos,groups'});await pending;
   assert.equal(f.probe.snapshot().phase,'READY');await f.probe.checkPhoto();
   assert.equal(f.probe.snapshot().phase,'READY');
 });
@@ -68,40 +68,57 @@ test('duplicate permission clicks start only one request',async()=>{
   const f=fixture();await f.probe.initialize();let resolve;let requests=0;
   f.bridge.send=()=>{requests++;return new Promise(done=>{resolve=done;});};
   const pending=f.probe.requestAccess();await f.probe.requestAccess();
-  assert.equal(requests,1);resolve({access_token:f.token,scope:'wall,photos'});await pending;
+  assert.equal(requests,1);resolve({access_token:f.token,scope:'wall,photos,groups'});await pending;
 });
 test('reset during community lookup prevents the next API request',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();let resolve;let requests=0;
   f.bridge.send=()=>{requests++;return new Promise(done=>{resolve=done;});};
   const pending=f.probe.checkPhoto();f.probe.reset();
-  resolve({response:{groups:[{id:242095689,is_admin:1,admin_level:3}]}});await pending;
+  resolve({response:{count:1,items:[242095689]}});await pending;
   assert.equal(requests,1);assert.equal(f.probe.snapshot().phase,'READY');
 });
 test('an invalid or foreign community response fails before photo probe',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
-  let requests=0;f.bridge.send=async()=>{requests++;return {response:{groups:[{id:123,is_admin:1,admin_level:3}]}};};
+  let requests=0;f.bridge.send=async()=>{requests++;return {response:{count:1,items:[123]}};};
   await f.probe.checkPhoto();assert.equal(requests,1);
   assert.equal(f.probe.snapshot().phase,'COMMUNITY_CONTROL_REQUIRED');
 });
 
-test('community diagnostics expose only bounded facts and clear on reset',async()=>{
-  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
-  let requests=0;
-  f.bridge.send=async()=>{requests++;return {response:{groups:[{id:242095689,is_admin:true,admin_level:3,name:f.token,secret:f.token}]}};};
-  await f.probe.checkPhoto();
-  assert.deepEqual(f.probe.snapshot().communityDiagnostic,{
-    shape:'groups_array',count:1,idMatches:true,isAdminType:'boolean',isAdmin:null,adminLevel:3,deactivated:false,
-  });
-  assert.equal(requests,1);assert.equal(f.probe.snapshot().phase,'COMMUNITY_CONTROL_REQUIRED');
-  assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
+test('missing groups grant blocks all API calls',async()=>{
+  const f=fixture({scope:'wall,photos'});await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  assert.equal(f.probe.snapshot().phase,'MISSING_SCOPES');assert.equal(f.calls.length,2);
+});
+test('control proof is scoped to current token editor list and never exposes other IDs',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  assert.deepEqual(f.calls[2].params,{method:'groups.get',params:{access_token:f.token,v:'5.199',filter:'editor',extended:0,count:1000,offset:0}});
+  assert.deepEqual(f.probe.snapshot().communityDiagnostic,{shape:'items_array',matched:true,complete:true});
   f.probe.reset();assert.equal(f.probe.snapshot().communityDiagnostic,null);
 });
+test('malformed, foreign and incomplete list responses fail closed without another request',async()=>{
+  for(const response of [{count:1,items:['242095689']},{count:1,items:[123]},{count:2,items:[123]},{count:1,items:[{id:242095689}]},{count:0,items:[242095689]},{count:2,items:[242095689,242095689]}]){
+    const f=fixture();await f.probe.initialize();await f.probe.requestAccess();let requests=0;
+    f.bridge.send=async()=>{requests++;return {response};};
+    await f.probe.checkPhoto();
+    assert.equal(requests,1);assert.notEqual(f.probe.snapshot().phase,'PHOTO_ENDPOINT_AVAILABLE');
+    assert.equal(JSON.stringify(f.probe.snapshot()).includes('private'),false);
+  }
+});
 
-test('malformed community diagnostic never reflects arbitrary values',async()=>{
-  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
-  f.bridge.send=async()=>({response:{groups:[{id:f.token,is_admin:f.token,admin_level:f.token}]}});
-  await f.probe.checkPhoto();
-  const d=f.probe.snapshot().communityDiagnostic;
-  assert.equal(d.isAdminType,'string');assert.equal(d.isAdmin,null);assert.equal(d.adminLevel,null);
-  assert.equal(d.idMatches,false);assert.equal(JSON.stringify(d).includes(f.token),false);
+test('incomplete list is explicit and does not paginate automatically',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();let requests=0;
+  f.bridge.send=async()=>{requests++;return {response:{count:1001,items:[123]}};};
+  await f.probe.checkPhoto();assert.equal(requests,1);
+  assert.equal(f.probe.snapshot().phase,'COMMUNITY_LIST_INCOMPLETE');
+  assert.deepEqual(f.probe.snapshot().communityDiagnostic,{shape:'items_array',matched:false,complete:false});
+});
+
+test('valid target match never exposes other community IDs or extra response fields',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();const send=f.bridge.send;
+  f.bridge.send=async(method,params)=>params.method==='groups.get'
+    ?{response:{count:2,items:[987654321,242095689],secret:f.token}}:send(method,params);
+  await f.probe.checkPhoto();assert.equal(f.probe.snapshot().phase,'PHOTO_ENDPOINT_AVAILABLE');
+  assert.equal(JSON.stringify(f.probe.snapshot()).includes('987654321'),false);
+  assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
+  const snapshot=f.probe.snapshot();snapshot.communityDiagnostic.matched=false;
+  assert.equal(f.probe.snapshot().communityDiagnostic.matched,true);
 });
