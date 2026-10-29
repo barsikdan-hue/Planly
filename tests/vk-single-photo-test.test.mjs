@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
+import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION,inspectPreconditions} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
 function fixture(){
   const calls=[];let claimed=false;
   const o={active:()=>true,claim:()=>{if(claimed)return false;claimed=true;return true;},
@@ -53,4 +53,14 @@ test('persistent latch contains only a fixed marker and refuses existing operati
 test('token-bearing upload URL is rejected before a claim',async()=>{
   const f=fixture();f.o.sensitiveToken='private-token';f.o.uploadUrl+='?secret=private-token';
   assert.equal((await publishOne(f.o)).phase,'TEST_PRECONDITION_FAILED');assert.equal(f.calls.length,0);
+});
+
+test('dry run identifies exact precondition without a claim or upload',()=>{
+  const f=fixture();let claims=0;f.o.claim=()=>{claims++;return true;};
+  assert.equal(inspectPreconditions(f.o),'READY');
+  assert.equal(inspectPreconditions({...f.o,uploadUrl:'https://upload.vk.com/private'}),'UPLOAD_HOST');
+  assert.equal(inspectPreconditions({...f.o,image:null}),'IMAGE_MISSING');
+  assert.equal(inspectPreconditions({...f.o,image:new Blob(['x'],{type:'image/jpeg'})}),'IMAGE_TYPE');
+  assert.equal(inspectPreconditions({...f.o,active:()=>false}),'CANCELLED');
+  assert.equal(claims,0);assert.equal(f.calls.length,0);
 });

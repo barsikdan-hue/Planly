@@ -16,6 +16,7 @@ const labels={
   TEST_ALREADY_ATTEMPTED:'Эта тестовая операция уже запускалась. Повтор запрещён.',
   TEST_OUTCOME_UNKNOWN:'Исход тестовой операции не подтверждён. Не повторяйте отправку: сначала нужна проверка результата.',
   TEST_POST_CONFIRMED:'VK подтвердил создание одного тестового поста с новой картинкой.',
+  TEST_DIAGNOSTIC_FAILED:'Не удалось выполнить локальную проверку условий. Загрузок и отправок не было.',
 };
 const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchParams.get('vk_app_id')},state=>{
   doc.querySelector('#status').textContent=labels[state.phase]??'Проверка не завершена.';
@@ -30,6 +31,8 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   let attempted=true;
   try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}
   doc.querySelector('#publish-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||attempted||!globalThis.navigator?.locks;
+  doc.querySelector('#inspect-test').disabled=state.busy||!['PHOTO_ENDPOINT_AVAILABLE','TEST_PRECONDITION_FAILED','TEST_ALREADY_ATTEMPTED'].includes(state.phase);
+  doc.querySelector('#preflight-result').textContent=state.preflight?`Условия без отправки: ${state.preflight.reason}; хранилище: ${state.preflight.storage}. Запись в хранилище этой проверкой не выполнялась.`:'';
   const receipt=doc.querySelector('#post-receipt');
   receipt.textContent=state.phase==='TEST_POST_CONFIRMED'?`Открыть пост №${state.postId}`:'';
   if(state.phase==='TEST_POST_CONFIRMED')receipt.href=`https://vk.ru/wall-242095689_${state.postId}`;
@@ -46,6 +49,10 @@ ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{probe.reset();});
+doc.querySelector('#inspect-test').addEventListener('click',()=>{void probe.inspectTest({
+  makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),
+  storageStatus:()=>globalThis.localStorage.getItem(TEST_OPERATION)===null?'AVAILABLE':'ATTEMPTED',
+});});
 doc.querySelector('#publish-test').addEventListener('click',async()=>{
   if(!globalThis.navigator?.locks)return;
   await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{

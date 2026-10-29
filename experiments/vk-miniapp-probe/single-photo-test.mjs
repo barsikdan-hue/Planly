@@ -2,15 +2,25 @@ export const TEST_MESSAGE='Тест Planly: автоматическая заг�
 export const TEST_OPERATION='planly-vk-newphoto-20261029-01';
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 const text=(s,max)=>typeof s==='string'&&s.trim().length>0&&s.length<=max;
-export async function publishOne({active,claim,uploadUrl,image,upload,api,sensitiveToken}){
+export function inspectPreconditions({active,uploadUrl,image,sensitiveToken}){
   let url;
-  try{url=new URL(uploadUrl);}catch{return {phase:'TEST_PRECONDITION_FAILED'};}
-  if(url.protocol!=='https:'||!/^pu\d*\.vk\.com$/.test(url.hostname)||url.port||url.username||url.password||url.hash
-    ||(sensitiveToken&&(url.toString().includes(sensitiveToken)||[...url.searchParams.values()].some(value=>value.includes(sensitiveToken))))
-    ||!(image instanceof Blob)||image.type!=='image/png'||image.size<1||image.size>1_000_000||!active())return {phase:'TEST_PRECONDITION_FAILED'};
+  try{url=new URL(uploadUrl);}catch{return 'UPLOAD_URL_INVALID';}
+  if(url.protocol!=='https:')return 'UPLOAD_SCHEME';
+  if(!/^pu\d*\.vk\.com$/.test(url.hostname))return 'UPLOAD_HOST';
+  if(url.port||url.username||url.password||url.hash)return 'UPLOAD_URL_COMPONENTS';
+  if(sensitiveToken&&(url.toString().includes(sensitiveToken)||[...url.searchParams.values()].some(value=>value.includes(sensitiveToken))))return 'UPLOAD_TOKEN_IN_URL';
+  if(!(image instanceof Blob))return 'IMAGE_MISSING';
+  if(image.type!=='image/png')return 'IMAGE_TYPE';
+  if(image.size<1||image.size>1_000_000)return 'IMAGE_SIZE';
+  if(!active())return 'CANCELLED';
+  return 'READY';
+}
+export async function publishOne(options){
+  const {active,claim,uploadUrl,image,upload,api}=options;
+  if(inspectPreconditions(options)!=='READY')return {phase:'TEST_PRECONDITION_FAILED'};
   try{if(!claim())return {phase:'TEST_ALREADY_ATTEMPTED'};}catch{return {phase:'TEST_PRECONDITION_FAILED'};}
   try{
-    const raw=await upload(url.toString(),image);
+    const raw=await upload(new URL(uploadUrl).toString(),image);
     if(!active()||!positive(raw?.server)||!text(raw.photo,1_048_576)||raw.photo.trim()==='[]'||!text(raw.hash,8192))throw {};
     const saved=await api('photos.saveWallPhoto',{group_id:242095689,server:raw.server,photo:raw.photo,hash:raw.hash});
     if(!active()||!Array.isArray(saved)||saved.length!==1||saved[0]?.owner_id!==-242095689||!positive(saved[0]?.id))throw {};

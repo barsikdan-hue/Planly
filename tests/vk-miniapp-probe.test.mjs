@@ -143,3 +143,12 @@ test('reset while generating image prevents claim and upload',async()=>{
   f.probe.reset();resolve(new Blob(['test'],{type:'image/png'}));await pending;
   assert.equal(claims,0);assert.equal(f.probe.snapshot().phase,'READY');
 });
+
+test('local preflight inspection does not call VK or mutate operation marker',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  const before=f.calls.length;let reads=0;
+  await f.probe.inspectTest({makeImage:async()=>new Blob(['test'],{type:'image/png'}),storageStatus:()=>{reads++;return 'AVAILABLE';}});
+  assert.equal(f.calls.length,before);assert.equal(reads,1);
+  assert.deepEqual(f.probe.snapshot().preflight,{reason:'UPLOAD_HOST',storage:'AVAILABLE'});
+  f.probe.reset();assert.equal(f.probe.snapshot().preflight,null);
+});

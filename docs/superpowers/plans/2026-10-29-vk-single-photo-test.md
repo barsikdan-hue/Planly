@@ -1,5 +1,16 @@
 # One owner-authorized new-photo publication spike
 
+## Follow-up: no-send precondition diagnosis
+
+Owner screenshot8f7f66bf /2bd4aeb9 shows TEST_PRECONDITION_FAILED, not UNKNOWN:
+mutation block was not entered. Exact condition remains NOT_PROVEN. User requested
+investigation. Extract unchanged preconditions into fixed reason codes; add separate
+local inspect button using closure upload URL/generated image and read-only marker
+status. Never call claim/upload/API or clear marker from inspection. Show no URL,
+token, host, file bytes or raw exceptions. Existing publish guards stay unchanged.
+Target tests: exact reason selection, no claims/API, reset/snapshot clearing. A new
+static-only deployment needs separate exact Owner approval; CSP remains unchanged.
+
 Owner repeatedly authorized one new neutral image and fixed text in group242095689.
 Existing MiniApp54809413 current grant proves editor-list match and upload endpoint,
 not actual file transfer/save/post. Do not export token, reuse old community key,
