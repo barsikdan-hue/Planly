@@ -1,0 +1,41 @@
+name: VK Mini App probe
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/vk-miniapp-probe/**'
+      - 'tests/vk-miniapp-probe.test.mjs'
+      - '.github/workflows/vk-miniapp-probe.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/vk-miniapp-probe/**'
+      - 'tests/vk-miniapp-probe.test.mjs'
+      - '.github/workflows/vk-miniapp-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-static-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+      - name: Synthetic safety and cancellation tests (no provider access)
+        run: node --test tests/vk-miniapp-probe.test.mjs
+      - name: Install isolated pinned build dependencies
+        run: npm ci --prefix experiments/vk-miniapp-probe --ignore-scripts --no-audit --no-fund
+      - name: Build static diagnostic assets
+        run: npm run build --prefix experiments/vk-miniapp-probe
+      - name: Record exact asset hashes
+        working-directory: experiments/vk-miniapp-probe/dist
+        run: sha256sum index.html app.js style.css > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vk-miniapp-probe-static
+          path: experiments/vk-miniapp-probe/dist/
+          retention-days: 7

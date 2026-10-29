@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'"><title>Planly — проверка VK Mini App</title><link rel="stylesheet" href="./style.css"></head>
+<body><main><span class="tag">PLANLY · ТЕХНИЧЕСКАЯ ПРОВЕРКА</span><h1>Подключение VK</h1>
+<p>Mini App №54809413 · тестовая группа №242095689</p>
+<section><h2>Проверяем разрешения для новых фотографий</h2><p>Сначала VK запросит ваше согласие. Затем можно проверить доступ к методу загрузки. Эта страница ничего не публикует и не загружает.</p>
+<div class="actions"><button id="authorize" disabled>1. Запросить права VK</button><button id="check" disabled>2. Проверить доступ к фото</button><button id="reset">Очистить результат</button></div></section>
+<section aria-live="polite"><h2>Результат</h2><p id="status">Подготовка проверки…</p><p id="scopes">wall: не выдано · photos: не выдано</p><p id="expiry">Срок действия пока неизвестен.</p><p id="error"></p></section>
+<p class="note">Токен не показывается, не сохраняется в браузерное хранилище и не отправляется на сервер Planly. «Очистить результат» очищает сохранённый токен страницы; уже начатый запрос VK может завершиться. Это не отзывает разрешение в VK. Диагностика не подключает планировщик.</p>
+</main><script type="module" src="./app.js"></script></body></html>
