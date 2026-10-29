@@ -7,7 +7,7 @@ on:
       - 'tests/backup/**'
       - '.github/workflows/backup-receiver.yml'
   push:
-    branches: [main, 'codex/windows-backup-*']
+    branches: [main]
     paths:
       - 'scripts/backup/**'
       - 'tests/backup/**'

@@ -67,12 +67,21 @@ def windows_acl(path, created=False, directory=False):
         $p=$env:PLANLY_BACKUP_ACL_PATH
         $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User
         if ($env:PLANLY_BACKUP_ACL_NEW -eq '1') {
-          $acl=New-Object System.Security.AccessControl.DirectorySecurity
+          if ($env:PLANLY_BACKUP_ACL_DIR -eq '1') {
+            $acl=New-Object System.Security.AccessControl.DirectorySecurity
+            $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow')
+          } else {
+            $acl=New-Object System.Security.AccessControl.FileSecurity
+            $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'FullControl','Allow')
+          }
           $acl.SetOwner($sid)
           $acl.SetAccessRuleProtection($true,$false)
-          $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow')
           $acl.AddAccessRule($rule)
-          [System.IO.Directory]::SetAccessControl($p,$acl)
+          if ($env:PLANLY_BACKUP_ACL_DIR -eq '1') {
+            [System.IO.Directory]::SetAccessControl($p,$acl)
+          } else {
+            [System.IO.File]::SetAccessControl($p,$acl)
+          }
         }
         if ($env:PLANLY_BACKUP_ACL_DIR -eq '1') {
           $acl=[System.IO.Directory]::GetAccessControl($p)
@@ -119,13 +128,13 @@ def private_dir(path):
             raise BackupError('PRIVATE_ACL_REQUIRED')
 
 
-def private_file(path):
+def private_file(path, created=False):
     safe_path(path)
     if path.exists():
         if not path.is_file():
             raise BackupError('UNSAFE_PATH')
         if os.name == 'nt':
-            windows_acl(path)
+            windows_acl(path, created=created)
         elif path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
             raise BackupError('PRIVATE_ACL_REQUIRED')
 
@@ -138,7 +147,7 @@ def lock(root):
     with path.open('a+b') as stream:
         if new and os.name != 'nt':
             path.chmod(0o600)
-        private_file(path)
+        private_file(path, created=new)
         if stream.tell() == 0:
             stream.write(b'0')
             stream.flush()
@@ -201,7 +210,7 @@ def atomic_json(path, value):
     fd, name = tempfile.mkstemp(prefix='.status-', dir=path.parent)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-            private_file(Path(name))
+            private_file(Path(name), created=True)
             json.dump(value, stream)
             stream.flush()
             os.fsync(stream.fileno())
@@ -260,7 +269,7 @@ def pull(source, destination, snapshot):
                 with stored.open('xb') as stream:
                     if os.name != 'nt':
                         stored.chmod(0o600)
-                    private_file(stored)
+                    private_file(stored, created=True)
                     stream.write(manifest)
                     stream.flush()
                     os.fsync(stream.fileno())
@@ -274,10 +283,11 @@ def pull(source, destination, snapshot):
                     raise BackupError('FILE_MISMATCH')
                 temp = work / (row['name'] + '.part')
                 private_file(temp)
+                new_temp = not temp.exists()
                 with temp.open('wb') as stream:
                     if os.name != 'nt':
                         temp.chmod(0o600)
-                    private_file(temp)
+                    private_file(temp, created=new_temp)
                     source.fetch(row['name'], stream, row['bytes'] + 1)
                     stream.flush()
                     os.fsync(stream.fileno())

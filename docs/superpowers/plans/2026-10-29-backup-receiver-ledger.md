@@ -37,3 +37,12 @@ PR #77 acceptance documentation at afd388b: fresh GitHub readback confirms
 CI40817992058 and Self-host40817992057 SUCCESS. That is separate from this branch.
 No merge, deploy, server stop, infrastructure change, transfer of real secrets or
 new provider operation performed by the receiver implementation work.
+
+Cross-platform CI found a separate Windows creation defect at ab32ad1: Linux
+passed, Windows rejected a newly created lock with PRIVATE_ACL_REQUIRED.
+Diagnostic-only51b044a proved owner_matches=False, other_allow_grants=False,
+exit2 (owner mismatch), unlike local Windows owner_matches=True. New files on
+the hosted runner receive a different default owner despite private inherited
+DACL. Fix explicitly initializes owner/DACL only on freshly created files before
+any data write; pre-existing broad/mismatched files still fail closed. No retries,
+skipped assertions, increased limits or access-policy relaxation used.
