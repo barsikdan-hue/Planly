@@ -83,3 +83,25 @@ test('an invalid or foreign community response fails before photo probe',async()
   await f.probe.checkPhoto();assert.equal(requests,1);
   assert.equal(f.probe.snapshot().phase,'COMMUNITY_CONTROL_REQUIRED');
 });
+
+test('community diagnostics expose only bounded facts and clear on reset',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
+  let requests=0;
+  f.bridge.send=async()=>{requests++;return {response:{groups:[{id:242095689,is_admin:true,admin_level:3,name:f.token,secret:f.token}]}};};
+  await f.probe.checkPhoto();
+  assert.deepEqual(f.probe.snapshot().communityDiagnostic,{
+    shape:'groups_array',count:1,idMatches:true,isAdminType:'boolean',isAdmin:null,adminLevel:3,deactivated:false,
+  });
+  assert.equal(requests,1);assert.equal(f.probe.snapshot().phase,'COMMUNITY_CONTROL_REQUIRED');
+  assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
+  f.probe.reset();assert.equal(f.probe.snapshot().communityDiagnostic,null);
+});
+
+test('malformed community diagnostic never reflects arbitrary values',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
+  f.bridge.send=async()=>({response:{groups:[{id:f.token,is_admin:f.token,admin_level:f.token}]}});
+  await f.probe.checkPhoto();
+  const d=f.probe.snapshot().communityDiagnostic;
+  assert.equal(d.isAdminType,'string');assert.equal(d.isAdmin,null);assert.equal(d.adminLevel,null);
+  assert.equal(d.idMatches,false);assert.equal(JSON.stringify(d).includes(f.token),false);
+});

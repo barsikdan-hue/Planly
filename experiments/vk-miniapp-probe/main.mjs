@@ -16,6 +16,8 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   doc.querySelector('#scopes').textContent=`wall: ${state.scopes.wall?'выдано':'не выдано'} · photos: ${state.scopes.photos?'выдано':'не выдано'}`;
   doc.querySelector('#expiry').textContent=state.expiresIn===null?'Срок действия: API не сообщил. Фоновая работа не подтверждена.':`Сообщённый срок действия: ${state.expiresIn} секунд. Обновление токена ещё не проверено.`;
   doc.querySelector('#error').textContent=state.errorCode===null?'':`Код VK: ${state.errorCode}`;
+  const d=state.communityDiagnostic;
+  doc.querySelector('#community-diagnostic').textContent=d?`Диагностика группы: форма=${d.shape}; записей=${d.count??'нет'}; ID совпал=${d.idMatches}; is_admin: тип=${d.isAdminType}, значение=${d.isAdmin??'не 0/1'}; admin_level=${d.adminLevel??'нет допустимого значения'}; deactivated присутствует=${d.deactivated}.`:'';
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
   doc.querySelector('#check').disabled=state.busy||!['AUTHORIZED','CHECK_FAILED','PHOTO_ENDPOINT_AVAILABLE'].includes(state.phase);
   doc.querySelector('#reset').disabled=state.phase==='OPEN_IN_VK';
