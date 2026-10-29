@@ -71,3 +71,13 @@ test('host diagnostic exposes only recognized upload-shaped DNS names, never URL
   for(const url of ['https://private-secret.evil.test/x','https://private-secret.vk.com/x','https://pu.vk.com.evil.test/x','not-url'])assert.equal(safeUploadHost(url),'REDACTED');
   assert.equal(safeUploadHost('https://pu123.vk.com/x','pu123'),'REDACTED');
 });
+
+test('actual VK-returned pu.vk.ru host passes without admitting other vk.ru hosts',async()=>{
+  const f=fixture();f.o.uploadUrl='https://pu.vk.ru/c123/upload.php';
+  assert.equal(inspectPreconditions(f.o),'READY');
+  assert.equal((await publishOne(f.o)).phase,'TEST_POST_CONFIRMED');
+  for(const host of ['pu1.vk.ru','upload.vk.ru','pu.vk.ru.evil.test','evilpu.vk.ru']){
+    const g=fixture();g.o.uploadUrl=`https://${host}/upload`;
+    assert.equal(inspectPreconditions(g.o),'UPLOAD_HOST');assert.equal(g.calls.length,0);
+  }
+});

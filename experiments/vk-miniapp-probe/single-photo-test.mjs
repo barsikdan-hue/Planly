@@ -14,7 +14,7 @@ export function inspectPreconditions({active,uploadUrl,image,sensitiveToken}){
   let url;
   try{url=new URL(uploadUrl);}catch{return 'UPLOAD_URL_INVALID';}
   if(url.protocol!=='https:')return 'UPLOAD_SCHEME';
-  if(!/^pu\d*\.vk\.com$/.test(url.hostname))return 'UPLOAD_HOST';
+  if(!/^pu\d*\.vk\.com$/.test(url.hostname)&&url.hostname!=='pu.vk.ru')return 'UPLOAD_HOST';
   if(url.port||url.username||url.password||url.hash)return 'UPLOAD_URL_COMPONENTS';
   if(sensitiveToken&&(url.toString().includes(sensitiveToken)||[...url.searchParams.values()].some(value=>value.includes(sensitiveToken))))return 'UPLOAD_TOKEN_IN_URL';
   if(!(image instanceof Blob))return 'IMAGE_MISSING';

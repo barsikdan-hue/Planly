@@ -1,5 +1,18 @@
 # One owner-authorized new-photo publication spike
 
+## Proven host mismatch: exact pu.vk.ru correction
+
+Owner screenshot a09c1d5c shows provider-returned pu.vk.ru, UPLOAD_HOST and storage
+AVAILABLE. Actual upload target differs from original pu[digits].vk.com guard;
+this explains pre-mutation failure. Public TLS connection validated hostname/trust
+for pu.vk.ru (TLS1.3, certificate expires7Feb2027); no upload URL/token disclosed.
+Add EXACT pu.vk.ru to static spike runtime guard and meta/header CSP, preserve
+existing pu[digits].vk.com. Do not allow wildcard vk.ru, pu1.vk.ru, other names or
+redirects. Regression observed RED, then29tests PASS. No backend connector change,
+marker reset, provider retry or claim of CORS/upload/send PASS. Stage deployment
+needs separate exact source+CSP gate. Human first runs no-send conditions: expect
+READY and AVAILABLE, then the existing single-post grant can be attempted once.
+
 ## Follow-up: no-send precondition diagnosis
 
 Owner dry-run screenshot2457bc1c confirms UPLOAD_HOST and AVAILABLE storage,

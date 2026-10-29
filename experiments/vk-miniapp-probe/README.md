@@ -1,5 +1,12 @@
 # VK Mini App diagnostic spike
 
+Current prepared correction: actual Owner dry-run reports upload host pu.vk.ru.
+Original pu[digits].vk.com-only guard caused UPLOAD_HOST before any mutation.
+Only exact pu.vk.ru is added to the static test guard/meta CSP; HTTPS, credentials,
+port, fragment, token-in-URL, image, ownership, redirect and one-shot checks remain.
+Public TLS hostname verification PASS; actual upload/CORS/save/post not verified.
+No backend connector changes. Staging stays400cce4 until separate deployment gate.
+
 ## Prepared source: single owner-authorized new-photo test
 
 New source adds a third explicit one-shot publication button for fixed group242095689,
