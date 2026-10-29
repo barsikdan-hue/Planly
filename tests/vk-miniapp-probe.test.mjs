@@ -122,3 +122,24 @@ test('valid target match never exposes other community IDs or extra response fie
   const snapshot=f.probe.snapshot();snapshot.communityDiagnostic.matched=false;
   assert.equal(f.probe.snapshot().communityDiagnostic.matched,true);
 });
+
+test('reset and fresh authorization cannot resume an old publication preflight',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  const send=f.bridge.send;let resolve;let uploads=0;let delay=true;
+  f.bridge.send=(method,params)=>params.method==='groups.get'&&delay
+    ?new Promise(done=>{resolve=done;}):send(method,params);
+  const pending=f.probe.publishTest({image:new Blob(['test'],{type:'image/png'}),claim:()=>true,upload:async()=>{uploads++;throw {};}});
+  f.probe.reset();delay=false;await f.probe.requestAccess();await f.probe.checkPhoto();
+  resolve({response:{count:1,items:[242095689]}});await pending;
+  assert.equal(uploads,0);assert.equal(f.probe.snapshot().phase,'PHOTO_ENDPOINT_AVAILABLE');
+});
+
+test('reset while generating image prevents claim and upload',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  let resolve;let claims=0;
+  const pending=f.probe.publishTest({makeImage:()=>new Promise(done=>{resolve=done;}),claim:()=>{claims++;return true;},upload:async()=>{throw {};}});
+  // Preflight has two awaited Bridge reads before image generation.
+  while(!resolve)await new Promise(done=>setImmediate(done));
+  f.probe.reset();resolve(new Blob(['test'],{type:'image/png'}));await pending;
+  assert.equal(claims,0);assert.equal(f.probe.snapshot().phase,'READY');
+});

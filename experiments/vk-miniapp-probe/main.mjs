@@ -1,5 +1,6 @@
 import bridge from '@vkontakte/vk-bridge';
 import {createProbe} from './controller.mjs';
+import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-test.mjs';
 const doc=globalThis.document;
 const labels={
   NOT_INITIALIZED:'Подготовка проверки…',OPEN_IN_VK:'Откройте эту страницу внутри Mini App Planly №54809413.',
@@ -11,6 +12,10 @@ const labels={
   COMMUNITY_LIST_INCOMPLETE:'Нужная группа не найдена в первой странице списка управления. Доступ не подтверждён, следующих запросов не было.',
   PHOTO_ENDPOINT_AVAILABLE:'VK выдал адрес загрузки фото. Файл не загружен, публикаций нет.',
   CHECK_FAILED:'VK не подтвердил доступ к методу. Публикаций и загрузок не было.',
+  TEST_PRECONDITION_FAILED:'Тест не запущен: не выполнены условия безопасной загрузки или недоступна защита от повторов.',
+  TEST_ALREADY_ATTEMPTED:'Эта тестовая операция уже запускалась. Повтор запрещён.',
+  TEST_OUTCOME_UNKNOWN:'Исход тестовой операции не подтверждён. Не повторяйте отправку: сначала нужна проверка результата.',
+  TEST_POST_CONFIRMED:'VK подтвердил создание одного тестового поста с новой картинкой.',
 };
 const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchParams.get('vk_app_id')},state=>{
   doc.querySelector('#status').textContent=labels[state.phase]??'Проверка не завершена.';
@@ -22,9 +27,31 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
   doc.querySelector('#check').disabled=state.busy||!['AUTHORIZED','CHECK_FAILED','PHOTO_ENDPOINT_AVAILABLE'].includes(state.phase);
   doc.querySelector('#reset').disabled=state.phase==='OPEN_IN_VK';
+  let attempted=true;
+  try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}
+  doc.querySelector('#publish-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||attempted||!globalThis.navigator?.locks;
+  const receipt=doc.querySelector('#post-receipt');
+  receipt.textContent=state.phase==='TEST_POST_CONFIRMED'?`Открыть пост №${state.postId}`:'';
+  if(state.phase==='TEST_POST_CONFIRMED')receipt.href=`https://vk.ru/wall-242095689_${state.postId}`;
+  else receipt.removeAttribute('href');
 });
+doc.querySelector('#test-message').textContent=TEST_MESSAGE;
+const canvas=doc.querySelector('#test-image');
+const ctx=canvas.getContext('2d');
+ctx.fillStyle='#edf4ff';ctx.fillRect(0,0,800,500);
+ctx.fillStyle='#0969da';ctx.fillRect(60,60,680,14);
+ctx.font='bold 62px sans-serif';ctx.fillText('PLANLY',60,220);
+ctx.fillStyle='#183047';ctx.font='32px sans-serif';ctx.fillText('VK PHOTO UPLOAD TEST',60,295);
+ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{probe.reset();});
+doc.querySelector('#publish-test').addEventListener('click',async()=>{
+  if(!globalThis.navigator?.locks)return;
+  await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
+    if(!lock)return;
+    await probe.publishTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimTest(globalThis.localStorage),upload:uploadPhoto});
+  });
+});
 globalThis.addEventListener('pagehide',()=>{probe.reset();});
 void probe.initialize();

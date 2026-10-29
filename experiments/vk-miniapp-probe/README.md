@@ -1,5 +1,24 @@
 # VK Mini App diagnostic spike
 
+## Prepared source: single owner-authorized new-photo test
+
+New source adds a third explicit one-shot publication button for fixed group242095689,
+fixed TEST_MESSAGE and a neutral canvas-generated PNG. First two buttons remain
+read-only. Same-origin Web Locks serialize clicks/tabs; fixed localStorage marker
+is written before first mutation and survives reset/reload. No token in storage.
+Fresh control proof precedes upload; token/upload URL remain closure-only. Strict
+HTTPS pu[digits].vk.com upload family, no credentials/redirects. Then saveWallPhoto
+and fixed wall.post GUID, validating saved photo owner and post receipt. Unknown
+outcome is terminal; do not clear latch/retry. Reset cancels further steps, including
+preflight/image generation. This is not a server-side/global idempotency ledger;
+do not launch it in another browser/profile or manually remove the marker.
+Browser CORS upload support remains unverified; failure stops without a relay or
+fallback. One actual Owner send grant exists, not yet consumed. Staging stillc1e3fbc.
+Deployment needs exact Owner gate for the assets plus probe-only header CSP
+connect-src https://*.vk.com (meta updated too), preserving all other site paths.
+25 tests/build/targeted lint and independent review are source evidence only.
+No source preparation command uploads/saves/posts or changes hosting.
+
 ## Current source revision: editor-list control proof
 
 Owner authorized preparation only, not deployment or live calls. Actual54809413

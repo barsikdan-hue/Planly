@@ -1,3 +1,4 @@
+import {publishOne} from './single-photo-test.mjs';
 const APP_ID=54809413;
 const GROUP_ID=242095689;
 const API_VERSION='5.199';
@@ -23,7 +24,7 @@ async function boundedSend(bridge,method,params){
 
 /** Feasibility only. No token export, persistent storage, upload or send method. */
 export function createProbe(bridge,context,onChange=()=>{}){
-  let token=null,initialized=false,epoch=0;
+  let token=null,uploadUrl=null,initialized=false,epoch=0;
   let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null};
   const validContext=context?.appId===String(APP_ID);
   const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,scopes:{...state.scopes},communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
@@ -40,7 +41,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     return snapshot();
   }
   function reset(){
-    epoch++;token=null;
+    epoch++;token=null;uploadUrl=null;
     state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null};
     emit();return snapshot();
   }
@@ -54,7 +55,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   async function requestAccess(){
     if(!initialized)return snapshot();
     return run(async active=>{
-      token=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null});
+      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null});
       const grant=await boundedSend(bridge,'VKWebAppGetAuthToken',{app_id:APP_ID,scope:'wall,photos,groups'});
       if(!active())return;
       if(!isRecord(grant)||typeof grant.scope!=='string'||typeof grant.access_token!=='string'||!/^[-A-Za-z0-9_.]{20,16000}$/.test(grant.access_token))throw {};
@@ -69,6 +70,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     if(!initialized||!token)return snapshot();
     return run(async active=>{
       const currentToken=token;
+      uploadUrl=null;
       update({communityDiagnostic:null});
       const groups=unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method:'groups.get',params:{access_token:currentToken,v:API_VERSION,filter:'editor',extended:0,count:1000,offset:0},
@@ -92,8 +94,24 @@ export function createProbe(bridge,context,onChange=()=>{}){
       if(!isRecord(photo)||typeof photo.upload_url!=='string')throw {};
       const url=new URL(photo.upload_url);
       if(url.protocol!=='https:'||!url.hostname||url.username||url.password)throw {};
+      uploadUrl=url.toString();
       update({phase:'PHOTO_ENDPOINT_AVAILABLE'});
     },'CHECK_FAILED');
   }
-  return {snapshot,initialize,requestAccess,checkPhoto,reset};
+  async function publishTest(options){
+    if(state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token)return snapshot();
+    const startedEpoch=epoch;
+    await checkPhoto();
+    if(epoch!==startedEpoch||state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token||!uploadUrl)return snapshot();
+    return run(async active=>{
+      const currentToken=token;
+      const image=options.makeImage?await options.makeImage():options.image;
+      if(!active())return;
+      const result=await publishOne({...options,image,active,uploadUrl,sensitiveToken:currentToken,api:async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
+        method,params:{...params,access_token:currentToken,v:API_VERSION},
+      }))});
+      if(active())update(result);
+    },'TEST_OUTCOME_UNKNOWN');
+  }
+  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,reset};
 }
