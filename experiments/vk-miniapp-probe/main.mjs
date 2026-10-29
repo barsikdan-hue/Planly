@@ -32,7 +32,7 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}
   doc.querySelector('#publish-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||attempted||!globalThis.navigator?.locks;
   doc.querySelector('#inspect-test').disabled=state.busy||!['PHOTO_ENDPOINT_AVAILABLE','TEST_PRECONDITION_FAILED','TEST_ALREADY_ATTEMPTED'].includes(state.phase);
-  doc.querySelector('#preflight-result').textContent=state.preflight?`Условия без отправки: ${state.preflight.reason}; хранилище: ${state.preflight.storage}. Запись в хранилище этой проверкой не выполнялась.`:'';
+  doc.querySelector('#preflight-result').textContent=state.preflight?`Условия без отправки: ${state.preflight.reason}; хранилище: ${state.preflight.storage}; домен загрузчика: ${state.preflight.host}. Запись в хранилище этой проверкой не выполнялась.`:'';
   const receipt=doc.querySelector('#post-receipt');
   receipt.textContent=state.phase==='TEST_POST_CONFIRMED'?`Открыть пост №${state.postId}`:'';
   if(state.phase==='TEST_POST_CONFIRMED')receipt.href=`https://vk.ru/wall-242095689_${state.postId}`;

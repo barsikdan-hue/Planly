@@ -2,6 +2,15 @@
 
 ## Follow-up: no-send precondition diagnosis
 
+Owner dry-run screenshot2457bc1c confirms UPLOAD_HOST and AVAILABLE storage,
+not a PNG/claim/upload/CORS failure. Actual upload hostname unknown. Add display-only
+safeUploadHost: only pu/ps/cs/sun numeric DNS patterns under fixed candidate suffixes;
+other names REDACTED and any token substring suppressed. No path/query/credentials
+or URL export. Candidate display does not authorize a domain, widen upload regex,
+change CSP, perform API calls or touch latch. Synthetic privacy regressions first,
+then build/lint/review/CI. Deploy separately, human dry-run, verify actual domain
+before proposing any targeted upload-host correction. No blind retry.
+
 Owner screenshot8f7f66bf /2bd4aeb9 shows TEST_PRECONDITION_FAILED, not UNKNOWN:
 mutation block was not entered. Exact condition remains NOT_PROVEN. User requested
 investigation. Extract unchanged preconditions into fixed reason codes; add separate

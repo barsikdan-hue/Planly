@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION,inspectPreconditions} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
+import {publishOne,TEST_MESSAGE,claimTest,TEST_OPERATION,inspectPreconditions,safeUploadHost} from '../experiments/vk-miniapp-probe/single-photo-test.mjs';
 function fixture(){
   const calls=[];let claimed=false;
   const o={active:()=>true,claim:()=>{if(claimed)return false;claimed=true;return true;},
@@ -63,4 +63,11 @@ test('dry run identifies exact precondition without a claim or upload',()=>{
   assert.equal(inspectPreconditions({...f.o,image:new Blob(['x'],{type:'image/jpeg'})}),'IMAGE_TYPE');
   assert.equal(inspectPreconditions({...f.o,active:()=>false}),'CANCELLED');
   assert.equal(claims,0);assert.equal(f.calls.length,0);
+});
+
+test('host diagnostic exposes only recognized upload-shaped DNS names, never URL secrets',()=>{
+  assert.equal(safeUploadHost('https://pu123.vkuserphoto.ru/upload?token=private-secret#private'),'pu123.vkuserphoto.ru');
+  assert.equal(safeUploadHost('https://pu.vk.com/upload?hash=private'),'pu.vk.com');
+  for(const url of ['https://private-secret.evil.test/x','https://private-secret.vk.com/x','https://pu.vk.com.evil.test/x','not-url'])assert.equal(safeUploadHost(url),'REDACTED');
+  assert.equal(safeUploadHost('https://pu123.vk.com/x','pu123'),'REDACTED');
 });

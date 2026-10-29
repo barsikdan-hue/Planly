@@ -1,4 +1,4 @@
-import {publishOne,inspectPreconditions} from './single-photo-test.mjs';
+import {publishOne,inspectPreconditions,safeUploadHost} from './single-photo-test.mjs';
 const APP_ID=54809413;
 const GROUP_ID=242095689;
 const API_VERSION='5.199';
@@ -120,7 +120,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
       const reason=inspectPreconditions({active,uploadUrl,image,sensitiveToken:token});
       let storage='UNAVAILABLE';
       try{const reported=storageStatus();if(['AVAILABLE','ATTEMPTED'].includes(reported))storage=reported;}catch{/* no raw errors */}
-      update({preflight:{reason,storage}});
+      update({preflight:{reason,storage,host:safeUploadHost(uploadUrl,token)}});
     },'TEST_DIAGNOSTIC_FAILED');
   }
   return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,reset};

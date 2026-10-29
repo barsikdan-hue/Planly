@@ -2,6 +2,14 @@ export const TEST_MESSAGE='Тест Planly: автоматическая заг�
 export const TEST_OPERATION='planly-vk-newphoto-20261029-01';
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 const text=(s,max)=>typeof s==='string'&&s.trim().length>0&&s.length<=max;
+// Display-only candidate identification. This does not authorize an upload host.
+export function safeUploadHost(uploadUrl,sensitiveToken){
+  try{
+    const host=new URL(uploadUrl).hostname;
+    if(sensitiveToken&&host.includes(sensitiveToken.toLowerCase()))return 'REDACTED';
+    return /^(?:pu\d*|ps\d*|cs\d+|sun\d+-\d+)\.(?:vk\.com|vk\.ru|vkuserphoto\.ru|userapi\.com)$/.test(host)?host:'REDACTED';
+  }catch{return 'REDACTED';}
+}
 export function inspectPreconditions({active,uploadUrl,image,sensitiveToken}){
   let url;
   try{url=new URL(uploadUrl);}catch{return 'UPLOAD_URL_INVALID';}

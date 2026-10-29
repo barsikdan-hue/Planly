@@ -149,6 +149,6 @@ test('local preflight inspection does not call VK or mutate operation marker',as
   const before=f.calls.length;let reads=0;
   await f.probe.inspectTest({makeImage:async()=>new Blob(['test'],{type:'image/png'}),storageStatus:()=>{reads++;return 'AVAILABLE';}});
   assert.equal(f.calls.length,before);assert.equal(reads,1);
-  assert.deepEqual(f.probe.snapshot().preflight,{reason:'UPLOAD_HOST',storage:'AVAILABLE'});
+  assert.deepEqual(f.probe.snapshot().preflight,{reason:'UPLOAD_HOST',storage:'AVAILABLE',host:'REDACTED'});
   f.probe.reset();assert.equal(f.probe.snapshot().preflight,null);
 });
