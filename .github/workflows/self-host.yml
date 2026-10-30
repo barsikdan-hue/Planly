@@ -2,7 +2,7 @@ name: Self-host build
 
 on:
   pull_request:
-    branches: [main, 'codex/swipe-planner-2-*']
+    branches: [main, 'codex/swipe-planner-2-*', 'codex/windows-backup-20261029']
   push:
     branches: [main, feat/self-host-build]
 
