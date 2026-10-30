@@ -7,6 +7,7 @@ on:
       - 'tests/vk-miniapp-probe.test.mjs'
       - 'tests/vk-single-photo-test.test.mjs'
       - 'tests/vk-upload-only.test.mjs'
+      - 'tests/vk-server-upload-client.test.mjs'
       - '.github/workflows/vk-miniapp-probe.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'tests/vk-miniapp-probe.test.mjs'
       - 'tests/vk-single-photo-test.test.mjs'
       - 'tests/vk-upload-only.test.mjs'
+      - 'tests/vk-server-upload-client.test.mjs'
       - '.github/workflows/vk-miniapp-probe.yml'
 
 permissions:
@@ -30,7 +32,7 @@ jobs:
         with:
           node-version: '22.13.0'
       - name: Synthetic safety and cancellation tests (no provider access)
-        run: node --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs
+        run: node --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs tests/vk-server-upload-client.test.mjs
       - name: Install isolated pinned build dependencies
         run: npm ci --prefix experiments/vk-miniapp-probe --ignore-scripts --no-audit --no-fund
       - name: Build static diagnostic assets

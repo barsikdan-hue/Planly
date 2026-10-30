@@ -1,5 +1,16 @@
 # VK Mini App diagnostic spike
 
+Server relay source prepared30Oct after actual CORS console proof. New owner-only
+/api/social-accounts/vk/upload-test (GET admission then POST) uploads one PNG to
+exact pu.vk.ru observed upload path, public IPv4 DNS pin/TLS hostname verification,
+no redirects, bounded bytes/time. Token never leaves browser. Signed URL/image are
+transient request data; no raw upload response returned. New browser marker and
+per-owner Redis SETNX latch preserve both old attempts; no save/post. Same-origin
+owner session must be admitted, or no upload; VK iframe cookie admission unverified.
+Meta + deployment header CSP must include self. Current live static remainse6384c7;
+new source is not deployment/provider success.50 scoped tests and independent
+review pass. Separate deployment/URL-transfer/new-single-upload gates required.
+
 Prepared upload-only test: Owner explicitly authorized one file upload without
 saving photo or posting. Separate UPLOAD_ONLY_OPERATION persistent marker; original
 TEST_OPERATION remains untouched. Same Web Lock, fresh control proof/endpoint,

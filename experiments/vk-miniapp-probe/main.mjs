@@ -2,6 +2,7 @@ import bridge from '@vkontakte/vk-bridge';
 import {createProbe} from './controller.mjs';
 import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-test.mjs';
 import {UPLOAD_ONLY_OPERATION,claimUploadOnly} from './upload-only.mjs';
+import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mjs';
 const doc=globalThis.document;
 const labels={
   NOT_INITIALIZED:'Подготовка проверки…',OPEN_IN_VK:'Откройте эту страницу внутри Mini App Planly №54809413.',
@@ -20,6 +21,7 @@ const labels={
   TEST_DIAGNOSTIC_FAILED:'Не удалось выполнить локальную проверку условий. Загрузок и отправок не было.',
   TEST_READBACK_FAILED:'Чтение результата недоступно. Повторная отправка не разрешена.',
   UPLOAD_ONLY_FAILED:'Проверка только загрузки не завершена. Повтор не запускайте; сохранение и публикация не вызывались.',
+  SERVER_UPLOAD_FAILED:'Проверка серверной загрузки не завершена. Не повторяйте операцию.',
 };
 const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchParams.get('vk_app_id')},state=>{
   doc.querySelector('#status').textContent=labels[state.phase]??'Проверка не завершена.';
@@ -46,6 +48,11 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   let uploadAttempted=true;
   try{uploadAttempted=globalThis.localStorage.getItem(UPLOAD_ONLY_OPERATION)!==null;}catch{/* fail closed */}
   doc.querySelector('#upload-only-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||uploadAttempted||!globalThis.navigator?.locks;
+  let serverAttempted=true;
+  try{serverAttempted=globalThis.localStorage.getItem(SERVER_UPLOAD_OPERATION)!==null;}catch{/* fail closed */}
+  doc.querySelector('#server-upload-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||serverAttempted||!globalThis.navigator?.locks;
+  const su=state.serverUpload;
+  doc.querySelector('#server-upload-result').textContent=su?`Серверная загрузка: ${su.status}; HTTP=${su.httpStatus??'не подтверждён'}. Сохранение фото и публикация не вызывались. OWNER_SESSION_REQUIRED означает, что сервер не распознал сессию владельца; защита не отключается.`:'';
   const u=state.uploadOnly;
   doc.querySelector('#upload-only-result').textContent=u?`Только загрузка: ${u.status}; HTTP=${u.httpStatus??'не подтверждён'}; категория=${u.errorKind??'нет'}. Сохранение фото и создание поста не вызывались. При FETCH_UNCONFIRMED браузер не подтвердил ответ; это само по себе не доказывает CORS. Повтор не запускайте.`:'';
   doc.querySelector('#inspect-test').disabled=state.busy||!['PHOTO_ENDPOINT_AVAILABLE','TEST_PRECONDITION_FAILED','TEST_ALREADY_ATTEMPTED'].includes(state.phase);
@@ -67,6 +74,13 @@ doc.querySelector('#authorize').addEventListener('click',()=>{void probe.request
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{probe.reset();});
 doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackTest();});
+doc.querySelector('#server-upload-test').addEventListener('click',async()=>{
+  if(!globalThis.navigator?.locks)return;
+  await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
+    if(!lock)return;
+    await probe.serverUploadTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimServerUpload(globalThis.localStorage)});
+  });
+});
 doc.querySelector('#upload-only-test').addEventListener('click',async()=>{
   if(!globalThis.navigator?.locks)return;
   await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
