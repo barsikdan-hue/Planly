@@ -3,15 +3,13 @@ import {requireOwnerProviderAccess} from '../../../../../lib/server/auth/access.
 import {getRedisConnection} from '../../../../../lib/server/scheduler/redis.ts';
 import {makeRelayHandler} from '../../../../../lib/server/vk/upload-relay.ts';
 import {relayUpload} from '../../../../../lib/server/vk/upload-relay-transport.ts';
+import {makeOwnerAdmissionHandler} from '../../../../../lib/server/vk/owner-admission.ts';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
-export async function GET(request:Request):Promise<Response>{
-  try{
-    const owner=await requireApiOwner(request);requireOwnerProviderAccess(owner);
-    return Response.json({status:'OWNER_SESSION_RECOGNIZED'},{headers:{'Cache-Control':'no-store'}});
-  }catch{return Response.json({status:'OWNER_SESSION_REQUIRED'},{status:401,headers:{'Cache-Control':'no-store'}});}
-}
+export const GET=makeOwnerAdmissionHandler(async request=>{
+  const owner=await requireApiOwner(request);requireOwnerProviderAccess(owner);
+});
 export const POST=makeRelayHandler({
   authorize:async request=>{const owner=await requireApiOwner(request);requireOwnerProviderAccess(owner);return owner.id;},
   claim:async ownerId=>{

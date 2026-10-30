@@ -9,6 +9,8 @@ on:
       - 'tests/vk-upload-only.test.mjs'
       - 'tests/vk-server-upload-client.test.mjs'
       - 'tests/vk-upload-relay.test.ts'
+      - 'tests/vk-owner-admission.test.ts'
+      - 'lib/server/vk/owner-admission.ts'
       - 'lib/server/vk/upload-relay*.ts'
       - 'app/api/social-accounts/vk/upload-test/**'
       - '.github/workflows/vk-miniapp-probe.yml'
@@ -21,6 +23,8 @@ on:
       - 'tests/vk-upload-only.test.mjs'
       - 'tests/vk-server-upload-client.test.mjs'
       - 'tests/vk-upload-relay.test.ts'
+      - 'tests/vk-owner-admission.test.ts'
+      - 'lib/server/vk/owner-admission.ts'
       - 'lib/server/vk/upload-relay*.ts'
       - 'app/api/social-accounts/vk/upload-test/**'
       - '.github/workflows/vk-miniapp-probe.yml'
@@ -38,7 +42,7 @@ jobs:
         with:
           node-version: '22.13.0'
       - name: Synthetic safety and cancellation tests (no provider access)
-        run: node --experimental-strip-types --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs tests/vk-server-upload-client.test.mjs tests/vk-upload-relay.test.ts
+        run: node --experimental-strip-types --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs tests/vk-server-upload-client.test.mjs tests/vk-upload-relay.test.ts tests/vk-owner-admission.test.ts
       - name: Install isolated pinned build dependencies
         run: npm ci --prefix experiments/vk-miniapp-probe --ignore-scripts --no-audit --no-fund
       - name: Build static diagnostic assets

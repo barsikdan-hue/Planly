@@ -11,7 +11,12 @@ export async function serverUploadOnly(options){
   try{
     const admission=await fetchImpl(endpoint,{method:'GET',credentials:'include',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(10_000)});
     if(!active())return {status:'CANCELLED'};
-    if(!admission.ok)return {status:'OWNER_SESSION_REQUIRED'};
+    if(!admission.ok){
+      const denied=await admission.json();
+      if(admission.status===401&&denied?.status==='OWNER_SESSION_REQUIRED')return {status:'OWNER_SESSION_REQUIRED'};
+      if(admission.status===403&&denied?.status==='OWNER_ACCESS_DENIED')return {status:'OWNER_ACCESS_DENIED'};
+      return {status:'ADMISSION_UNAVAILABLE'};
+    }
     const admitted=await admission.json();if(admitted?.status!=='OWNER_SESSION_RECOGNIZED')return {status:'OWNER_SESSION_REQUIRED'};
     const bytes=new Uint8Array(await image.arrayBuffer());if(!active())return {status:'CANCELLED'};
     const parts=[];for(let i=0;i<bytes.length;i+=32768)parts.push(String.fromCharCode(...bytes.subarray(i,i+32768)));

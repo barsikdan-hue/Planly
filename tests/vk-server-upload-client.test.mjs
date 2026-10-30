@@ -16,6 +16,15 @@ test('missing owner admission never claims or uploads',async()=>{
   o.fetchImpl=async()=>{requests++;return Response.json({status:'OWNER_SESSION_REQUIRED'},{status:401});};
   assert.deepEqual(await serverUploadOnly(o),{status:'OWNER_SESSION_REQUIRED'});assert.equal(claims,0);assert.equal(requests,1);
 });
+
+test('admission denial categories are preserved without claiming or uploading',async()=>{
+  for(const [http,status] of [[403,'OWNER_ACCESS_DENIED'],[503,'ADMISSION_UNAVAILABLE'],[500,'private-error']]){
+    const o=input();let claims=0;let requests=0;o.claim=()=>{claims++;return true;};
+    o.fetchImpl=async()=>{requests++;return Response.json({status},{status:http});};
+    assert.deepEqual(await serverUploadOnly(o),{status:http===500?'ADMISSION_UNAVAILABLE':status});
+    assert.equal(claims,0);assert.equal(requests,1);
+  }
+});
 test('cancelled admission and unknown response never disclose errors or retry',async()=>{
   const o=input();let active=true;let claims=0;o.active=()=>active;o.claim=()=>{claims++;return true;};
   o.fetchImpl=async()=>{active=false;return Response.json({status:'OWNER_SESSION_RECOGNIZED'});};
