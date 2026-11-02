@@ -3,7 +3,9 @@ import {createProbe} from './controller.mjs';
 import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-test.mjs';
 import {UPLOAD_ONLY_OPERATION,claimUploadOnly} from './upload-only.mjs';
 import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mjs';
+import {openFirstPartyUpload} from './first-party-upload.mjs';
 const doc=globalThis.document;
+let windowFlow=null;
 const labels={
   NOT_INITIALIZED:'Подготовка проверки…',OPEN_IN_VK:'Откройте эту страницу внутри Mini App Planly №54809413.',
   READY:'Готово. Разрешения ещё не запрошены.',INIT_FAILED:'Не удалось инициализировать VK Bridge. Откройте приложение через VK.',
@@ -52,7 +54,9 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   try{serverAttempted=globalThis.localStorage.getItem(SERVER_UPLOAD_OPERATION)!==null;}catch{/* fail closed */}
   doc.querySelector('#server-upload-test').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||serverAttempted||!globalThis.navigator?.locks;
   const su=state.serverUpload;
-  doc.querySelector('#server-upload-result').textContent=su?`Серверная загрузка: ${su.status}; HTTP=${su.httpStatus??'не подтверждён'}. Сохранение фото и публикация не вызывались. OWNER_SESSION_REQUIRED означает, что сервер не распознал сессию владельца; защита не отключается.`:'';
+  const windowHints={WINDOW_UNAVAILABLE:'Окно Planly не открылось или было закрыто. Разрешите всплывающее окно и начните проверку заново. Если отправка уже начиналась, повтор запрещён.',
+    WINDOW_EXPIRED:'Время подтверждения истекло. Если отправка уже начиналась, повторять её нельзя.',CANCELLED:'Проверка отменена. Если отправка уже начиналась, повторять её нельзя.'};
+  doc.querySelector('#server-upload-result').textContent=su?(windowHints[su.status]??`Серверная загрузка: ${su.status}; HTTP=${su.httpStatus??'не подтверждён'}. Сохранение фото и публикация не вызывались. OWNER_SESSION_REQUIRED означает, что окно Planly не распознало вход владельца; защита не отключается.`):'';
   const u=state.uploadOnly;
   doc.querySelector('#upload-only-result').textContent=u?`Только загрузка: ${u.status}; HTTP=${u.httpStatus??'не подтверждён'}; категория=${u.errorKind??'нет'}. Сохранение фото и создание поста не вызывались. При FETCH_UNCONFIRMED браузер не подтвердил ответ; это само по себе не доказывает CORS. Повтор не запускайте.`:'';
   doc.querySelector('#inspect-test').disabled=state.busy||!['PHOTO_ENDPOINT_AVAILABLE','TEST_PRECONDITION_FAILED','TEST_ALREADY_ATTEMPTED'].includes(state.phase);
@@ -72,14 +76,18 @@ ctx.fillStyle='#183047';ctx.font='32px sans-serif';ctx.fillText('VK PHOTO UPLOAD
 ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
-doc.querySelector('#reset').addEventListener('click',()=>{probe.reset();});
+doc.querySelector('#reset').addEventListener('click',()=>{windowFlow?.cancel();probe.reset();});
 doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackTest();});
 doc.querySelector('#server-upload-test').addEventListener('click',async()=>{
-  if(!globalThis.navigator?.locks)return;
-  await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
-    if(!lock)return;
-    await probe.serverUploadTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimServerUpload(globalThis.localStorage)});
-  });
+  if(!globalThis.navigator?.locks||windowFlow)return;
+  const flow=openFirstPartyUpload();
+  windowFlow=flow;
+  try{
+    await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
+      if(!lock)return;
+      await probe.serverUploadTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimServerUpload(globalThis.localStorage),transport:flow.run});
+    });
+  }finally{flow.cancel();if(windowFlow===flow)windowFlow=null;}
 });
 doc.querySelector('#upload-only-test').addEventListener('click',async()=>{
   if(!globalThis.navigator?.locks)return;
@@ -99,5 +107,5 @@ doc.querySelector('#publish-test').addEventListener('click',async()=>{
     await probe.publishTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimTest(globalThis.localStorage),upload:uploadPhoto});
   });
 });
-globalThis.addEventListener('pagehide',()=>{probe.reset();});
+globalThis.addEventListener('pagehide',()=>{windowFlow?.cancel();probe.reset();});
 void probe.initialize();

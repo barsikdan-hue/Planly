@@ -96,6 +96,9 @@ jobs:
       - name: Install isolated browser test Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: VK first-party window on fully intercepted synthetic origins
+        run: node --experimental-strip-types tests/vk-first-party-browser.mjs
+
       - name: Browser pilot on synthetic loopback fixtures
         run: pnpm test:e2e
 

@@ -156,7 +156,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     return run(async active=>{
       const currentToken=token;
       const image=await options.makeImage();if(!active())return;
-      const result=await serverUploadOnly({...options,image,active,uploadUrl,sensitiveToken:currentToken});
+      const result=await (options.transport??serverUploadOnly)({...options,image,active,uploadUrl,sensitiveToken:currentToken});
       if(active())update({serverUpload:result});
     },'SERVER_UPLOAD_FAILED');
   }
