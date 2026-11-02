@@ -1,8 +1,9 @@
 import {isIP} from 'node:net';
 import {readBoundedJson} from '../analytics/body.ts';
+import {DIAGNOSTIC_OPERATION,sanitizeRejectionDiagnostic} from '../../../public/vk-upload-diagnostic.mjs';
 
 export type RelayInput={uploadUrl:URL;image:Buffer};
-export type RelayResult={status:'UPLOAD_CONFIRMED'|'UPSTREAM_HTTP_REJECTED'|'UPSTREAM_RESPONSE_INVALID'|'UPSTREAM_UNCONFIRMED';httpStatus?:number};
+export type RelayResult={status:'UPLOAD_CONFIRMED'|'UPSTREAM_HTTP_REJECTED'|'UPSTREAM_RESPONSE_INVALID'|'UPSTREAM_UNCONFIRMED';httpStatus?:number;diagnostic?:ReturnType<typeof sanitizeRejectionDiagnostic>};
 const invalid=()=>new Error('Invalid relay input');
 export function parseRelayInput(raw:unknown):RelayInput{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw invalid();
@@ -34,6 +35,7 @@ export function makeRelayHandler(deps:Dependencies){
       ||request.headers.get('sec-fetch-site')&&request.headers.get('sec-fetch-site')!=='same-origin')return reply({status:'FORBIDDEN'},403);
     let ownerId:string;
     try{ownerId=await deps.authorize(request);if(!ownerId)throw {};}catch{return reply({status:'OWNER_SESSION_REQUIRED'},401);}
+    if(request.headers.get('x-planly-vk-diagnostic')!==DIAGNOSTIC_OPERATION)return reply({status:'FORBIDDEN'},403);
     if(!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type')??''))return reply({status:'INVALID_INPUT'},415);
     let input:RelayInput;
     try{input=parseRelayInput(await readBoundedJson(request.body,1_350_000));}catch{return reply({status:'INVALID_INPUT'},422);}
@@ -42,7 +44,8 @@ export function makeRelayHandler(deps:Dependencies){
       if(!await deps.claim(ownerId))return reply({status:'ALREADY_ATTEMPTED'},409);
       if(request.signal.aborted)return reply({status:'CANCELLED'},409);
       const result=await deps.upload(input);
-      return reply({status:result.status,...(result.httpStatus!==undefined?{httpStatus:result.httpStatus}:{})});
+      const diagnostic=sanitizeRejectionDiagnostic(result.diagnostic);
+      return reply({status:result.status,...(result.httpStatus!==undefined?{httpStatus:result.httpStatus}:{}),...(diagnostic?{diagnostic}:{})});
     }catch{return reply({status:'UPSTREAM_UNCONFIRMED'},502);}
   };
 }

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openFirstPartyUpload} from '../experiments/vk-miniapp-probe/first-party-upload.mjs';
+import {DIAGNOSTIC_OPERATION} from '../public/vk-upload-diagnostic.mjs';
 import {ORIGIN,WINDOW_PATH,TTL} from '../public/vk-upload-window-core.mjs';
 const png=new Blob([new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0])],{type:'image/png'});
 const options=()=>({active:()=>true,image:png,uploadUrl:'https://pu.vk.ru/c1/ss1/upload.php?act=do_add&wallphoto=1&hash=private',sensitiveToken:'DO_NOT_SEND_TOKEN'});
@@ -8,7 +9,7 @@ function fixture(blocked=false){
  let listener,tick,time=0;const sent=[];const popup={closed:false,postMessage:(m,o)=>sent.push({m,o})};let opened=0;
  const flow=openFirstPartyUpload({openWindow:(url,target)=>{opened++;assert.equal(url,ORIGIN+WINDOW_PATH);assert.equal(target,'_blank');return blocked?null:popup;},
   events:{addEventListener:(_n,l)=>{listener=l;},removeEventListener:()=>{listener=null;}},now:()=>time,randomNonce:()=> 'ab'.repeat(16),schedule:f=>{tick=f;return 1;},stop:()=>{}});
- return {flow,popup,sent,event:(data,source=popup,origin=ORIGIN)=>listener?.({data,source,origin}),tick:()=>tick?.(),expire:()=>{time+=TTL;tick();},opened:()=>opened};
+ return {flow,popup,sent,event:(data,source=popup,origin=ORIGIN)=>listener?.({data:data.type==='READY'?{operation:DIAGNOSTIC_OPERATION,...data}:data,source,origin}),tick:()=>tick?.(),expire:()=>{time+=TTL;tick();},opened:()=>opened};
 }
 test('popup opens synchronously; exact peer handshake transfers only bounded URL/image/group',async()=>{
  const f=fixture();assert.equal(f.opened(),1);const promise=f.flow.run(options());

@@ -1,7 +1,8 @@
+import {DIAGNOSTIC_OPERATION,sanitizeRejectionDiagnostic} from './vk-upload-diagnostic.mjs';
 export const ORIGIN='https://stage.lentaro.ru';
 export const WINDOW_PATH='/social-connections/vk-upload-test';
 export const TTL=120_000;
-export const OPERATION='planly-vk-server-upload-only-20261030-01';
+export const OPERATION='planly-'+DIAGNOSTIC_OPERATION;
 export const validNonce=n=>typeof n==='string'&&/^[a-f0-9]{32}$/.test(n);
 export const randomWindowNonce=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 const record=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -27,7 +28,8 @@ const results=new Set(['UPLOAD_CONFIRMED','UPSTREAM_HTTP_REJECTED','UPSTREAM_RES
   'CANCELLED','MARKER_UNAVAILABLE','SERVER_UPLOAD_UNCONFIRMED','WINDOW_UNAVAILABLE','WINDOW_EXPIRED','PAYLOAD_REJECTED']);
 export function safeResult(raw){
   const status=record(raw)&&results.has(raw.status)?raw.status:'SERVER_UPLOAD_UNCONFIRMED';
-  return {status,...(Number.isSafeInteger(raw?.httpStatus)&&raw.httpStatus>=100&&raw.httpStatus<=599?{httpStatus:raw.httpStatus}:{})};
+  const diagnostic=status==='UPSTREAM_HTTP_REJECTED'?sanitizeRejectionDiagnostic(raw?.diagnostic):undefined;
+  return {status,...(Number.isSafeInteger(raw?.httpStatus)&&raw.httpStatus>=100&&raw.httpStatus<=599?{httpStatus:raw.httpStatus}:{}),...(diagnostic?{diagnostic}:{})};
 }
 export async function ownerAdmission(fetchImpl){
   try{
@@ -54,7 +56,7 @@ export async function executeUpload({payload,active,storage,locks,fetchImpl}){
       }catch{return {status:'MARKER_UNAVAILABLE'};}
       if(!active())return {status:'CANCELLED'};
       const r=await fetchImpl('/api/social-accounts/vk/upload-test',{method:'POST',credentials:'same-origin',redirect:'error',cache:'no-store',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(45_000)});
+        headers:{'Content-Type':'application/json','X-Planly-VK-Diagnostic':DIAGNOSTIC_OPERATION},body:JSON.stringify(input),signal:AbortSignal.timeout(45_000)});
       return safeResult(await r.json());
     });
   }catch{return {status:'SERVER_UPLOAD_UNCONFIRMED'};}
@@ -79,7 +81,7 @@ export function createReceiver({opener,now,admit,confirmPeer,execute,send,previe
   const active=()=>phase!=='DONE'&&nonce!==null&&now()<expires;
   const finish=raw=>{
     if(phase==='DONE')return;
-    phase='DONE';payload=null;const result=safeResult(raw);render(result.status);
+    phase='DONE';payload=null;const result=safeResult(raw);render(result.status,result);
     if(nonce)send({type:'RESULT',nonce,result});
   };
   const expire=()=>finish({status:phase==='UPLOADING'?'SERVER_UPLOAD_UNCONFIRMED':'WINDOW_EXPIRED'});
@@ -87,7 +89,7 @@ export function createReceiver({opener,now,admit,confirmPeer,execute,send,previe
     if(phase==='DONE'||event.origin!==ORIGIN||event.source!==opener||!record(event.data))return;
     if(now()>=expires){expire();return;}
     const m=event.data;
-    if(m.type==='HELLO'&&phase==='WAITING'&&validNonce(m.nonce)&&Object.keys(m).sort().join(',')==='nonce,type'){
+    if(m.type==='HELLO'&&phase==='WAITING'&&validNonce(m.nonce)&&m.operation===DIAGNOSTIC_OPERATION&&Object.keys(m).sort().join(',')==='nonce,operation,type'){
       nonce=m.nonce;phase='ADMITTING';render(phase);
       let result;try{result=await admit();}catch{result={status:'ADMISSION_UNAVAILABLE'};}
       if(!active()){finish({status:'WINDOW_EXPIRED'});return;}

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ORIGIN,TTL,OPERATION,validatePayload,createReceiver,executeUpload,requestPeerConfirmation} from '../public/vk-upload-window-core.mjs';
+import {ORIGIN,TTL,OPERATION,validatePayload,createReceiver,executeUpload,requestPeerConfirmation,safeResult} from '../public/vk-upload-window-core.mjs';
+import {DIAGNOSTIC_OPERATION} from '../public/vk-upload-diagnostic.mjs';
 const nonce='ab'.repeat(16);
 const payload=()=>({groupId:242095689,uploadUrl:'https://pu.vk.ru/c1/ss1/upload.php?act=do_add&wallphoto=1&hash=private',imageBase64:btoa(String.fromCharCode(137,80,78,71,13,10,26,10,0,0,0,0))});
 function fixture(){
@@ -8,7 +9,7 @@ function fixture(){
  const r=createReceiver({opener,now:()=>clock,confirmPeer:async()=>true,admit:async()=>{admissions++;return {status:'OWNER_SESSION_RECOGNIZED'};},
    execute:async(p,active)=>{assert.equal(active(),true);uploads++;assert.deepEqual(p,payload());return {status:'UPLOAD_CONFIRMED',httpStatus:200};},
    send:x=>sent.push(x),preview:p=>previews.push(p),render:()=>{}});
- const event=(type,extra={})=>({origin:ORIGIN,source:opener,data:{type,nonce,...extra}});
+ const event=(type,extra={})=>({origin:ORIGIN,source:opener,data:{type,nonce,...(type==='HELLO'?{operation:DIAGNOSTIC_OPERATION}:{}),...extra}});
  return {r,event,sent,previews,counts:()=>({admissions,uploads}),expire:()=>{clock+=TTL;}};
 }
 test('receiver requires exact origin/source/nonce and never uploads on handshake',async()=>{
@@ -32,7 +33,7 @@ test('payload replacement, nonce reuse and expiry fail closed',async()=>{
 test('cancellation fences late authorization and denies upload',async()=>{
  let resolve;const opener={},sent=[];let calls=0;
  const r=createReceiver({opener,now:()=>0,admit:()=>new Promise(r=>{resolve=r;}),execute:async()=>{calls++;},send:m=>sent.push(m),preview:()=>{},render:()=>{}});
- const hello=r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce}});
+ const hello=r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce,operation:DIAGNOSTIC_OPERATION}});
  r.cancel();resolve({status:'OWNER_SESSION_RECOGNIZED'});await hello;await r.confirm();
  assert.equal(calls,0);assert.equal(sent.filter(x=>x.type==='ADMITTED').length,0);
 });
@@ -61,18 +62,18 @@ test('admission failures and an expired unclaimed window cannot preview or execu
  for(const status of ['OWNER_SESSION_REQUIRED','OWNER_ACCESS_DENIED','ADMISSION_UNAVAILABLE']){
   const opener={},messages=[];let uploads=0,previews=0;
   const r=createReceiver({opener,now:()=>0,admit:async()=>({status}),execute:async()=>{uploads++;},send:m=>messages.push(m),preview:()=>{previews++;},render:()=>{}});
-  await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce}});await r.confirm();
+  await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce,operation:DIAGNOSTIC_OPERATION}});await r.confirm();
   assert.equal(messages.at(-1).result.status,status);assert.equal(uploads,0);assert.equal(previews,0);
  }
  let clock=0,calls=0;const opener={};
  const r=createReceiver({opener,now:()=>clock,admit:async()=>{calls++;},execute:async()=>{},send:()=>{},preview:()=>{},render:()=>{}});
- clock=TTL;r.tick();await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce}});assert.equal(calls,0);
+ clock=TTL;r.tick();await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce,operation:DIAGNOSTIC_OPERATION}});assert.equal(calls,0);
 });
 test('fresh denial before confirmation cannot execute; expiry after dispatch reports uncertainty',async()=>{
  let admissions=0,calls=0;const opener={},messages=[];let clock=0,complete;
  const options={opener,now:()=>clock,confirmPeer:async()=>true,admit:async()=>({status:++admissions===1?'OWNER_SESSION_RECOGNIZED':'OWNER_ACCESS_DENIED'}),
  execute:async()=>{calls++;},send:m=>messages.push(m),preview:()=>{},render:()=>{}};
- const r=createReceiver(options);const event=type=>({origin:ORIGIN,source:opener,data:{type,nonce,...(type==='PAYLOAD'?{payload:payload()}:{})}});
+ const r=createReceiver(options);const event=type=>({origin:ORIGIN,source:opener,data:{type,nonce,...(type==='HELLO'?{operation:DIAGNOSTIC_OPERATION}:{}),...(type==='PAYLOAD'?{payload:payload()}:{})}});
  await r.receive(event('HELLO'));await r.receive(event('PAYLOAD'));await r.confirm();assert.equal(calls,0);assert.equal(messages.at(-1).result.status,'OWNER_ACCESS_DENIED');
  const g=createReceiver({...options,admit:async()=>({status:'OWNER_SESSION_RECOGNIZED'}),execute:()=>new Promise(resolve=>{complete=resolve;})});
  await g.receive(event('HELLO'));await g.receive(event('PAYLOAD'));const pending=g.confirm();await new Promise(r=>setImmediate(r));
@@ -82,7 +83,7 @@ test('fresh denial before confirmation cannot execute; expiry after dispatch rep
 test('no current source acknowledgement means no upload even with valid owner session',async()=>{
  let calls=0;const opener={};const r=createReceiver({opener,now:()=>0,confirmPeer:async()=>false,
   admit:async()=>({status:'OWNER_SESSION_RECOGNIZED'}),execute:async()=>{calls++;},send:()=>{},preview:()=>{},render:()=>{}});
- await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce}});
+ await r.receive({origin:ORIGIN,source:opener,data:{type:'HELLO',nonce,operation:DIAGNOSTIC_OPERATION}});
  await r.receive({origin:ORIGIN,source:opener,data:{type:'PAYLOAD',nonce,payload:payload()}});
  await r.confirm();assert.equal(calls,0);assert.equal(r.phase(),'DONE');
 });
@@ -96,4 +97,19 @@ test('fresh source acknowledgement is bound to source/origin/nonce/challenge and
  listener({origin:ORIGIN,source:opener,data:ack});assert.equal(await promise,true);assert.equal(listener,null);
  const timeout=requestPeerConfirmation(args);timer();assert.equal(await timeout,false);
  const cancelled=requestPeerConfirmation(args);active=false;listener({origin:ORIGIN,source:opener,data:ack});assert.equal(await cancelled,false);
+});
+test('new diagnostic has its own key and preserves old consumed marker; metadata stays sanitized',async()=>{
+ assert.equal(OPERATION,'planly-'+DIAGNOSTIC_OPERATION);
+ const old='planly-vk-server-upload-only-20261030-01';const data=new Map([[old,'ATTEMPTED']]);
+ const storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};
+ const result=await executeUpload({payload:payload(),active:()=>true,storage,locks:{request:async(_n,_o,f)=>f({})},
+  fetchImpl:async()=>Response.json({status:'UPSTREAM_HTTP_REJECTED',httpStatus:405,diagnostic:{allowPost:'NO',contentType:'HTML',body:'METHOD_REJECTION',private:'secret'}})});
+ assert.equal(data.get(old),'ATTEMPTED');assert.equal(data.get(OPERATION),'ATTEMPTED');
+ assert.deepEqual(result,{status:'UPSTREAM_HTTP_REJECTED',httpStatus:405,diagnostic:{allowPost:'NO',contentType:'HTML',body:'METHOD_REJECTION'}});
+ assert.equal(safeResult({status:'UPSTREAM_HTTP_REJECTED',diagnostic:{allowPost:'SECRET'}}).diagnostic,undefined);
+});
+test('old or mixed popup handshakes cannot admit a new diagnostic',async()=>{
+ const f=fixture();const old=f.event('HELLO');delete old.data.operation;
+ await f.r.receive(old);await f.r.receive(f.event('HELLO',{operation:'old-operation'}));
+ assert.deepEqual(f.counts(),{admissions:0,uploads:0});assert.equal(f.previews.length,0);
 });

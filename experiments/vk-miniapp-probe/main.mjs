@@ -4,6 +4,7 @@ import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-
 import {UPLOAD_ONLY_OPERATION,claimUploadOnly} from './upload-only.mjs';
 import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mjs';
 import {openFirstPartyUpload} from './first-party-upload.mjs';
+import {diagnosticText} from '../../public/vk-upload-diagnostic.mjs';
 const doc=globalThis.document;
 let windowFlow=null;
 const labels={
@@ -56,7 +57,7 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   const su=state.serverUpload;
   const windowHints={WINDOW_UNAVAILABLE:'Окно Planly не открылось или было закрыто. Разрешите всплывающее окно и начните проверку заново. Если отправка уже начиналась, повтор запрещён.',
     WINDOW_EXPIRED:'Время подтверждения истекло. Если отправка уже начиналась, повторять её нельзя.',CANCELLED:'Проверка отменена. Если отправка уже начиналась, повторять её нельзя.'};
-  doc.querySelector('#server-upload-result').textContent=su?(windowHints[su.status]??`Серверная загрузка: ${su.status}; HTTP=${su.httpStatus??'не подтверждён'}. Сохранение фото и публикация не вызывались. OWNER_SESSION_REQUIRED означает, что окно Planly не распознало вход владельца; защита не отключается.`):'';
+  doc.querySelector('#server-upload-result').textContent=su?((windowHints[su.status]??`Серверная загрузка: ${su.status}; HTTP=${su.httpStatus??'не подтверждён'}. Сохранение фото и публикация не вызывались. OWNER_SESSION_REQUIRED означает, что окно Planly не распознало вход владельца; защита не отключается.`)+diagnosticText(su.diagnostic)):'';
   const u=state.uploadOnly;
   doc.querySelector('#upload-only-result').textContent=u?`Только загрузка: ${u.status}; HTTP=${u.httpStatus??'не подтверждён'}; категория=${u.errorKind??'нет'}. Сохранение фото и создание поста не вызывались. При FETCH_UNCONFIRMED браузер не подтвердил ответ; это само по себе не доказывает CORS. Повтор не запускайте.`:'';
   doc.querySelector('#inspect-test').disabled=state.busy||!['PHOTO_ENDPOINT_AVAILABLE','TEST_PRECONDITION_FAILED','TEST_ALREADY_ATTEMPTED'].includes(state.phase);

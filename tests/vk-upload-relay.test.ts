@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import {parseRelayInput,isPublicRelayIpv4,makeRelayHandler} from '../lib/server/vk/upload-relay.ts';
 import {relayUpload} from '../lib/server/vk/upload-relay-transport.ts';
 import {EventEmitter} from 'node:events';
+import {DIAGNOSTIC_OPERATION} from '../public/vk-upload-diagnostic.mjs';
 import type {request as httpsRequest,RequestOptions} from 'node:https';
 const target='https://pu.vk.ru/c906628/ss2321/upload.php?act=do_add&wallphoto=1&hash=private';
 const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64');
 const body=()=>({groupId:242095689,uploadUrl:target,imageBase64:png});
-const req=()=>new Request('https://stage.lentaro.ru/api/social-accounts/vk/upload-test',{method:'POST',headers:{origin:'https://stage.lentaro.ru','content-type':'application/json'},body:JSON.stringify(body())});
+const req=()=>new Request('https://stage.lentaro.ru/api/social-accounts/vk/upload-test',{method:'POST',headers:{origin:'https://stage.lentaro.ru','content-type':'application/json','x-planly-vk-diagnostic':DIAGNOSTIC_OPERATION},body:JSON.stringify(body())});
 test('relay accepts only the exact observed upload family and bounded PNG',()=>{
   assert.equal(parseRelayInput(body()).image.length,12);
   for(const uploadUrl of ['https://evil.test/c1/ss1/upload.php?act=do_add&wallphoto=1',target.replace('pu.vk.ru','pu1.vk.ru'),target+'&access_token=private',target+'#x',target.replace('upload.php','other.php')])assert.throws(()=>parseRelayInput({...body(),uploadUrl}));
@@ -30,6 +31,14 @@ test('unauthorized/cross-origin requests never claim or upload, exceptions sanit
   const response=await handler(req());assert.equal(response.status,401);assert.equal((await response.text()).includes('private'),false);assert.equal(mutations,0);
   const cross=new Request(req(),{headers:{origin:'https://evil.test','content-type':'application/json'}});
   assert.equal((await handler(cross)).status,403);assert.equal(mutations,0);
+});
+test('old or mismatched client cannot consume the newly counted diagnostic attempt',async()=>{
+  let mutations=0;const handler=makeRelayHandler({authorize:async()=> 'owner',claim:async()=>{mutations++;return true;},upload:async()=>{mutations++;return {status:'UPLOAD_CONFIRMED'};}});
+  for(const value of [null,'vk-old-operation']){
+    const r=req();if(value===null)r.headers.delete('x-planly-vk-diagnostic');else r.headers.set('x-planly-vk-diagnostic',value);
+    assert.equal((await handler(r)).status,403);
+  }
+  assert.equal(mutations,0);
 });
 
 test('transport rejects private DNS before any HTTP request',async()=>{

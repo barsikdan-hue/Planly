@@ -1,5 +1,6 @@
 import {ORIGIN,WINDOW_PATH,TTL,validNonce,validatePayload,safeResult} from '../../public/vk-upload-window-core.mjs';
 import {inspectPreconditions} from './single-photo-test.mjs';
+import {DIAGNOSTIC_OPERATION} from '../../public/vk-upload-diagnostic.mjs';
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 // Must be called directly from the user's click, before awaiting VK or Web Locks.
 export function openFirstPartyUpload({openWindow=(...args)=>window.open(...args),events=globalThis,now=Date.now,
@@ -22,7 +23,9 @@ export function openFirstPartyUpload({openWindow=(...args)=>window.open(...args)
     if(done||event.origin!==ORIGIN||event.source!==popup||!event.data||typeof event.data!=='object')return;
     const m=event.data;
     if(!active()){cancel('WINDOW_EXPIRED');return;}
-    if(m.type==='READY'&&!hello&&Object.keys(m).join(',')==='type'){hello=true;post({type:'HELLO',nonce});return;}
+    if(m.type==='READY'&&!hello&&m.operation===DIAGNOSTIC_OPERATION&&Object.keys(m).sort().join(',')==='operation,type'){
+      hello=true;post({type:'HELLO',nonce,operation:DIAGNOSTIC_OPERATION});return;
+    }
     if(!hello||m.nonce!==nonce)return;
     if(m.type==='CONFIRM_REQUEST'&&sent&&!acknowledged&&validNonce(m.challenge)&&Object.keys(m).sort().join(',')==='challenge,nonce,type'){
       acknowledged=true;post({type:'CONFIRM_ACK',nonce,challenge:m.challenge});return;

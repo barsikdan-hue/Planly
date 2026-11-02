@@ -1,5 +1,6 @@
 import {inspectPreconditions} from './single-photo-test.mjs';
-export const SERVER_UPLOAD_OPERATION='planly-vk-server-upload-only-20261030-01';
+import {DIAGNOSTIC_OPERATION,sanitizeRejectionDiagnostic} from '../../public/vk-upload-diagnostic.mjs';
+export const SERVER_UPLOAD_OPERATION='planly-'+DIAGNOSTIC_OPERATION;
 export function claimServerUpload(storage){
   if(storage.getItem(SERVER_UPLOAD_OPERATION)!==null)return false;
   storage.setItem(SERVER_UPLOAD_OPERATION,'ATTEMPTED');return storage.getItem(SERVER_UPLOAD_OPERATION)==='ATTEMPTED';
@@ -22,11 +23,12 @@ export async function serverUploadOnly(options){
     const parts=[];for(let i=0;i<bytes.length;i+=32768)parts.push(String.fromCharCode(...bytes.subarray(i,i+32768)));
     const imageBase64=btoa(parts.join(''));
     try{if(!claim())return {status:'ALREADY_ATTEMPTED'};}catch{return {status:'MARKER_UNAVAILABLE'};}
-    const response=await fetchImpl(endpoint,{method:'POST',credentials:'include',redirect:'error',cache:'no-store',headers:{'Content-Type':'application/json'},
+    const response=await fetchImpl(endpoint,{method:'POST',credentials:'include',redirect:'error',cache:'no-store',headers:{'Content-Type':'application/json','X-Planly-VK-Diagnostic':DIAGNOSTIC_OPERATION},
       body:JSON.stringify({groupId:242095689,uploadUrl,imageBase64}),signal:AbortSignal.timeout(45_000)});
     const result=await response.json();
     const statuses=['UPLOAD_CONFIRMED','UPSTREAM_HTTP_REJECTED','UPSTREAM_RESPONSE_INVALID','UPSTREAM_UNCONFIRMED','ALREADY_ATTEMPTED','OWNER_SESSION_REQUIRED','INVALID_INPUT','FORBIDDEN','CANCELLED'];
     if(!statuses.includes(result?.status))return {status:'SERVER_UPLOAD_UNCONFIRMED'};
-    return {status:result.status,...(Number.isSafeInteger(result.httpStatus)&&result.httpStatus>=100&&result.httpStatus<=599?{httpStatus:result.httpStatus}:{})};
+    const diagnostic=result.status==='UPSTREAM_HTTP_REJECTED'?sanitizeRejectionDiagnostic(result.diagnostic):undefined;
+    return {status:result.status,...(Number.isSafeInteger(result.httpStatus)&&result.httpStatus>=100&&result.httpStatus<=599?{httpStatus:result.httpStatus}:{}),...(diagnostic?{diagnostic}:{})};
   }catch{return {status:'SERVER_UPLOAD_UNCONFIRMED'};}
 }

@@ -2,6 +2,7 @@ import {resolve4} from 'node:dns/promises';
 import {request} from 'node:https';
 import {randomBytes} from 'node:crypto';
 import {isPublicRelayIpv4,type RelayInput,type RelayResult} from './upload-relay.ts';
+import {classifyRejection} from './upload-rejection.ts';
 
 type RelayNetwork={resolve:(host:string)=>Promise<string[]>;request:typeof request};
 export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve:host=>resolve4(host),request}):Promise<RelayResult>{
@@ -17,12 +18,28 @@ export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve
   const payload=Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="planly-server-test.png"\r\nContent-Type: image/png\r\n\r\n`),input.image,Buffer.from(`\r\n--${boundary}--\r\n`)]);
   return new Promise(resolve=>{
     let settled=false;
+    let incompleteRejection:(()=>void)|undefined;
     const done=(value:RelayResult)=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};
     const req=network.request(input.uploadUrl,{method:'POST',family:4,agent:false,servername:'pu.vk.ru',
       lookup:(_host,_options,callback)=>callback(null,addresses[0],4),
       headers:{'Content-Type':`multipart/form-data; boundary=${boundary}`,'Content-Length':String(payload.length)}},res=>{
       const code=res.statusCode;
-      if(!code||code<200||code>=300){res.destroy();done({status:'UPSTREAM_HTTP_REJECTED',...(code?{httpStatus:code}:{})});return;}
+      if(!code||code<200||code>=300){
+        const chunks:Buffer[]=[];let size=0;
+        const rejected=(state:'COMPLETE'|'LIMIT'|'INCOMPLETE')=>{
+          if(settled)return;
+          const diagnostic=classifyRejection(res.headers??{},Buffer.concat(chunks),state);chunks.length=0;
+          done({status:'UPSTREAM_HTTP_REJECTED',...(code?{httpStatus:code}:{}),diagnostic});
+        };
+        incompleteRejection=()=>rejected('INCOMPLETE');
+        res.on('data',(chunk:Buffer)=>{
+          if(settled)return;
+          if(size+chunk.length>4096){rejected('LIMIT');res.destroy();return;}
+          size+=chunk.length;chunks.push(chunk);
+        });
+        res.on('error',incompleteRejection);res.on('aborted',incompleteRejection);
+        res.on('end',()=>rejected('COMPLETE'));return;
+      }
       const chunks:Buffer[]=[];let size=0;
       res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>1_100_000){res.destroy();done({status:'UPSTREAM_RESPONSE_INVALID',httpStatus:code});}else chunks.push(chunk);});
       res.on('error',()=>done({status:'UPSTREAM_UNCONFIRMED'}));
@@ -34,8 +51,8 @@ export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve
         }catch{done({status:'UPSTREAM_RESPONSE_INVALID',httpStatus:code});}
       });
     });
-    req.on('error',()=>done({status:'UPSTREAM_UNCONFIRMED'}));
-    const timer=setTimeout(()=>{req.destroy();done({status:'UPSTREAM_UNCONFIRMED'});},30_000);
+    req.on('error',()=>{if(incompleteRejection)incompleteRejection();else done({status:'UPSTREAM_UNCONFIRMED'});});
+    const timer=setTimeout(()=>{incompleteRejection?.();req.destroy();done({status:'UPSTREAM_UNCONFIRMED'});},30_000);
     req.end(payload);
   });
 }

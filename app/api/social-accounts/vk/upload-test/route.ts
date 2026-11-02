@@ -4,6 +4,7 @@ import {getRedisConnection} from '../../../../../lib/server/scheduler/redis.ts';
 import {makeRelayHandler} from '../../../../../lib/server/vk/upload-relay.ts';
 import {relayUpload} from '../../../../../lib/server/vk/upload-relay-transport.ts';
 import {makeOwnerAdmissionHandler} from '../../../../../lib/server/vk/owner-admission.ts';
+import {diagnosticMarkerKey} from '../../../../../lib/server/vk/upload-rejection.ts';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -15,7 +16,7 @@ export const POST=makeRelayHandler({
   claim:async ownerId=>{
     let timer:ReturnType<typeof setTimeout>|undefined;
     try{
-      return await Promise.race([getRedisConnection().set(`planly:vk-server-upload-test:20261030:${ownerId}`,'ATTEMPTED','NX').then(result=>result==='OK'),
+      return await Promise.race([getRedisConnection().set(diagnosticMarkerKey(ownerId),'ATTEMPTED','NX').then(result=>result==='OK'),
         new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Admission deadline')),5000);})]);
     }finally{clearTimeout(timer);}
   },
