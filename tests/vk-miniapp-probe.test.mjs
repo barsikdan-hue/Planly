@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProbe } from '../experiments/vk-miniapp-probe/controller.mjs';
 
-function fixture({scope='wall,photos,groups',admin=true,photoError=false}={}) {
+function fixture({scope='wall,photos,groups',admin=true,photoError=false,fallback}={}) {
   const calls=[];
   const token='synthetic-private-token-never-render';
   const bridge={send:async(method,params)=>{
@@ -11,7 +11,7 @@ function fixture({scope='wall,photos,groups',admin=true,photoError=false}={}) {
     if(method==='VKWebAppGetAuthToken')return {access_token:token,scope};
     if(params.method==='groups.get')return {response:{count:admin?1:0,items:admin?[242095689]:[]}};
     if(photoError)throw {error_data:{error_code:27,error_description:token}};
-    return {response:{upload_url:'https://upload.example.test/private-session'}};
+    return {response:{upload_url:'https://upload.example.test/private-session',...(fallback===undefined?{}:{fallback_upload_url:fallback})}};
   }};
   return {bridge,calls,token,probe:createProbe(bridge,{appId:'54809413'})};
 }
@@ -21,6 +21,25 @@ test('outside VK or wrong app never asks for a grant',async()=>{
     const f=fixture();const p=createProbe(f.bridge,{appId});
     await p.initialize();await p.requestAccess();await p.checkPhoto();
     assert.equal(f.calls.length,0);assert.equal(p.snapshot().phase,'OPEN_IN_VK');
+  }
+});
+
+test('fallback diagnostic exposes only fixed metadata and never requests fallback',async()=>{
+  const f=fixture({fallback:'https://pu.vk.ru/c123/ss456/upload.php?hash=synthetic-private-hash'});
+  await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+  assert.deepEqual(f.probe.snapshot().fallbackDiagnostic,{status:'PRESENT',https:true,host:'PU_VK_RU',sameAsPrimary:false});
+  const visible=JSON.stringify(f.probe.snapshot());
+  for(const secret of [f.token,'synthetic-private-hash','/c123','private-session'])assert.equal(visible.includes(secret),false);
+  assert.deepEqual(f.calls.filter(x=>x.method==='VKWebAppCallAPIMethod').map(x=>x.params.method),['groups.get','photos.getWallUploadServer']);
+  f.probe.reset();assert.equal(f.probe.snapshot().fallbackDiagnostic,null);
+});
+
+test('missing or malformed fallback remains explicit without disabling primary',async()=>{
+  for(const [fallback,expected] of [[undefined,'ABSENT'],[null,'INVALID'],['javascript:alert(1)','INVALID'],['https://user:pass@pu.vk.ru/x','INVALID'],['https://unknown.example.test/private','PRESENT']]){
+    const f=fixture({fallback});await f.probe.initialize();await f.probe.requestAccess();await f.probe.checkPhoto();
+    assert.equal(f.probe.snapshot().phase,'PHOTO_ENDPOINT_AVAILABLE');
+    assert.equal(f.probe.snapshot().fallbackDiagnostic.status,expected);
+    assert.equal(JSON.stringify(f.probe.snapshot()).includes('unknown.example'),false);
   }
 });
 test('init alone does not request permissions or contact API',async()=>{

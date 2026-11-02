@@ -40,6 +40,8 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   const rlink=doc.querySelector('#readback-link');
   rlink.textContent=rb?.status==='MATCH_FOUND'?`Открыть найденный пост №${rb.postId}`:'';
   if(rb?.status==='MATCH_FOUND')rlink.href=`https://vk.ru/wall-242095689_${rb.postId}`;else rlink.removeAttribute('href');
+  const fallback=state.fallbackDiagnostic;
+  doc.querySelector('#fallback-diagnostic').textContent=fallback?`Резервный адрес VK: ${fallback.status}; HTTPS=${fallback.https??'—'}; загрузчик=${fallback.host??'—'}; совпадает с основным=${fallback.sameAsPrimary??'—'}. Загрузка на резервный адрес не выполнялась.`:'';
   const d=state.communityDiagnostic;
   doc.querySelector('#community-diagnostic').textContent=d?`Проверка управления: форма=${d.shape}; нужная группа найдена среди редакторских/администраторских=${d.matched}; список полный=${d.complete}.`:'';
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
