@@ -14,6 +14,10 @@ on:
       - 'lib/server/vk/upload-window-document.ts'
       - 'public/vk-upload-window*.mjs'
       - 'tests/vk-first-party*'
+      - 'tests/vk-curl*'
+      - 'public/vk-curl*'
+      - 'scripts/*vk-curl*'
+      - 'app/social-connections/vk-curl-export/**'
       - 'app/social-connections/vk-upload-test/**'
       - 'lib/server/vk/upload-relay*.ts'
       - 'lib/server/vk/upload-rejection.ts'
@@ -35,6 +39,10 @@ on:
       - 'lib/server/vk/upload-window-document.ts'
       - 'public/vk-upload-window*.mjs'
       - 'tests/vk-first-party*'
+      - 'tests/vk-curl*'
+      - 'public/vk-curl*'
+      - 'scripts/*vk-curl*'
+      - 'app/social-connections/vk-curl-export/**'
       - 'app/social-connections/vk-upload-test/**'
       - 'lib/server/vk/upload-relay*.ts'
       - 'lib/server/vk/upload-rejection.ts'
@@ -56,7 +64,9 @@ jobs:
         with:
           node-version: '22.13.0'
       - name: Synthetic safety and cancellation tests (no provider access)
-        run: node --experimental-strip-types --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs tests/vk-server-upload-client.test.mjs tests/vk-upload-relay.test.ts tests/vk-owner-admission.test.ts tests/vk-first-party-window.test.mjs tests/vk-first-party-sender.test.mjs tests/vk-first-party-document.test.ts tests/vk-rejection-diagnostic.test.ts tests/vk-rejection-transport.test.ts
+        run: node --experimental-strip-types --test tests/vk-miniapp-probe.test.mjs tests/vk-single-photo-test.test.mjs tests/vk-upload-only.test.mjs tests/vk-server-upload-client.test.mjs tests/vk-upload-relay.test.ts tests/vk-owner-admission.test.ts tests/vk-first-party-window.test.mjs tests/vk-first-party-sender.test.mjs tests/vk-first-party-document.test.ts tests/vk-rejection-diagnostic.test.ts tests/vk-rejection-transport.test.ts tests/vk-curl-export.test.mjs
+      - name: Standalone curl offline safety tests
+        run: python3 -B tests/vk-curl-control.test.py
       - name: Install isolated pinned build dependencies
         run: npm ci --prefix experiments/vk-miniapp-probe --ignore-scripts --no-audit --no-fund
       - name: Build static diagnostic assets

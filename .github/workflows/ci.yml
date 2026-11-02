@@ -99,6 +99,9 @@ jobs:
       - name: VK first-party window on fully intercepted synthetic origins
         run: node --experimental-strip-types tests/vk-first-party-browser.mjs
 
+      - name: VK address export on fully intercepted synthetic origins
+        run: node --experimental-strip-types tests/vk-curl-export-browser.mjs
+
       - name: Browser pilot on synthetic loopback fixtures
         run: pnpm test:e2e
 

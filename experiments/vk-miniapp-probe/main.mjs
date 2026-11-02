@@ -46,6 +46,7 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   doc.querySelector('#community-diagnostic').textContent=d?`Проверка управления: форма=${d.shape}; нужная группа найдена среди редакторских/администраторских=${d.matched}; список полный=${d.complete}.`:'';
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
   doc.querySelector('#check').disabled=state.busy||!['AUTHORIZED','CHECK_FAILED','PHOTO_ENDPOINT_AVAILABLE'].includes(state.phase);
+  doc.querySelector('#curl-export').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE';
   doc.querySelector('#reset').disabled=state.phase==='OPEN_IN_VK';
   let attempted=true;
   try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}
@@ -91,6 +92,13 @@ doc.querySelector('#server-upload-test').addEventListener('click',async()=>{
       await probe.serverUploadTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimServerUpload(globalThis.localStorage),transport:flow.run});
     });
   }finally{flow.cancel();if(windowFlow===flow)windowFlow=null;}
+});
+
+doc.querySelector('#curl-export').addEventListener('click',async()=>{
+  if(windowFlow)return;
+  const flow=openFirstPartyUpload({windowPath:'/social-connections/vk-curl-export'});windowFlow=flow;
+  try{await probe.serverUploadTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),transport:flow.run});}
+  finally{flow.cancel();if(windowFlow===flow)windowFlow=null;}
 });
 doc.querySelector('#upload-only-test').addEventListener('click',async()=>{
   if(!globalThis.navigator?.locks)return;

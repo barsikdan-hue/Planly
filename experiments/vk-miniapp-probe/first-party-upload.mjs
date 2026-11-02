@@ -4,7 +4,7 @@ import {DIAGNOSTIC_OPERATION} from '../../public/vk-upload-diagnostic.mjs';
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 // Must be called directly from the user's click, before awaiting VK or Web Locks.
 export function openFirstPartyUpload({openWindow=(...args)=>window.open(...args),events=globalThis,now=Date.now,
-  randomNonce=random,schedule=f=>setInterval(f,250),stop=clearInterval}={}){
+  randomNonce=random,schedule=f=>setInterval(f,250),stop=clearInterval,windowPath=WINDOW_PATH}={}){
   const nonce=randomNonce();let popup=null,done=false,outcome=null,options=null,payload=null,admitted=false,hello=false,sent=false,acknowledged=false,timer=null;
   const deadline=now()+TTL;let resolve;
   const completion=new Promise(r=>{resolve=r;});
@@ -34,7 +34,7 @@ export function openFirstPartyUpload({openWindow=(...args)=>window.open(...args)
     if(m.type==='RESULT'&&Object.keys(m).sort().join(',')==='nonce,result,type')finish(m.result);
   }
   events.addEventListener('message',receive);
-  try{if(validNonce(nonce))popup=openWindow(ORIGIN+WINDOW_PATH,'_blank','popup,width=620,height=780');}catch{/* blocked */}
+  try{if(validNonce(nonce)&&[WINDOW_PATH,'/social-connections/vk-curl-export'].includes(windowPath))popup=openWindow(ORIGIN+windowPath,'_blank','popup,width=620,height=780');}catch{/* blocked */}
   if(!popup)finish({status:'WINDOW_UNAVAILABLE'});
   else timer=schedule(()=>{if(popup.closed)cancel('WINDOW_UNAVAILABLE');else if(now()>=deadline)cancel('WINDOW_EXPIRED');else if(!active())cancel('CANCELLED');});
   return {
