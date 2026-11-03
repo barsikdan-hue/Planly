@@ -98,6 +98,26 @@ test('VK ordered private PNG and JPEG bytes upload as photo then save before tex
   }
 });
 
+for (const host of ['pu.vk.ru.evil.invalid', 'pu1.vk.ru', 'evil.vk.ru']) {
+  test(`VK rejects unapproved lookalike upload host ${host}`, async () => {
+    const { connector, requests } = fixture(() => api({ album_id: -14, user_id: 88, group_id: 123, upload_url: `https://${host}/upload.php` }));
+    failed(await connector.publish({ ...input, media: [photo()] }), 'PERMANENT', 'VK_UPLOAD_URL');
+    assert.equal(requests.length, 1);
+  });
+}
+
+test('VK accepts the observed pu.vk.ru upload host and completes photo publication', async () => {
+  const { connector, requests } = fixture(request => {
+    if (request.url.pathname.endsWith('photos.getWallUploadServer')) return api({ album_id: -14, user_id: 88, group_id: 123, upload_url: 'https://pu.vk.ru/c123/ss321/upload.php?act=do_add&wallphoto=1' });
+    if (request.url.hostname === 'pu.vk.ru') return json({ server: 17, photo: 'opaque-photo', hash: 'safe-hash' });
+    if (request.url.pathname.endsWith('photos.saveWallPhoto')) return api([{ id: 10, owner_id: -123 }]);
+    return api({ post_id: 42 });
+  });
+  assert.deepEqual(await connector.publish({ ...input, media: [photo()] }), { ok: true, remoteId: '-123_42', remoteUrl: 'https://vk.com/wall-123_42' });
+  assert.equal(requests.length, 4);
+  assert.equal(requests[1].url.hostname, 'pu.vk.ru');
+});
+
 for (const changed of [{ socialAccountId: undefined }, { socialAccountId: '' }, { destinationId: '123' }, { destinationId: '-0123' }, { provider: 'MAX' }]) {
   test(`VK rejects invalid account/destination/provider ${JSON.stringify(changed)} without provider transport`, async () => {
     const { connector, requests, accounts } = fixture();

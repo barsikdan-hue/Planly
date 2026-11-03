@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, 'codex/swipe-planner-2-*']
+    branches: [main, 'codex/swipe-planner-2-*', 'codex/windows-backup-20261029']
   push:
     branches: [main, feat/foundation-content-core, feat/scheduler, feat/self-host-build, feat/telegram-max-ui-validation]
 
@@ -95,6 +95,12 @@ jobs:
 
       - name: Install isolated browser test Chromium
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: VK first-party window on fully intercepted synthetic origins
+        run: node --experimental-strip-types tests/vk-first-party-browser.mjs
+
+      - name: VK address export on fully intercepted synthetic origins
+        run: node --experimental-strip-types tests/vk-curl-export-browser.mjs
 
       - name: Browser pilot on synthetic loopback fixtures
         run: pnpm test:e2e
