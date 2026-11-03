@@ -39,6 +39,18 @@ test('executor only posts fixed protocol once and persists only attempt marker',
   assert.deepEqual(await executeUserUpload(args),{status:'UPLOAD_CONFIRMED',httpStatus:200});assert.equal((await executeUserUpload(args)).status,'ALREADY_ATTEMPTED');
   assert.equal(calls,1);assert.deepEqual([...map],[['old-marker','ATTEMPTED'],[USER_UPLOAD_OPERATION,'ATTEMPTED']]);
 });
+test('new diagnostic operation preserves the consumed first attempt and rejects its old window',async()=>{
+  const previous='vk-user-upload-20261103-01';
+  const map=new Map([[previous,'ATTEMPTED']]);let posts=0;
+  const options={payload:payload(),active:()=>true,now:()=>1000,storage:{getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v)},
+    locks:{request:async(_n,_o,fn)=>fn({})},fetchImpl:async()=>{posts++;return Response.json({status:'PROVIDER_READ_REJECTED',diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27}});}};
+  assert.equal(USER_UPLOAD_OPERATION,'vk-user-upload-diagnostic-20261103-02');
+  assert.equal((await executeUserUpload(options)).status,'PROVIDER_READ_REJECTED');
+  assert.equal((await executeUserUpload(options)).status,'ALREADY_ATTEMPTED');
+  assert.equal(posts,1);assert.deepEqual([...map],[[previous,'ATTEMPTED'],[USER_UPLOAD_OPERATION,'ATTEMPTED']]);
+  const f=fixture();await f.r.receive(f.event('HELLO',{operation:previous}));await f.r.receive(f.event('PAYLOAD',{payload:payload()}));await f.r.confirm();
+  assert.equal(f.counts().calls,0);assert.equal(f.counts().admissions,0);
+});
 test('unknown response consumes marker; absent lock/storage/cancellation sends nothing',async()=>{
   const map=new Map();let calls=0;
   const options={payload:payload(),active:()=>true,now:()=>1000,storage:{getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v)},locks:{request:async(_n,_o,f)=>f({})},fetchImpl:async()=>{calls++;throw new Error(token);}};

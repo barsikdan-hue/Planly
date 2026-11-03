@@ -18,6 +18,11 @@ test('owner user upload consumes one independent operation and returns a closed 
   assert.deepEqual(await first.json(),{status:'UPLOAD_CONFIRMED',httpStatus:200});
   assert.equal((await handler(request())).status,409);assert.deepEqual(calls,['authorize','claim','upload','authorize','claim']);
 });
+test('consumed first-operation clients cannot authorize or claim the new diagnostic operation',async()=>{
+  const {handler,calls}=fixture();
+  const response=await handler(request(body(),{'x-planly-vk-user-upload':'vk-user-upload-20261103-01'}));
+  assert.equal(response.status,403);assert.deepEqual(calls,[]);
+});
 test('wrong origin, fetch metadata, operation, JSON shape and stale/future input cannot consume the attempt',async()=>{
   const {handler,calls}=fixture();
   for(const req of [request(body(),{origin:'https://evil.invalid'}),request(body(),{'sec-fetch-site':'cross-site'}),request(body(),{'x-planly-vk-user-upload':'old'}),request({...body(),groupId:1}),request({...body(),issuedAt:now-120_001}),request({...body(),issuedAt:now+1}),request({...body(),accessToken:token+'\n'}),request({...body(),scopes:['wall','photos']}),request({...body(),uploadUrl:'https://evil.invalid'})]){
@@ -152,7 +157,7 @@ test('API numeric diagnostic is bounded and arbitrary strings or errors never be
 test('HTTP handler carries only sanitized stage fields and preserves consumed operation',async()=>{
   const {handler,calls}=fixture({upload:async()=>({status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,transport:token,token,photo:token,hash:token,url:token}})});
   assert.deepEqual(await (await handler(request())).json(),{status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27}});
-  assert.equal((await handler(request())).status,409);assert.equal(calls.filter(v=>v==='claim').length,2);assert.equal(USER_UPLOAD_OPERATION,'vk-user-upload-20261103-01');
+  assert.equal((await handler(request())).status,409);assert.equal(calls.filter(v=>v==='claim').length,2);assert.equal(USER_UPLOAD_OPERATION,'vk-user-upload-diagnostic-20261103-02');
 });
 test('unknown transport codes remain OTHER and a deadline retains the active stage',async()=>{
   const unexpected=await runUserUpload(body(),new AbortController().signal,async()=>{throw Object.assign(Error(token),{code:token});});
