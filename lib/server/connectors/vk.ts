@@ -74,7 +74,7 @@ export async function validateVkCommunity(options: Transport & { communityId: st
   return { destinationId: `-${options.communityId}`, displayName };
 }
 
-function uploadDestination(value: unknown, token: string): URL | null {
+export function allowedVkPhotoUploadDestination(value: unknown, token: string): URL | null {
   if (typeof value !== 'string' || value.length > 8192) return null;
   try {
     const url = new URL(value);
@@ -85,6 +85,15 @@ function uploadDestination(value: unknown, token: string): URL | null {
     for (const key of url.searchParams.keys()) if (/^(access_token|refresh_token|authorization)$/i.test(key)) return null;
     return url;
   } catch { return null; }
+}
+
+// Shared native multipart path for publishing and the isolated owner upload test.
+// The OAuth credential is deliberately not part of this transport's arguments.
+export function uploadVkPhotoMultipart(options: {uploadUrl: URL; bytes: Uint8Array; mimeType: string; fetchImpl: typeof fetch; signal?: AbortSignal}): Promise<Response> {
+  const bytes = new Uint8Array(options.bytes.length); bytes.set(options.bytes);
+  const form = new FormData();
+  form.set('photo', new Blob([bytes.buffer], {type: options.mimeType}), options.mimeType === 'image/png' ? 'photo.png' : 'photo.jpg');
+  return options.fetchImpl(options.uploadUrl.toString(), {method: 'POST', redirect: 'error', body: form, signal: options.signal ?? AbortSignal.timeout(30_000)});
 }
 
 export function createVkConnector(options: { getAccessToken: (socialAccountId: string) => Promise<string>; fetchImpl?: typeof fetch; apiVersion?: string }): SocialConnector {
@@ -110,18 +119,13 @@ export function createVkConnector(options: { getAccessToken: (socialAccountId: s
         const prepared = await call('photos.getWallUploadServer', { group_id: groupId });
         if (!prepared.ok) return prepared;
         const server = record(prepared.result);
-        const uploadUrl = uploadDestination(server?.upload_url, token);
+        const uploadUrl = allowedVkPhotoUploadDestination(server?.upload_url, token);
         if (!uploadUrl) return failure('PERMANENT', 'VK_UPLOAD_URL', 'VK did not provide an allowed photo upload destination.');
         if (!Number.isSafeInteger(server?.album_id) || !validPositiveId(server?.user_id) ||
           (server?.group_id !== undefined && (!validPositiveId(server.group_id) || String(server.group_id) !== groupId))) return failure('PERMANENT', 'VK_UPLOAD_RESPONSE', 'VK did not confirm the photo upload community.');
         let uploaded: Record<string, unknown> | null;
         try {
-          const bytes = new Uint8Array(asset.bytes.length);
-          bytes.set(asset.bytes);
-          const form = new FormData();
-          // Official VK Java SDK photoWall uses multipart field photo; uploads carry no OAuth token.
-          form.set('photo', new Blob([bytes.buffer], { type: asset.mimeType }), asset.mimeType === 'image/png' ? 'photo.png' : 'photo.jpg');
-          const response = await fetchImpl(uploadUrl.toString(), { method: 'POST', redirect: 'error', body: form, signal: AbortSignal.timeout(30_000) });
+          const response = await uploadVkPhotoMultipart({uploadUrl, bytes: asset.bytes, mimeType: asset.mimeType, fetchImpl});
           if (response.status >= 300 && response.status < 400) return failure('PERMANENT', 'VK_UPLOAD_REDIRECT', 'VK photo upload destination attempted a redirect.');
           if (!response.ok) return failure('TEMPORARY', 'VK_UPLOAD_FAILED', 'VK photo upload was not confirmed.');
           uploaded = record(await response.json());

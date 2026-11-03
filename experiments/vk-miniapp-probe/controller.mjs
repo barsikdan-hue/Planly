@@ -1,6 +1,7 @@
 import {publishOne,inspectPreconditions,safeUploadHost,readTestResult} from './single-photo-test.mjs';
 import {uploadOnly} from './upload-only.mjs';
 import {serverUploadOnly} from './server-upload-only.mjs';
+import {safeUserUploadResult} from '../../public/vk-user-upload-core.mjs';
 const APP_ID=54809413;
 const GROUP_ID=242095689;
 const API_VERSION='5.199';
@@ -38,7 +39,7 @@ async function boundedSend(bridge,method,params){
 /** Closure-only credentials. Reads and one-shot publication require explicit actions. */
 export function createProbe(bridge,context,onChange=()=>{}){
   let token=null,uploadUrl=null,initialized=false,epoch=0;
-  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null};
+  let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null,userUpload:null};
   const validContext=context?.appId===String(APP_ID);
   const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,fallbackDiagnostic:state.fallbackDiagnostic?{...state.fallbackDiagnostic}:null,scopes:{...state.scopes},serverUpload:state.serverUpload?{...state.serverUpload}:null,uploadOnly:state.uploadOnly?{...state.uploadOnly}:null,readback:state.readback?{...state.readback}:null,preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
   const emit=()=>onChange(snapshot());
@@ -55,7 +56,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   }
   function reset(){
     epoch++;token=null;uploadUrl=null;
-    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null};
+    state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null,userUpload:null};
     emit();return snapshot();
   }
   async function initialize(){
@@ -171,5 +172,13 @@ export function createProbe(bridge,context,onChange=()=>{}){
       if(active())update({serverUpload:result});
     },'SERVER_UPLOAD_FAILED');
   }
-  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,uploadOnlyTest,serverUploadTest,reset};
+  async function userTokenUploadTest({transport}){
+    if(state.busy||!initialized||!token||!state.scopes.wall||!state.scopes.photos||!state.scopes.groups||typeof transport!=='function')return snapshot();
+    return run(async active=>{
+      update({userUpload:null});
+      const result=await transport({accessToken:token,active});
+      if(active())update({userUpload:safeUserUploadResult(result)});
+    },'SERVER_UPLOAD_FAILED');
+  }
+  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,uploadOnlyTest,serverUploadTest,userTokenUploadTest,reset};
 }

@@ -47,6 +47,30 @@ test('init alone does not request permissions or contact API',async()=>{
   assert.deepEqual(f.calls.map(x=>x.method),['VKWebAppInit']);
   assert.equal(f.probe.snapshot().phase,'READY');
 });
+
+test('user-token operation stays closure-only, requires granted scopes and makes no Mini App API reads',async()=>{
+  const f=fixture();let captured=null;
+  await f.probe.initialize();
+  await f.probe.userTokenUploadTest({transport:async input=>{captured=input;}});
+  assert.equal(captured,null);
+  await f.probe.requestAccess();
+  await f.probe.userTokenUploadTest({transport:async input=>{captured=input;return {status:'UPLOAD_CONFIRMED',secret:f.token};}});
+  assert.equal(captured.accessToken,f.token);
+  assert.equal(captured.active(),true);
+  assert.equal(f.calls.length,2);
+  assert.deepEqual(f.probe.snapshot().userUpload,{status:'UPLOAD_CONFIRMED'});
+  assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
+  f.probe.reset();assert.equal(captured.active(),false);assert.equal(f.probe.snapshot().userUpload,null);
+});
+
+test('reset during transient-token operation ignores late result and prevents duplicate operation',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
+  let resolve,calls=0;const transport=()=>{calls++;return new Promise(done=>{resolve=done;});};
+  const pending=f.probe.userTokenUploadTest({transport});
+  await f.probe.userTokenUploadTest({transport});assert.equal(calls,1);
+  f.probe.reset();resolve({status:'UPLOAD_CONFIRMED'});await pending;
+  assert.equal(f.probe.snapshot().userUpload,null);
+});
 test('explicit grant uses confirmed Mini App, scopes and no token UI',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
   assert.deepEqual(f.calls[1],{method:'VKWebAppGetAuthToken',params:{app_id:54809413,scope:'wall,photos,groups'}});

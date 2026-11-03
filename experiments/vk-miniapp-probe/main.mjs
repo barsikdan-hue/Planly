@@ -4,6 +4,8 @@ import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-
 import {UPLOAD_ONLY_OPERATION,claimUploadOnly} from './upload-only.mjs';
 import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mjs';
 import {openFirstPartyUpload} from './first-party-upload.mjs';
+import {openUserTokenUpload} from './user-token-upload.mjs';
+import {USER_UPLOAD_OPERATION} from '../../public/vk-user-upload-core.mjs';
 import {diagnosticText} from '../../public/vk-upload-diagnostic.mjs';
 const doc=globalThis.document;
 let windowFlow=null;
@@ -47,6 +49,10 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   doc.querySelector('#authorize').disabled=state.busy||!['READY','MISSING_SCOPES','AUTH_DECLINED_OR_UNAVAILABLE'].includes(state.phase);
   doc.querySelector('#check').disabled=state.busy||!['AUTHORIZED','CHECK_FAILED','PHOTO_ENDPOINT_AVAILABLE'].includes(state.phase);
   doc.querySelector('#curl-export').disabled=state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE';
+  let userUploadAttempted=true;
+  try{userUploadAttempted=globalThis.localStorage.getItem(USER_UPLOAD_OPERATION)!==null;}catch{/* fail closed */}
+  doc.querySelector('#user-token-upload').disabled=state.busy||!state.scopes.wall||!state.scopes.photos||!state.scopes.groups||userUploadAttempted||!globalThis.navigator?.locks;
+  doc.querySelector('#user-token-upload-result').textContent=state.userUpload?`Проверка с ключом: ${state.userUpload.status}${state.userUpload.httpStatus?`; HTTP=${state.userUpload.httpStatus}`:''}. Фото не сохранялось, пост не создавался. При неизвестном исходе повторять нельзя.`:'';
   doc.querySelector('#reset').disabled=state.phase==='OPEN_IN_VK';
   let attempted=true;
   try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}
@@ -79,6 +85,13 @@ ctx.font='bold 62px sans-serif';ctx.fillText('PLANLY',60,220);
 ctx.fillStyle='#183047';ctx.font='32px sans-serif';ctx.fillText('VK PHOTO UPLOAD TEST',60,295);
 ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
+
+doc.querySelector('#user-token-upload').addEventListener('click',async()=>{
+  if(windowFlow||!globalThis.navigator?.locks)return;
+  const flow=openUserTokenUpload();windowFlow=flow;
+  try{await probe.userTokenUploadTest({transport:flow.run});}
+  finally{flow.cancel();if(windowFlow===flow)windowFlow=null;}
+});
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{windowFlow?.cancel();probe.reset();});
 doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackTest();});
