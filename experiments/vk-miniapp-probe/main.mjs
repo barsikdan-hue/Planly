@@ -6,6 +6,7 @@ import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mj
 import {openFirstPartyUpload} from './first-party-upload.mjs';
 import {openUserTokenUpload} from './user-token-upload.mjs';
 import {USER_UPLOAD_OPERATION} from '../../public/vk-user-upload-core.mjs';
+import {userUploadDiagnosticText} from '../../public/vk-user-upload-diagnostic.mjs';
 import {diagnosticText} from '../../public/vk-upload-diagnostic.mjs';
 const doc=globalThis.document;
 let windowFlow=null;
@@ -52,7 +53,7 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   let userUploadAttempted=true;
   try{userUploadAttempted=globalThis.localStorage.getItem(USER_UPLOAD_OPERATION)!==null;}catch{/* fail closed */}
   doc.querySelector('#user-token-upload').disabled=state.busy||!state.scopes.wall||!state.scopes.photos||!state.scopes.groups||userUploadAttempted||!globalThis.navigator?.locks;
-  doc.querySelector('#user-token-upload-result').textContent=state.userUpload?`Проверка с ключом: ${state.userUpload.status}${state.userUpload.httpStatus?`; HTTP=${state.userUpload.httpStatus}`:''}. Фото не сохранялось, пост не создавался. При неизвестном исходе повторять нельзя.`:'';
+  doc.querySelector('#user-token-upload-result').textContent=state.userUpload?`Проверка с ключом: ${state.userUpload.status}${state.userUpload.httpStatus?`; HTTP=${state.userUpload.httpStatus}`:''}.${userUploadDiagnosticText(state.userUpload.diagnostic)} Фото не сохранялось, пост не создавался. При неизвестном исходе повторять нельзя.`:'';
   doc.querySelector('#reset').disabled=state.phase==='OPEN_IN_VK';
   let attempted=true;
   try{attempted=globalThis.localStorage.getItem(TEST_OPERATION)!==null;}catch{/* fail closed */}

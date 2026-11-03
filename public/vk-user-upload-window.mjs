@@ -1,4 +1,4 @@
-import {ORIGIN,USER_UPLOAD_OPERATION,createUserUploadReceiver,ownerUserUploadAdmission,executeUserUpload,requestPeerConfirmation} from './vk-user-upload-core.mjs';
+import {ORIGIN,USER_UPLOAD_OPERATION,createUserUploadReceiver,ownerUserUploadAdmission,executeUserUpload,requestPeerConfirmation,userUploadDiagnosticText} from './vk-user-upload-core.mjs';
 import {FIXED_USER_UPLOAD_PNG} from './vk-user-upload-protocol.mjs';
 const status=document.querySelector('#status'),button=document.querySelector('#confirm'),image=document.querySelector('#preview');
 const labels={WAITING:'Ожидаем данные из Mini App…',ADMITTING:'Проверяем вход владельца…',ADMITTED:'Вход подтверждён. Ожидаем согласование операции…',
@@ -23,7 +23,7 @@ else{
     send:message=>opener.postMessage(message,ORIGIN),
     preview:()=>{image.src='data:image/png;base64,'+FIXED_USER_UPLOAD_PNG;image.hidden=false;},
     render:(phase,result)=>{
-      status.textContent=(labels[phase]??'Исход операции не подтверждён. Не повторяйте отправку.')+(result?.httpStatus?` HTTP=${result.httpStatus}.`:'');
+      status.textContent=(labels[phase]??'Исход операции не подтверждён. Не повторяйте отправку.')+(result?.httpStatus?` HTTP=${result.httpStatus}.`:'')+userUploadDiagnosticText(result?.diagnostic);
       button.disabled=phase!=='PREVIEW';
       if(!['PREVIEW','CONFIRMING','UPLOADING'].includes(phase)){image.removeAttribute('src');image.hidden=true;}
     },

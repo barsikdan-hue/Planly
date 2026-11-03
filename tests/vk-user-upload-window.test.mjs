@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ORIGIN,TTL,USER_UPLOAD_OPERATION,validateUserUploadPayload,createUserUploadReceiver,executeUserUpload,safeUserUploadResult,ownerUserUploadAdmission} from '../public/vk-user-upload-core.mjs';
+import {ORIGIN,TTL,USER_UPLOAD_OPERATION,validateUserUploadPayload,createUserUploadReceiver,executeUserUpload,safeUserUploadResult,ownerUserUploadAdmission,sanitizeUserUploadDiagnostic,userUploadDiagnosticText} from '../public/vk-user-upload-core.mjs';
 const token='vk1.a.'+'x'.repeat(32), nonce='ab'.repeat(16);
 const payload=(now=1000)=>({groupId:242095689,accessToken:token,scopes:['wall','photos','groups'],issuedAt:now});
 function fixture(overrides={}){
@@ -62,4 +62,29 @@ test('closed result and owner admission reject echo and malformed responses',asy
   assert.deepEqual(safeUserUploadResult({status:token,httpStatus:999,accessToken:token}),{status:'UPSTREAM_UNCONFIRMED'});
   assert.deepEqual(safeUserUploadResult({status:'PROVIDER_READ_REJECTED',httpStatus:403,echo:token}),{status:'PROVIDER_READ_REJECTED',httpStatus:403});
   assert.deepEqual(await ownerUserUploadAdmission(async(url,init)=>{assert.equal(url,'/api/social-accounts/vk/user-upload-test');assert.equal(init.credentials,'same-origin');return Response.json({status:'OWNER_SESSION_RECOGNIZED'});}),{status:'OWNER_SESSION_RECOGNIZED'});
+});
+test('bounded user upload diagnostic survives result sanitization without provider echo',()=>{
+  const raw={stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,accessToken:token,nested:{description:token},transport:'TLS_UNTRUSTED'};
+  assert.deepEqual(sanitizeUserUploadDiagnostic(raw),{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27});
+  assert.deepEqual(safeUserUploadResult({status:'UPSTREAM_UNCONFIRMED',httpStatus:200,diagnostic:raw,echo:token}),{
+    status:'UPSTREAM_UNCONFIRMED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27},
+  });
+  assert.deepEqual(sanitizeUserUploadDiagnostic({stage:'UPLOAD_ADDRESS_READ',reason:'TRANSPORT_FAILED',transport:'TLS_UNTRUSTED',errorCode:27}),{
+    stage:'UPLOAD_ADDRESS_READ',reason:'TRANSPORT_FAILED',transport:'TLS_UNTRUSTED',
+  });
+  assert.equal(JSON.stringify(safeUserUploadResult({status:'UPSTREAM_UNCONFIRMED',diagnostic:raw})).includes(token),false);
+});
+test('diagnostic rejects unknown stages/reasons, nested values and out-of-range metadata',()=>{
+  for(const raw of [null,[],[token],token,{}, {stage:token,reason:'UNKNOWN'},{stage:'FILE_UPLOAD',reason:token},{stage:['FILE_UPLOAD'],reason:'UNKNOWN'},
+    {stage:'FILE_UPLOAD',reason:{message:token}}])assert.equal(sanitizeUserUploadDiagnostic(raw),undefined);
+  for(const errorCode of [-1,1_000_000,1.5,NaN,Infinity,'27',{},[27]])assert.deepEqual(sanitizeUserUploadDiagnostic({stage:'GROUPS_READ',reason:'API_REJECTED',errorCode}),{stage:'GROUPS_READ',reason:'API_REJECTED'});
+  for(const transport of [token,{},['DNS_FAILURE']])assert.deepEqual(sanitizeUserUploadDiagnostic({stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED',transport}),{stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED'});
+  for(const transport of ['TLS_UNTRUSTED','DNS_FAILURE','CONNECT_TIMEOUT','CONNECTION_RESET','OTHER'])assert.deepEqual(sanitizeUserUploadDiagnostic({stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED',transport}),{stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED',transport});
+  assert.deepEqual(safeUserUploadResult({status:'UPSTREAM_UNCONFIRMED',diagnostic:{stage:token,reason:'UNKNOWN'}}),{status:'UPSTREAM_UNCONFIRMED'});
+});
+test('diagnostic UI text uses fixed labels and bounded API code only',()=>{
+  assert.match(userUploadDiagnosticText({stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,description:token}),/Проверка управления группой.*VK отклонил запрос.*27/);
+  assert.match(userUploadDiagnosticText({stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED',transport:'TLS_UNTRUSTED',description:token}),/Отправка файла.*Ошибка соединения.*сертификат/);
+  for(const raw of [{stage:token,reason:'UNKNOWN'},{stage:'FILE_UPLOAD',reason:token},[token]])assert.equal(userUploadDiagnosticText(raw),'');
+  assert.equal(userUploadDiagnosticText({stage:'UPLOAD_RESPONSE',reason:'INVALID_RESPONSE',message:token}).includes(token),false);
 });

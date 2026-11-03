@@ -21,7 +21,7 @@ try{
     if(url.pathname==='/fixture')return route.fulfill({contentType:'text/html',body:fixture});
     if(['/boot','/app.js','/style.css'].includes(url.pathname))return route.fulfill({contentType:url.pathname==='/boot'?'text/html':url.pathname==='/app.js'?'text/javascript':'text/css',body:await readFile('experiments/vk-miniapp-probe/dist/'+(url.pathname==='/boot'?'index.html':url.pathname.slice(1)),'utf8')});
     if(url.pathname==='/user-token-upload.mjs')return route.fulfill({contentType:'text/javascript',body:await readFile('experiments/vk-miniapp-probe/user-token-upload.mjs','utf8')});
-    if(/^\/(?:public\/)?vk-(?:user-upload-(?:core|protocol|window)|upload-window-core|upload-diagnostic)\.mjs$/.test(url.pathname)){
+    if(/^\/(?:public\/)?vk-(?:user-upload-(?:core|protocol|window|diagnostic)|upload-window-core|upload-diagnostic)\.mjs$/.test(url.pathname)){
       return route.fulfill({contentType:'text/javascript',body:await readFile('public/'+url.pathname.split('/').at(-1),'utf8')});
     }
     if(url.pathname==='/social-connections/vk-user-upload-test'){
@@ -35,7 +35,8 @@ try{
       const body=request.postDataJSON();assert.deepEqual(Object.keys(body).sort(),['accessToken','groupId','issuedAt','scopes']);
       assert.equal(body.accessToken,token);assert.equal(body.groupId,242095689);
       assert.equal((await request.allHeaders())['x-planly-vk-user-upload'],USER_UPLOAD_OPERATION);
-      posts++;return route.fulfill({json:{status:'UPLOAD_CONFIRMED',httpStatus:200,private:token}});
+      posts++;return route.fulfill({json:{status:'PROVIDER_READ_REJECTED',httpStatus:200,private:token,
+        diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,description:token}}});
     }
     unexpected++;return route.abort();
   });
@@ -47,7 +48,9 @@ try{
   await popup.evaluate(()=>document.querySelector('#confirm').click());assert.equal(posts,0);
   await mkdir('test-results/vk-user-upload',{recursive:true});await popup.screenshot({path:'test-results/vk-user-upload/preview.png'});
   await popup.locator('#confirm').click();
-  await popup.getByText(/VK подтвердил загрузку/).waitFor();await frame.locator('#result').filter({hasText:'UPLOAD_CONFIRMED'}).waitFor();
+  await popup.getByText(/VK отклонил проверку прав/).waitFor();await frame.locator('#result').filter({hasText:'PROVIDER_READ_REJECTED'}).waitFor();
+  const result=JSON.parse(await frame.locator('#result').innerText());
+  assert.deepEqual(result.diagnostic,{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27});
   assert.equal(posts,1);assert.equal((await frame.locator('#result').innerText()).includes(token),false);
   const stored=await popup.evaluate(()=>JSON.stringify({...localStorage}));assert.equal(stored.includes(token),false);
   assert.equal(await popup.evaluate(key=>localStorage.getItem(key),USER_UPLOAD_OPERATION),'ATTEMPTED');

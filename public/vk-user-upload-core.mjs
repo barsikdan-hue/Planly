@@ -1,5 +1,7 @@
 import {requestPeerConfirmation} from './vk-upload-window-core.mjs';
 import {USER_UPLOAD_OPERATION,GROUP_ID} from './vk-user-upload-protocol.mjs';
+import {sanitizeUserUploadDiagnostic} from './vk-user-upload-diagnostic.mjs';
+export {sanitizeUserUploadDiagnostic,userUploadDiagnosticText} from './vk-user-upload-diagnostic.mjs';
 export {requestPeerConfirmation};
 export {USER_UPLOAD_OPERATION};
 export const ORIGIN='https://stage.lentaro.ru';
@@ -20,8 +22,10 @@ const statuses=new Set(['UPLOAD_CONFIRMED','PROVIDER_READ_REJECTED','COMMUNITY_C
   'OWNER_ACCESS_DENIED','ADMISSION_UNAVAILABLE','INVALID_INPUT','FORBIDDEN','CANCELLED','MARKER_UNAVAILABLE',
   'WINDOW_UNAVAILABLE','WINDOW_EXPIRED','PAYLOAD_REJECTED']);
 export function safeUserUploadResult(raw){
+  const diagnostic=sanitizeUserUploadDiagnostic(raw?.diagnostic);
   return {status:record(raw)&&statuses.has(raw.status)?raw.status:'UPSTREAM_UNCONFIRMED',
-    ...(Number.isSafeInteger(raw?.httpStatus)&&raw.httpStatus>=100&&raw.httpStatus<=599?{httpStatus:raw.httpStatus}:{})};
+    ...(Number.isSafeInteger(raw?.httpStatus)&&raw.httpStatus>=100&&raw.httpStatus<=599?{httpStatus:raw.httpStatus}:{}),
+    ...(diagnostic?{diagnostic}:{})};
 }
 export async function ownerUserUploadAdmission(fetchImpl){
   try{

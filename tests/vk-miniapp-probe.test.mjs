@@ -71,6 +71,14 @@ test('reset during transient-token operation ignores late result and prevents du
   f.probe.reset();resolve({status:'UPLOAD_CONFIRMED'});await pending;
   assert.equal(f.probe.snapshot().userUpload,null);
 });
+
+test('transient operation preserves only closed failure stage and numeric provider code',async()=>{
+  const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
+  await f.probe.userTokenUploadTest({transport:async()=>({status:'PROVIDER_READ_REJECTED',httpStatus:200,
+    diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,error_description:f.token,url:'https://private.invalid/'+f.token}})});
+  assert.deepEqual(f.probe.snapshot().userUpload,{status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27}});
+  assert.equal(JSON.stringify(f.probe.snapshot()).includes(f.token),false);
+});
 test('explicit grant uses confirmed Mini App, scopes and no token UI',async()=>{
   const f=fixture();await f.probe.initialize();await f.probe.requestAccess();
   assert.deepEqual(f.calls[1],{method:'VKWebAppGetAuthToken',params:{app_id:54809413,scope:'wall,photos,groups'}});

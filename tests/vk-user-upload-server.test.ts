@@ -86,10 +86,11 @@ test('server checks editor membership then prepares and uploads only the fixed P
   const form=requests[2].init.body as FormData;assert.ok(form instanceof FormData);assert.deepEqual([...form.keys()],['photo']);const photo=form.get('photo') as File;
   assert.equal(photo.type,'image/png');assert.deepEqual(Buffer.from(await photo.arrayBuffer()),Buffer.from(FIXED_USER_UPLOAD_PNG,'base64'));assert.equal(new Headers(requests[2].init.headers).get('authorization'),null);
 });
-test('unmatched malformed or duplicate editor lists stop before upload URL preparation',async()=>{
-  for(const groups of [{count:1,items:[1]},{count:2000,items:[1]},{count:2,items:[242095689,242095689]},{count:1,items:['242095689']},null]){
+test('valid unmatched editor lists and malformed replies have distinct failures before upload URL preparation',async()=>{
+  for(const [groups,status] of [[{count:1,items:[1]},'COMMUNITY_CONTROL_REQUIRED'],[{count:2000,items:[1]},'COMMUNITY_CONTROL_REQUIRED'],[{count:2,items:[242095689,242095689]},'INVALID_PROVIDER_RESPONSE'],[{count:1,items:['242095689']},'INVALID_PROVIDER_RESPONSE'],[null,'INVALID_PROVIDER_RESPONSE']] as const){
     const {requests,fetchImpl}=transportFixture(()=>api(groups));const result=await runUserUpload(body(),new AbortController().signal,fetchImpl);
-    assert.equal(result.status,'COMMUNITY_CONTROL_REQUIRED');assert.equal(requests.length,1);
+    assert.equal(result.status,status);assert.equal(requests.length,1);
+    if(status==='INVALID_PROVIDER_RESPONSE')assert.deepEqual(result.diagnostic,{stage:'GROUPS_READ',reason:'INVALID_RESPONSE'});
   }
 });
 test('provider errors unsafe upload URLs and token echoes are closed and cannot cause file transport',async()=>{
@@ -103,4 +104,59 @@ test('HTTP rejection and malformed success never expose provider body or upload 
     const base=transportFixture();const fetchImpl:typeof fetch=async(url,init)=>new URL(String(url)).hostname==='pu.vk.ru'?response:base.fetchImpl(url,init);
     const result=await runUserUpload(body(),new AbortController().signal,fetchImpl);assert.equal(result.status,status);assert.ok(!JSON.stringify(result).includes(token));
   }
+});
+
+for(const [index,stage] of [[0,'GROUPS_READ'],[1,'UPLOAD_ADDRESS_READ']] as const){
+  for(const [mode,expected] of [
+    ['http',{status:'PROVIDER_READ_REJECTED',httpStatus:403,diagnostic:{stage,reason:'HTTP_REJECTED'}}],
+    ['api',{status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage,reason:'API_REJECTED',errorCode:27}}],
+    ['invalid',{status:'INVALID_PROVIDER_RESPONSE',httpStatus:200,diagnostic:{stage,reason:'INVALID_RESPONSE'}}],
+    ['tls',{status:'UPSTREAM_UNCONFIRMED',diagnostic:{stage,reason:'TRANSPORT_FAILED',transport:'TLS_UNTRUSTED'}}],
+  ] as const){
+    test(`${stage} distinguishes ${mode} without echo or extra provider calls`,async()=>{
+      const base=transportFixture();let calls=0;
+      const fetchImpl:typeof fetch=async(url,init)=>{
+        if(calls++!==index)return base.fetchImpl(url,init);
+        if(mode==='http')return new Response(token,{status:403});
+        if(mode==='api')return Response.json({error:{error_code:27,error_msg:token,request_params:[{key:'access_token',value:token}]}});
+        if(mode==='invalid')return new Response(token,{status:200});
+        throw Object.assign(new TypeError(token),{cause:Object.assign(Error(token),{code:'UNABLE_TO_VERIFY_LEAF_SIGNATURE'})});
+      };
+      const result=await runUserUpload(body(),new AbortController().signal,fetchImpl);
+      assert.deepEqual(result,expected);assert.equal(calls,index+1);assert.ok(!JSON.stringify(result).includes(token));
+      assert.ok(!base.requests.some(r=>/saveWallPhoto|wall.post/.test(r.url.pathname)));
+    });
+  }
+}
+test('file upload transport and upload response validation report different stages',async()=>{
+  for(const [mode,expected] of [
+    ['reset',{status:'UPSTREAM_UNCONFIRMED',diagnostic:{stage:'FILE_UPLOAD',reason:'TRANSPORT_FAILED',transport:'CONNECTION_RESET'}}],
+    ['http',{status:'UPSTREAM_HTTP_REJECTED',httpStatus:405,diagnostic:{stage:'FILE_UPLOAD',reason:'HTTP_REJECTED'}}],
+    ['json',{status:'UPSTREAM_RESPONSE_INVALID',httpStatus:200,diagnostic:{stage:'UPLOAD_RESPONSE',reason:'INVALID_RESPONSE'}}],
+  ] as const){
+    const base=transportFixture();let calls=0;
+    const fetchImpl:typeof fetch=async(url,init)=>{
+      calls++;if(new URL(String(url)).hostname!=='pu.vk.ru')return base.fetchImpl(url,init);
+      if(mode==='reset')throw Object.assign(Error(token),{code:'ECONNRESET'});
+      return new Response(token,{status:mode==='http'?405:200});
+    };
+    assert.deepEqual(await runUserUpload(body(),new AbortController().signal,fetchImpl),expected);assert.equal(calls,3);
+  }
+});
+test('API numeric diagnostic is bounded and arbitrary strings or errors never become a code',async()=>{
+  for(const code of [token,-1,1_000_000,2.5,null]){
+    const result=await runUserUpload(body(),new AbortController().signal,async()=>Response.json({error:{error_code:code,error_msg:token}}));
+    assert.deepEqual(result,{status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED'}});
+  }
+});
+test('HTTP handler carries only sanitized stage fields and preserves consumed operation',async()=>{
+  const {handler,calls}=fixture({upload:async()=>({status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27,transport:token,token,photo:token,hash:token,url:token}})});
+  assert.deepEqual(await (await handler(request())).json(),{status:'PROVIDER_READ_REJECTED',httpStatus:200,diagnostic:{stage:'GROUPS_READ',reason:'API_REJECTED',errorCode:27}});
+  assert.equal((await handler(request())).status,409);assert.equal(calls.filter(v=>v==='claim').length,2);assert.equal(USER_UPLOAD_OPERATION,'vk-user-upload-20261103-01');
+});
+test('unknown transport codes remain OTHER and a deadline retains the active stage',async()=>{
+  const unexpected=await runUserUpload(body(),new AbortController().signal,async()=>{throw Object.assign(Error(token),{code:token});});
+  assert.deepEqual(unexpected,{status:'UPSTREAM_UNCONFIRMED',diagnostic:{stage:'GROUPS_READ',reason:'TRANSPORT_FAILED',transport:'OTHER'}});
+  const controller=new AbortController();const result=await runUserUpload(body(),controller.signal,async()=>{controller.abort();throw Error(token);});
+  assert.deepEqual(result,{status:'UPSTREAM_UNCONFIRMED',diagnostic:{stage:'GROUPS_READ',reason:'DEADLINE'}});
 });
