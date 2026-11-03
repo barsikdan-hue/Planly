@@ -26,15 +26,38 @@ def claim(path):
  with os.fdopen(fd,'w') as f:f.write('ATTEMPTED\n');f.flush();os.fsync(f.fileno())
 
 def classify(status,headers,body):
- kind='HTML' if re.search(br'(?im)^content-type:\s*text/html(?:[;\s]|$)',headers) else 'OTHER'
- classification='METHOD_REJECTION' if kind=='HTML' and re.search(br'(?:405\s+(?:Not\s+Allowed|Method\s+Not\s+Allowed)|Method\s+Not\s+Allowed)',body[:4096],re.I) else 'OTHER'
- if len(body)>4096:classification='LIMIT'
- if 200<=status<300:
-  try:
-   v=json.loads(body)
-   if type(v.get('server')) is int and v['server']>0 and isinstance(v.get('photo'),str) and v['photo'].strip() not in ('','[]') and isinstance(v.get('hash'),str) and v['hash'].strip():classification='UPLOAD_CONFIRMED'
-  except (ValueError,AttributeError):pass
- return {'httpStatus':status,'contentType':kind,'body':classification}
+ kind='HTML' if re.search(br'(?im)^content-type:\s*text/html(?:[;\s]|$)',headers) else 'JSON' if re.search(br'(?im)^content-type:\s*application/(?:[\w.+-]+\+)?json(?:[;\s]|$)',headers) else 'OTHER'
+ result={'httpStatus':status,'contentType':kind,'body':'OTHER'}
+ def done(label):return result|{'body':label}
+ if len(body)>1100000:return done('LIMIT')
+ if not body.strip():return done('EMPTY_BODY')
+ if body.startswith(b'\x1f\x8b') or re.search(br'(?im)^content-encoding:\s*(?:gzip|br|deflate)(?:[;\s]|$)',headers):return done('ENCODED_BODY')
+ if kind=='HTML' and re.search(br'(?:405\s+(?:Not\s+Allowed|Method\s+Not\s+Allowed)|Method\s+Not\s+Allowed)',body[:4096],re.I):return done('METHOD_REJECTION')
+ try:v=json.loads(body)
+ except (ValueError,RecursionError):return done('INVALID_JSON' if kind=='JSON' else 'NON_JSON')
+ if not isinstance(v,dict):return done('JSON_NOT_OBJECT')
+ if 'error' in v or 'error_code' in v:
+  error=v.get('error');code=error.get('error_code') if isinstance(error,dict) else v.get('error_code')
+  if type(code) is int and 0<=code<=1000000:result['vkErrorCode']=code
+  return done('JSON_ERROR')
+ if 'response' in v:return done('WRAPPED_JSON')
+ photo=v.get('photo')
+ if not isinstance(photo,str):return done('INCOMPLETE_RECEIPT')
+ try:items=json.loads(photo)
+ except (ValueError,RecursionError):return done('INVALID_PHOTO')
+ if not isinstance(items,list):return done('INVALID_PHOTO')
+ if not items:return done('EMPTY_PHOTO')
+ if 200<=status<300 and type(v.get('server')) is int and v['server']>0 and isinstance(v.get('hash'),str) and 0<len(v['hash'].strip())<=8192:return done('UPLOAD_CONFIRMED')
+ return done('INCOMPLETE_RECEIPT')
+
+def safe_output(v):
+ if not isinstance(v,dict):return {'status':'OUTCOME_UNCONFIRMED'}
+ safe={'status':v.get('status') if v.get('status') in ('HOLD','OUTCOME_UNCONFIRMED','RESPONSE_RECEIVED') else 'OUTCOME_UNCONFIRMED'}
+ for key,options in {'contentType':('HTML','JSON','OTHER'),'body':('METHOD_REJECTION','OTHER','LIMIT','UPLOAD_CONFIRMED','EMPTY_BODY','ENCODED_BODY','INVALID_JSON','NON_JSON','JSON_NOT_OBJECT','JSON_ERROR','WRAPPED_JSON','INCOMPLETE_RECEIPT','INVALID_PHOTO','EMPTY_PHOTO')}.items():
+  if v.get(key) in options:safe[key]=v[key]
+ if type(v.get('httpStatus')) is int and 100<=v['httpStatus']<=599:safe['httpStatus']=v['httpStatus']
+ if safe.get('body')=='JSON_ERROR' and type(v.get('vkErrorCode')) is int and 0<=v['vkErrorCode']<=1000000:safe['vkErrorCode']=v['vkErrorCode']
+ return safe
 
 def main():
  result={'status':'HOLD','operation':OPERATION,'providerAttempts':0}

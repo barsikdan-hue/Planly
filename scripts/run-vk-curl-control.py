@@ -1,5 +1,5 @@
 """Local receiver. Default is offline preparation; execution needs its own Owner gate."""
-import base64, hashlib, json, os, pathlib, shlex, subprocess, sys, time
+import base64, hashlib, importlib.util, json, os, pathlib, shlex, subprocess, sys, time
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 PRIVATE=pathlib.Path('C:/Users/EliteSochi/.codex/private/vk-control')
@@ -32,13 +32,12 @@ def main():
   result=subprocess.run(ssh+['python3 -I -B '+shlex.quote(remote)+' --execute'],input=payload,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=50)
   if len(result.stdout)>2000:raise ValueError('OUTPUT')
   v=json.loads(result.stdout)
-  allowed={'status','operation','providerAttempts','httpStatus','contentType','body'}
+  allowed={'status','operation','providerAttempts','httpStatus','contentType','body','vkErrorCode'}
   if not isinstance(v,dict) or set(v)-allowed:raise ValueError('OUTPUT')
   # Reconstruct only closed enums/numbers; never relay arbitrary remote strings.
-  safe={'status':v.get('status') if v.get('status') in ('HOLD','OUTCOME_UNCONFIRMED','RESPONSE_RECEIVED') else 'OUTCOME_UNCONFIRMED'}
-  for key,options in {'contentType':('HTML','OTHER'),'body':('METHOD_REJECTION','OTHER','LIMIT','UPLOAD_CONFIRMED')}.items():
-   if v.get(key) in options:safe[key]=v[key]
-  if type(v.get('httpStatus')) is int and 100<=v['httpStatus']<=599:safe['httpStatus']=v['httpStatus']
+  spec=importlib.util.spec_from_file_location('vk_curl_control',ROOT/'scripts/vk-curl-control.py')
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  safe=module.safe_output(v)
   print(json.dumps(safe))
  except BaseException:print('{"status":"OUTCOME_UNCONFIRMED"}')
  finally:

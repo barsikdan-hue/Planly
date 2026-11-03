@@ -30,6 +30,26 @@ class ControlTests(unittest.TestCase):
  def test_output_is_classified_not_reflected(self):
   self.assertEqual(m.classify(405,b'HTTP/1.1 405 Method Not Allowed\r\nContent-Type: text/html\r\n\r\n',b'<h1>405 Not Allowed</h1>secret'),{'httpStatus':405,'contentType':'HTML','body':'METHOD_REJECTION'})
   self.assertNotIn('private',str(m.classify(200,b'',b'{"photo":"private","hash":"private","server":123}')))
+ def test_200_error_and_empty_photo_are_not_other(self):
+  result=m.classify(200,b'Content-Type: application/json\r\n',b'{"error":{"error_code":22,"error_msg":"private"}}')
+  self.assertEqual(result,{'httpStatus':200,'contentType':'JSON','body':'JSON_ERROR','vkErrorCode':22})
+  result=m.classify(200,b'',b'{"server":123,"photo":"[]","hash":"private"}')
+  self.assertEqual(result['body'],'EMPTY_PHOTO');self.assertNotIn('private',str(result))
+ def test_200_receipt_and_non_json_are_distinct(self):
+  for raw,expected in [(b'', 'EMPTY_BODY'),(b'<html>private</html>','NON_JSON'),(b'{}','INCOMPLETE_RECEIPT'),(b'[]','JSON_NOT_OBJECT'),(b'{"server":123,"photo":"[ ]","hash":"private"}','EMPTY_PHOTO')]:
+   self.assertEqual(m.classify(200,b'',raw)['body'],expected)
+  good=json.dumps({'server':123,'photo':json.dumps([{'photo':'private'}]),'hash':'private'}).encode()
+  self.assertEqual(m.classify(200,b'',good)['body'],'UPLOAD_CONFIRMED')
+  self.assertNotIn('private',str(m.classify(200,b'',good)))
+ def test_diagnostic_limits_and_privacy(self):
+  self.assertEqual(m.classify(200,b'',b'x'*1100001)['body'],'LIMIT')
+  self.assertEqual(m.classify(200,b'Content-Encoding: gzip\r\n',b'private')['body'],'ENCODED_BODY')
+  self.assertEqual(m.classify(200,b'Content-Type: application/json\r\n',b'private')['body'],'INVALID_JSON')
+  safe=m.safe_output({'status':'RESPONSE_RECEIVED','httpStatus':200,'body':'JSON_ERROR','contentType':'JSON','vkErrorCode':22,'photo':'private','error_msg':'private','uploadUrl':URL})
+  self.assertEqual(safe,{'status':'RESPONSE_RECEIVED','httpStatus':200,'body':'JSON_ERROR','contentType':'JSON','vkErrorCode':22})
+  for value in [-1,1000001,True,'private']:
+   self.assertNotIn('vkErrorCode',m.safe_output({'status':'RESPONSE_RECEIVED','body':'JSON_ERROR','vkErrorCode':value}))
+  self.assertNotIn('vkErrorCode',m.safe_output({'status':'RESPONSE_RECEIVED','body':'EMPTY_PHOTO','vkErrorCode':22}))
  def test_unknown_outcome_consumes_marker_and_never_retries(self):
   value={'uploadUrl':URL,'exportedAt':int(time.time()*1000),'imageBase64':base64.b64encode(b'\x89PNG\r\n\x1a\n\0\0\0\0').decode()}
   with tempfile.TemporaryDirectory() as folder, contextlib.ExitStack() as stack:
