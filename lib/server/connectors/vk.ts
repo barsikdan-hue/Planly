@@ -79,7 +79,7 @@ function uploadDestination(value: unknown, token: string): URL | null {
   try {
     const url = new URL(value);
     // Deliberately fail closed to the wall-photo upload family. New hosts need verified eligibility.
-    if (url.protocol !== 'https:' || !/^pu\d*\.vk\.com$/.test(url.hostname) || url.port || url.username || url.password || url.hash) return null;
+    if (url.protocol !== 'https:' || !(url.hostname === 'pu.vk.ru' || /^pu\d*\.vk\.com$/.test(url.hostname)) || url.port || url.username || url.password || url.hash) return null;
     const decoded = decodeURIComponent(url.toString());
     if (value.includes(token) || decoded.includes(token) || /[\r\n\0]/.test(decoded)) return null;
     for (const key of url.searchParams.keys()) if (/^(access_token|refresh_token|authorization)$/i.test(key)) return null;
