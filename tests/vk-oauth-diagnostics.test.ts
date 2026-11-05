@@ -143,7 +143,8 @@ for (const [failure, expectedStage, expectedReason] of [
     const echo = synthetic(); let intent: Record<string, unknown> | undefined; let connectedWrites = 0; let credentialWrites = 0; let validations = 0;
     // The actual flow, encryption and error propagation run; only PostgreSQL transport is replaced.
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
-      if (sql.startsWith('SELECT id,user_id')) return { rows: [{ id: 'diagnostic-account', user_id: 'diagnostic-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED' }] };
+      if (sql.startsWith('SELECT id,email')) return { rows: [{ id:'diagnostic-owner',email:'diagnostic@example.test',auth_initialized:true,access_state:'ACTIVE',session_version:0,role:'USER',access_expires_at:null }] };
+      if (sql.startsWith('SELECT id,user_id')) return { rows: [{ id: 'diagnostic-account', user_id: 'diagnostic-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED',connection_generation:0,binding_revision:0 }] };
       if (sql.startsWith('INSERT INTO vk_oauth_intents')) intent = { state_hash: values[0], user_id: values[1], account_id: values[2], community_id: values[3], ciphertext: values[4], iv: values[5], tag: values[6], key_version: values[7], expires_at: values[8] };
       if (sql.startsWith('SELECT account_id FROM vk_oauth_intents')) {
         if (failure === 'intent') throw new Error(echo);

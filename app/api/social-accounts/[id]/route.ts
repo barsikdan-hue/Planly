@@ -18,7 +18,7 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
       if ('ok' in result) return json({error:result.message},422);
       return json(result);
     }
-    return json(await setSocialAccountEnabled(owner.id, id, input.enabled));
+    return json(await setSocialAccountEnabled(owner.id, id, input.enabled,owner.sessionVersion));
   } catch (error) {
     return apiError(error);
   }

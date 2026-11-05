@@ -1,11 +1,12 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { getDb } from '../../../db/index.ts';
+import { getDb, getPublicationLockPool } from '../../../db/index.ts';
+import { createVkConnector, sanitizeVkPublicationDiagnostic } from '../connectors/vk.ts';
 import { mediaAssets, postMedia, posts, postTargets, publications, socialAccounts } from '../../../db/schema.ts';
 import { resolveConnector as resolveRegisteredConnector } from '../connectors/registry.ts';
 import { readMediaObjectBytes } from '../storage.ts';
 import { beginOwnerProviderHandoff, hasOwnerProviderAccess } from '../auth/access.ts';
 import { observePublicationAuthorization, beginVerifiedProviderHandoff, markObservedConnectionError, type PublicationAuthorization } from '../social-connections/publication-authorization.ts';
-import type { ConnectorResolver, PublicationErrorType, PublishInput, PublishResult } from '../connectors/types.ts';
+import type { ConnectorResolver, PublicationErrorType, PublishInput, PublishResult, VkPublicationDiagnostic } from '../connectors/types.ts';
 import { hasCurrentManualAccess } from '../auth/manual-access.ts';
 
 export type ProcessPublicationResult = {
@@ -100,22 +101,36 @@ async function markAccessExpired(publicationId: string, claimedAttempt?: number)
 
 async function markFailure(
   publicationId: string,
+  claimedAttempt: number,
   errorType: PublicationErrorType,
   code: string | null,
   message: string,
   retryAfterMs?: number,
   observed?: PublicationAuthorization,
   ownerObserved?: OwnerErrorObservation,
+  vkDiagnostic?: VkPublicationDiagnostic,
 ): Promise<ProcessPublicationResult> {
   const status = errorType === 'AUTH' ? 'REQUIRES_RECONNECT' : 'FAILED';
-  await getDb().update(publications).set({
+  const [failed] = await getDb().update(publications).set({
     status,
     normalizedErrorType: errorType,
     providerErrorCode: code,
     providerErrorMessage: message,
     nextRetryAt: null,
     updatedAt: new Date(),
-  }).where(eq(publications.id, publicationId));
+  }).where(and(eq(publications.id, publicationId), eq(publications.status, 'PUBLISHING'),
+    eq(publications.attemptCount, claimedAttempt))).returning({ id: publications.id });
+  if (!failed) {
+    const latest = await readPublication(publicationId);
+    return { status: latest.publication.status, skipped: true };
+  }
+  const diagnostic=sanitizeVkPublicationDiagnostic(vkDiagnostic);
+  if (diagnostic) {
+    const revision=process.env.PLANLY_BUILD_REVISION;
+    console.info(JSON.stringify({event:'VK_PUBLICATION_FAILURE',
+      correlationId:/^[A-Za-z0-9_-]{1,128}$/.test(publicationId)?publicationId:null,
+      buildRevision:revision && /^[a-f0-9]{40}$/.test(revision)?revision:null,diagnostic}));
+  }
   if (errorType === 'AUTH' && observed) {
     await markObservedConnectionError(observed);
   } else if (errorType === 'AUTH' && ownerObserved) {
@@ -138,6 +153,33 @@ export async function processPublication(
   publicationId: string,
   resolveConnector: ConnectorResolver = resolveRegisteredConnector,
 ): Promise<ProcessPublicationResult> {
+  // Session lock spans provider IO without keeping a transaction open. Another
+  // live delivery cannot diagnose this sender as crashed. A dead process loses
+  // the lock, so the next delivery can safely classify its PUBLISHING as unknown.
+  const client = await getPublicationLockPool().connect();
+  let locked = false, discard = false;
+  try {
+    const result = await client.query<{ locked: boolean }>(
+      'SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked', [`planly:publication:${publicationId}`]);
+    locked = result.rows[0]?.locked === true;
+    if (!locked) {
+      const current = await readPublication(publicationId);
+      return { status: current.publication.status, skipped: true };
+    }
+    return await processClaimedPublication(publicationId, resolveConnector);
+  } finally {
+    if (locked) {
+      try { await client.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [`planly:publication:${publicationId}`]); }
+      catch { discard = true; }
+    }
+    client.release(discard);
+  }
+}
+
+async function processClaimedPublication(
+  publicationId: string,
+  resolveConnector: ConnectorResolver,
+): Promise<ProcessPublicationResult> {
   const initial = await readPublication(publicationId);
 
   if (initial.publication.status === 'PUBLISHED') {
@@ -149,6 +191,7 @@ export async function processPublication(
   if (initial.publication.status === 'PUBLISHING') {
     return markFailure(
       publicationId,
+      initial.publication.attemptCount,
       'PERMANENT',
       'AMBIGUOUS_DELIVERY',
       'Previous delivery outcome is unknown; refusing a blind retry.',
@@ -163,8 +206,9 @@ export async function processPublication(
   let observed:PublicationAuthorization|undefined;
   const registered=resolveConnector===resolveRegisteredConnector;
   const ownerAccess=registered && await hasOwnerProviderAccess(initial.publication.userId);
-  if(registered && !ownerAccess)observed=(await observePublicationAuthorization(initial.publication.userId,initial.account.id,initial.publication))??undefined;
-  if(registered && !ownerAccess && !observed) {
+  const needsProof=registered && (!ownerAccess || initial.publication.provider==='VK');
+  if(needsProof)observed=(await observePublicationAuthorization(initial.publication.userId,initial.account.id,initial.publication))??undefined;
+  if(needsProof && !observed) {
     await getDb().update(publications).set({status:'REQUIRES_RECONNECT',normalizedErrorType:'AUTH',providerErrorCode:'PERSONAL_PROVIDER_SETUP_REQUIRED',providerErrorMessage:'Personal provider setup is required.',nextRetryAt:null,updatedAt:new Date()})
       .where(and(eq(publications.id,publicationId),inArray(publications.status,['SCHEDULED','QUEUED'])));
     const latest=await readPublication(publicationId);
@@ -194,7 +238,7 @@ export async function processPublication(
   // Keep the actual pre-handoff account snapshot across AUTH persistence and IO.
   // R2 cancellation/release may become possible as soon as AUTH commits.
   const ownerObserved: OwnerErrorObservation | undefined = ownerAccess &&
-    (row.publication.provider === 'TELEGRAM' || row.publication.provider === 'MAX')
+    (row.publication.provider === 'TELEGRAM' || row.publication.provider === 'MAX' || row.publication.provider === 'VK')
     ? Object.freeze({id: row.account.id, userId: row.account.userId, provider: row.account.provider,
       connectionGeneration: row.account.connectionGeneration, bindingRevision: row.account.bindingRevision,
       providerAccountId: row.account.providerAccountId})
@@ -204,8 +248,9 @@ export async function processPublication(
   // between this check and provider handoff.
   if (row.post.status !== 'READY') {
     await getDb().update(publications).set({ status: 'CANCELLED', nextRetryAt: null, updatedAt: new Date() })
-      .where(eq(publications.id, publicationId));
-    return { status: 'CANCELLED', skipped: true };
+      .where(and(eq(publications.id, publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount)));
+    const latest=await readPublication(publicationId);
+    return { status: latest.publication.status, skipped: true };
   }
   const text = row.target.textOverride ?? row.post.baseText;
   const input: PublishInput = {
@@ -221,11 +266,11 @@ export async function processPublication(
     const scopedMedia = await readScopedMedia(row);
     if (scopedMedia === null) return await markScopeFailure(publicationId, claimed.attemptCount);
     if (row.publication.provider === 'VK' && (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
-      return markFailure(publicationId, 'AUTH', 'VK_DISCONNECTED', 'Reconnect and enable the VK community before publishing.');
+      return markFailure(publicationId, claimed.attemptCount, 'AUTH', 'VK_DISCONNECTED', 'Reconnect and enable the VK community before publishing.',undefined,observed,ownerObserved);
     }
     if (resolveConnector === resolveRegisteredConnector && ((row.publication.provider === 'TELEGRAM' && process.env.TELEGRAM_BOT_TOKEN) || (row.publication.provider === 'MAX' && process.env.MAX_BOT_TOKEN)) &&
       (!row.account.enabled || row.account.connectionStatus !== 'CONNECTED')) {
-      return markFailure(publicationId,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.',undefined,observed,ownerObserved);
+      return markFailure(publicationId,claimed.attemptCount,'AUTH',`${row.publication.provider}_DISCONNECTED`,'Reconnect and enable the destination before publishing.',undefined,observed,ownerObserved);
     }
     // Only implemented providers prepare media; an unconfigured MAX remains an honest unsupported result.
     if (row.publication.provider === 'VK' || row.publication.provider === 'TELEGRAM' || (row.publication.provider === 'MAX' && (process.env.MAX_BOT_TOKEN || resolveConnector !== resolveRegisteredConnector))) {
@@ -236,12 +281,13 @@ export async function processPublication(
     }
     const connector = resolveConnector(row.publication.provider);
     if (connector.provider !== row.publication.provider) {
-      return markFailure(publicationId, 'PERMANENT', 'CONNECTOR_PROVIDER_MISMATCH', 'Connector provider mismatch.');
+      return markFailure(publicationId, claimed.attemptCount, 'PERMANENT', 'CONNECTOR_PROVIDER_MISMATCH', 'Connector provider mismatch.');
     }
 
     let result:PublishResult;
     if(resolveConnector===resolveRegisteredConnector) {
-      const start=()=>{handedOff=true;return connector.publish(input);};
+      const start=(vkToken?:string)=>{handedOff=true;return vkToken && input.provider==='VK'
+        ? createVkConnector({getAccessToken:async()=>vkToken}).publish(input) : connector.publish(input);};
       const started=observed?await beginVerifiedProviderHandoff(observed,input,start):await beginOwnerProviderHandoff(row.publication.userId,start);
       if(!started) {
         if (!await hasCurrentManualAccess(row.publication.userId)) return markAccessExpired(publicationId, claimed.attemptCount);
@@ -249,6 +295,12 @@ export async function processPublication(
           .where(and(eq(publications.id,publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount)));
         const latest=await readPublication(publicationId);
         return {status:latest.publication.status,skipped:true};
+      }
+      if ('rejection' in started) {
+        const rejection=started.rejection;
+        const diagnostic=sanitizeVkPublicationDiagnostic(rejection.vkDiagnostic);
+        const message=diagnostic?`${rejection.message} ${JSON.stringify(diagnostic)}`:rejection.message;
+        return markFailure(publicationId,claimed.attemptCount,rejection.errorType,rejection.code??null,message,rejection.retryAfterMs,observed,ownerObserved,diagnostic);
       }
       const outcome=await started.outcome;
       if(!outcome.ok) throw outcome.error;
@@ -258,14 +310,18 @@ export async function processPublication(
       result=await connector.publish(input);
     }
     if (!result.ok) {
-      return markFailure(publicationId, result.errorType, result.code ?? null, result.message, result.retryAfterMs, observed, ownerObserved);
+      const diagnostic=sanitizeVkPublicationDiagnostic(result.vkDiagnostic);
+      // Store only closed connector metadata. No provider payload, upload URL or
+      // transport error enters logs or the publication's public error message.
+      const message=diagnostic ? `${result.message} ${JSON.stringify(diagnostic)}` : result.message;
+      return markFailure(publicationId, claimed.attemptCount, result.errorType, result.code ?? null, message, result.retryAfterMs, observed, ownerObserved, diagnostic);
     }
 
     if (!result.remoteId.trim()) {
-      return markFailure(publicationId, 'PERMANENT', 'MISSING_REMOTE_ID', 'Provider reported success without a remote ID.');
+      return markFailure(publicationId, claimed.attemptCount, 'PERMANENT', 'MISSING_REMOTE_ID', 'Provider reported success without a remote ID.');
     }
 
-    await getDb().update(publications).set({
+    const [published] = await getDb().update(publications).set({
       status: 'PUBLISHED',
       publishedAt: new Date(),
       providerRemoteId: result.remoteId,
@@ -276,11 +332,16 @@ export async function processPublication(
       providerErrorCode: null,
       providerErrorMessage: null,
       updatedAt: new Date(),
-    }).where(eq(publications.id, publicationId));
+    }).where(and(eq(publications.id, publicationId),eq(publications.status,'PUBLISHING'),eq(publications.attemptCount,claimed.attemptCount))).returning({id:publications.id});
+    if (!published) {
+      const latest=await readPublication(publicationId);
+      return {status:latest.publication.status,skipped:true};
+    }
     return { status: 'PUBLISHED' };
   } catch {
     return markFailure(
       publicationId,
+      claimed.attemptCount,
       handedOff ? 'PERMANENT' : 'TEMPORARY',
       handedOff ? 'AMBIGUOUS_DELIVERY' : 'MEDIA_PREPARATION_FAILED',
       handedOff ? 'Provider delivery outcome is unknown. Check the channel before sending again.' : 'Private media could not be prepared for publication.',

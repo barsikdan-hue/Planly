@@ -1,4 +1,4 @@
-import { ForbiddenError, requireOwnerProviderAccess } from '../../../../../lib/server/auth/access.ts';
+import { ForbiddenError } from '../../../../../lib/server/auth/access.ts';
 import { requireApiOwner } from '../../../../../lib/server/auth/owner.ts';
 import { UnauthorizedError } from '../../../../../lib/server/auth/owner.ts';
 import { completeVkOAuth } from '../../../../../lib/server/vk/oauth.ts';
@@ -17,10 +17,10 @@ function feedback(connected: boolean): Response {
 }
 export async function GET(request: Request): Promise<Response> {
   try {
-    const owner = await requireApiOwner(request); requireOwnerProviderAccess(owner);
+    const owner = await requireApiOwner(request);
     const query = new URL(request.url).searchParams;
     if (query.has('error')) throw new VkOAuthError('AUTH', { stage: 'CALLBACK', reason: vkProviderFailureReason(query.get('error')) });
-    await completeVkOAuth(owner.id, { state: query.get('state') || '', code: query.get('code') || '', deviceId: query.get('device_id') || '' },
+    await completeVkOAuth(owner.id, { state: query.get('state') || '', code: query.get('code') || '', deviceId: query.get('device_id') || '',sessionVersion:owner.sessionVersion },
       (token, communityId) => validateVkCommunity({ token, communityId }));
     return feedback(true);
   } catch (error) {

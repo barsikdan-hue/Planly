@@ -5,29 +5,38 @@ import { ForbiddenError } from '../auth/access.ts';
 import { getOwnerEmail } from '../env.ts';
 import { createTelegramConnector } from '../connectors/telegram.ts';
 import { createMaxConnector } from '../connectors/max.ts';
-import type { PublishInput } from '../connectors/types.ts';
+import type { PublishInput, PublishResult } from '../connectors/types.ts';
 import { socialConnectionConfig } from './config.ts';
 import type { ConnectionTransaction } from './state.ts';
 import { hasManualAccess } from '../../manual-access.ts';
+import { readVkPublicationGrant, vkPublicationConfigRevision } from '../vk/publication-grant.ts';
+import { getVkConfig } from '../vk/config.ts';
+import { getVkAccessToken } from '../vk/credentials.ts';
+import { validateVkCommunity, VkCommunityValidationError } from '../connectors/vk.ts';
 
 type Pointer={socialBindingRevision:number|null;socialBindingDestinationId:string|null};
-export type PublicationAuthorization={userId:string;accountId:string;provider:'TELEGRAM'|'MAX';sessionVersion:number;generation:number;revision:number;destinationId:string;humanId:string;botId:string;configRevision:string};
+export type PublicationAuthorization={userId:string;accountId:string;provider:'TELEGRAM'|'MAX'|'VK';sessionVersion:number;generation:number;revision:number;destinationId:string;humanId:string;botId:string;configRevision:string};
 
 // Callers already hold the user lock. Admission and lifecycle use user → account.
 async function currentBinding(tx:ConnectionTransaction,user:typeof users.$inferSelect,accountId:string):Promise<PublicationAuthorization|null> {
   const [account]=await tx.select().from(socialAccounts).where(and(eq(socialAccounts.id,accountId),eq(socialAccounts.userId,user.id))).for('update');
-  if(!account || account.provider==='VK' || !user.authInitialized || user.accessState!=='ACTIVE' || !hasManualAccess(user) || !account.enabled || account.connectionStatus!=='CONNECTED')return null;
+  if(!account || account.userId!==user.id || !user.authInitialized || user.accessState!=='ACTIVE' || !hasManualAccess(user) || !account.enabled || account.connectionStatus!=='CONNECTED')return null;
+  if(account.provider==='VK') {
+    const bound=await readVkPublicationGrant(tx,user,account);
+    if(!bound)return null;
+    return {userId:user.id,accountId,provider:'VK',sessionVersion:user.sessionVersion,generation:account.connectionGeneration,revision:bound.grant.revision,destinationId:bound.grant.destinationId,humanId:user.id,botId:getVkConfig().clientId,configRevision:bound.grant.configRevision};
+  }
   const [binding]=await tx.select().from(socialBindings).where(eq(socialBindings.accountId,accountId));
   let config;try{config=socialConnectionConfig(account.provider);}catch{return null;}
   if(!binding || binding.userId!==user.id || binding.provider!==account.provider || binding.destinationId!==account.providerAccountId || binding.revision!==account.bindingRevision || binding.sessionVersion!==user.sessionVersion || binding.configRevision!==config.revision)return null;
   return {userId:user.id,accountId,provider:account.provider,sessionVersion:user.sessionVersion,generation:account.connectionGeneration,revision:binding.revision,destinationId:binding.destinationId,humanId:binding.humanId,botId:binding.botId,configRevision:binding.configRevision};
 }
 export async function capturePublicationBinding(tx:ConnectionTransaction,userId:string,accountId:string,provider:string):Promise<Partial<Pointer>> {
-  if(provider!=='TELEGRAM' && provider!=='MAX')return {};
+  if(provider!=='TELEGRAM' && provider!=='MAX' && provider!=='VK')return {};
   const [user]=await tx.select().from(users).where(eq(users.id,userId));
   // Migration-default internal callers retain nullable history. Actual registered
   // transport below still requires a live principal and proof for every USER.
-  if(user && (!user.authInitialized || user.email===getOwnerEmail()))return {};
+  if(user && (!user.authInitialized || provider!=='VK' && user.email===getOwnerEmail()))return {};
   const binding=user?await currentBinding(tx,user,accountId):null;
   if(!binding)throw new ForbiddenError();
   return {socialBindingRevision:binding.revision,socialBindingDestinationId:binding.destinationId};
@@ -43,7 +52,38 @@ export async function observePublicationAuthorization(userId:string,accountId:st
 function sameAuthorization(a:PublicationAuthorization,b:PublicationAuthorization) {
   return a.userId===b.userId && a.accountId===b.accountId && a.provider===b.provider && a.sessionVersion===b.sessionVersion && a.generation===b.generation && a.revision===b.revision && a.destinationId===b.destinationId && a.humanId===b.humanId && a.botId===b.botId && a.configRevision===b.configRevision;
 }
-export async function beginVerifiedProviderHandoff<T>(observed:PublicationAuthorization,input:PublishInput,start:()=>Promise<T>,now:()=>number=Date.now) {
+type ProviderHandoff<T> = {outcome:Promise<{ok:true;value:T}|{ok:false;error:unknown}>}|{rejection:Extract<PublishResult,{ok:false}>}|null;
+export async function beginVerifiedProviderHandoff<T>(observed:PublicationAuthorization,input:PublishInput,start:(vkToken?:string)=>Promise<T>,now:()=>number=Date.now):Promise<ProviderHandoff<T>> {
+  if(observed.provider==='VK') {
+    if(input.socialAccountId!==observed.accountId || input.provider!=='VK' || input.destinationId!==observed.destinationId)return null;
+    let token:string;
+    const checkedAt=now();
+    try {
+      if(vkPublicationConfigRevision()!==observed.configRevision)return null;
+      // Refresh precedes final user/account locks; no nested advisory lock can
+      // deadlock with OAuth/disconnect. Only this verified token is handed off.
+      token=await getVkAccessToken(observed.accountId);
+      const control=await validateVkCommunity({token,communityId:observed.destinationId.slice(1)});
+      if(control.destinationId!==observed.destinationId)return null;
+    } catch(error) {
+      if(error instanceof VkCommunityValidationError) {
+        const rejection:Extract<PublishResult,{ok:false}>={ok:false,errorType:error.errorType,code:error.code,message:error.message,...(error.vkDiagnostic?{vkDiagnostic:error.vkDiagnostic}:{})};
+        return {rejection};
+      }
+      return null;
+    }
+    return getDb().transaction(async tx=>{
+      const [user]=await tx.select().from(users).where(eq(users.id,observed.userId)).for('update');
+      if(!user)return null;
+      const current=await currentBinding(tx,user,observed.accountId);
+      if(!current || !sameAuthorization(current,observed) || now()<checkedAt || now()-checkedAt>30000)return null;
+      const [account]=await tx.select().from(socialAccounts).where(and(eq(socialAccounts.id,observed.accountId),eq(socialAccounts.userId,observed.userId))).for('update');
+      const bound=account?await readVkPublicationGrant(tx,user,account):null;
+      if(!bound || bound.token!==token)return null;
+      const outcome=start(token).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
+      return {outcome};
+    });
+  }
   let config;try{config=socialConnectionConfig(observed.provider);}catch{return null;}
   if(config.revision!==observed.configRevision || input.socialAccountId!==observed.accountId || input.provider!==observed.provider || input.destinationId!==observed.destinationId)return null;
   const connector=observed.provider==='TELEGRAM'?createTelegramConnector({token:config.token}):createMaxConnector({token:config.token});

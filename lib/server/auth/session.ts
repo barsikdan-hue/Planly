@@ -49,7 +49,7 @@ export async function getOwnerBySessionToken(rawToken: string): Promise<Owner | 
   if (!rawToken) return null;
   await initializeLegacyOwner();
   const rows = await getDb()
-    .select({ id: users.id, email: users.email, displayName: users.displayName })
+    .select({ id: users.id, email: users.email, displayName: users.displayName, sessionVersion: users.sessionVersion })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
     .where(and(

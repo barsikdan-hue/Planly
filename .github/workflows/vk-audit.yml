@@ -1,0 +1,86 @@
+name: VK audit isolated verification
+
+on:
+  push:
+    branches: [codex/lentaro-vk-audit-fixes-20261105]
+  pull_request:
+    branches: [codex/vk-miniapp-probe-20261029]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source: ${{ steps.source.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile
+      - id: source
+        run: echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Unit and contract gate, no database services
+        run: node scripts/verify-vk-audit.mjs --unit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vk-audit-unit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .superpowers/vk-audit-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  integration:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: vk-audit-disposable-bootstrap
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile
+      - name: Attest disposable services, run seven suites and project checks
+        env:
+          VK_AUDIT_DISPOSABLE_CI: '1'
+          VK_AUDIT_UNIT_REVISION: ${{ needs.unit.outputs.source }}
+          VK_AUDIT_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          VK_AUDIT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+        run: node scripts/verify-vk-audit.mjs --integration
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vk-audit-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .superpowers/vk-audit-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

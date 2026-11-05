@@ -37,7 +37,7 @@ async function fixture(body: (api: VkApi, pool: Pool, key: { encryptionKey: stri
   const pool = api.getPool();
   try {
     await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [[ownerId, otherOwner]]);
-    await pool.query('INSERT INTO users(id,email,display_name) VALUES ($1,$2,$3),($4,$5,$6)', [ownerId, 'vk-credentials@example.test', 'VK owner', otherOwner, 'vk-other@example.test', 'Other owner']);
+    await pool.query("INSERT INTO users(id,email,display_name,auth_initialized,access_state) VALUES ($1,$2,$3,true,'ACTIVE'),($4,$5,$6,true,'ACTIVE')", [ownerId, 'vk-credentials@example.test', 'VK owner', otherOwner, 'vk-other@example.test', 'Other owner']);
     await pool.query("INSERT INTO social_accounts(id,user_id,provider,provider_account_id,display_name,enabled,connection_status) VALUES ($1,$2,'VK','-12345','VK',true,'CONNECTED'),('vk-other-account',$3,'VK','-98765','VK other',true,'CONNECTED'),('vk-telegram',$2,'TELEGRAM','-100123','Telegram',true,'CONNECTED')", [accountId, ownerId, otherOwner]);
     await body(api, pool, { encryptionKey: env.VK_CREDENTIAL_ENCRYPTION_KEY, keyVersion: '1' });
   } finally {

@@ -43,6 +43,7 @@ export async function setSocialAccountEnabled(
   userId: string,
   accountId: string,
   enabled: boolean,
+  expectedSessionVersion?:number,
 ): Promise<SocialAccountDto> {
   const db = getDb();
   const [account] = await db.select().from(socialAccounts)
@@ -54,7 +55,7 @@ export async function setSocialAccountEnabled(
       if (!account.enabled || account.connectionStatus !== 'CONNECTED') throw new Error('Reconnect VK through VK ID.');
       return toDto(account);
     }
-    await disconnectVkAccount(userId, accountId);
+    await disconnectVkAccount(userId, accountId,expectedSessionVersion);
     const [disconnected] = await db.select().from(socialAccounts).where(eq(socialAccounts.id, accountId));
     return toDto(disconnected);
   }

@@ -31,7 +31,7 @@ for (const [label, origin, host, redirectUri, status] of [
     const savedEnv = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
     Object.assign(process.env, env); resetServerEnvForTests();
     // Only PostgreSQL/session transport is replaced; owner, config, adapter, guard and intent encryption are real.
-    const ownerRows = [{ id: 'origin-owner', email: 'origin@example.test', displayName: 'Origin', role: 'ADMIN', accessExpiresAt: null }];
+    const ownerRows = [{ id: 'origin-owner', email: 'origin@example.test', displayName: 'Origin', role: 'ADMIN', accessExpiresAt: null,sessionVersion:0,authInitialized:true,accessState:'ACTIVE' }];
     // Like Drizzle, this fixture must be awaitable both with and without LIMIT:
     // mutation admission now also reads the current manual-access policy.
     const chain = { from() { return this; }, innerJoin() { return this; }, where() { return this; }, async limit() { return ownerRows; }, then(resolve: (rows: typeof ownerRows) => unknown) { return Promise.resolve(ownerRows).then(resolve); } };
@@ -39,9 +39,13 @@ for (const [label, origin, host, redirectUri, status] of [
     globals.__planlyDb = { select: () => chain, update:()=>initialization };
     let intentWrites = 0; let connections = 0; let providerCalls = 0;
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
+      if(sql.startsWith('SELECT id,email')) {
+        assert.deepEqual(values,['origin-owner']);
+        return {rows:[{id:'origin-owner',email:'origin@example.test',auth_initialized:true,access_state:'ACTIVE',session_version:0,role:'ADMIN',access_expires_at:null}]};
+      }
       if (sql.startsWith('SELECT id,user_id')) {
         assert.deepEqual(values, ['origin-account']);
-        return { rows: [{ id: 'origin-account', user_id: 'origin-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED' }] };
+        return { rows: [{ id: 'origin-account', user_id: 'origin-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED',connection_generation:0,binding_revision:0 }] };
       }
       if (sql.startsWith('INSERT INTO vk_oauth_intents')) {
         intentWrites++;

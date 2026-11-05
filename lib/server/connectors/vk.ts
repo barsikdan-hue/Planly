@@ -1,4 +1,4 @@
-import type { PublicationErrorType, PublishInput, PublishResult, SocialConnector } from './types.ts';
+import type { PublicationErrorType, PublishInput, PublishResult, SocialConnector, VkPublicationDiagnostic } from './types.ts';
 import { validatePublicationContent } from '../../publication-content.ts';
 
 type Failure = Extract<PublishResult, { ok: false }>;
@@ -14,11 +14,43 @@ const validCommunity = (value: unknown): value is string => typeof value === 'st
 const validDestination = (value: unknown): value is string => typeof value === 'string' && value.startsWith('-') && validCommunity(value.slice(1));
 const validToken = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 16384 && !/\s/.test(value);
 
+// Rebuild at the worker boundary: never serialize arbitrary connector properties.
+export function sanitizeVkPublicationDiagnostic(value: unknown): VkPublicationDiagnostic | undefined {
+  try {
+  const candidate = record(value);
+  if (!candidate) return;
+  // Snapshot once so a mutable getter cannot change a value after validation.
+  const { stage, method, vkErrorCode, uploadHttpStatus, uploadHostClass, uploadAttempt, networkErrorClass: networkClass } = candidate;
+  if (typeof stage !== 'string' || !['COMMUNITY_VALIDATION', 'GET_UPLOAD_SERVER', 'UPLOAD', 'UPLOAD_RESPONSE', 'SAVE_PHOTO', 'PHOTO_RECEIPT', 'WALL_POST'].includes(stage)) return;
+  const safe: VkPublicationDiagnostic = { stage: stage as VkPublicationDiagnostic['stage'] };
+  if (typeof method === 'string' && ['groups.getById', 'photos.getWallUploadServer', 'photos.saveWallPhoto', 'wall.post'].includes(method)) safe.method = method as VkPublicationDiagnostic['method'];
+  if (typeof vkErrorCode === 'number' && Number.isSafeInteger(vkErrorCode) && vkErrorCode > 0 && vkErrorCode <= 9999) safe.vkErrorCode = vkErrorCode;
+  if (typeof uploadHttpStatus === 'number' && Number.isInteger(uploadHttpStatus) && uploadHttpStatus >= 100 && uploadHttpStatus <= 599) safe.uploadHttpStatus = uploadHttpStatus;
+  if (uploadHostClass === 'VK_RU_PHOTO_UPLOAD' || uploadHostClass === 'VK_COM_PHOTO_UPLOAD') safe.uploadHostClass = uploadHostClass;
+  if (uploadAttempt === 'PRIMARY' || uploadAttempt === 'FALLBACK') safe.uploadAttempt = uploadAttempt;
+  if (typeof networkClass === 'string' && ['TIMEOUT', 'DNS', 'CONNECTION', 'TLS', 'OTHER'].includes(networkClass)) safe.networkErrorClass = networkClass as VkPublicationDiagnostic['networkErrorClass'];
+  return safe;
+  } catch { return undefined; }
+}
+
+function networkErrorClass(error: unknown): VkPublicationDiagnostic['networkErrorClass'] {
+  const value = record(error), cause = record(value?.cause);
+  if (value?.name === 'TimeoutError' || value?.name === 'AbortError' || cause?.code === 'UND_ERR_CONNECT_TIMEOUT') return 'TIMEOUT';
+  const code = cause?.code ?? value?.code;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'DNS';
+  if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'UND_ERR_SOCKET') return 'CONNECTION';
+  if (code === 'CERT_HAS_EXPIRED' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || code === 'ERR_TLS_CERT_ALTNAME_INVALID') return 'TLS';
+  return 'OTHER';
+}
+
 // Only numeric, recognized API codes are reflected; provider messages/params never leave this module.
 function apiFailure(code: unknown, mutation: boolean, unknownOutcome: () => Failure): Failure {
   if (typeof code !== 'number' || !Number.isSafeInteger(code)) return mutation ? unknownOutcome() : unavailable();
+  if (code === 1051) return failure('PERMANENT', 'VK_METHOD_PROFILE_DENIED', 'VK denied this method for the current profile or application. Confirm official API access before trying again.');
+  if (code === 27) return failure('PERMANENT', 'VK_GROUP_TOKEN_METHOD_DENIED', 'VK denied this method for the supplied community authorization. Confirm an approved credential type before trying again.');
+  if (code === 15) return failure('PERMANENT', 'VK_API_ACCESS_NOT_GRANTED', 'VK has not granted access to this method or resource. Confirm API permissions before trying again.');
   if (code === 6 || code === 29) return { ...failure('TEMPORARY', `VK_${code}`, 'VK rate limit; retry later.'), retryAfterMs: 60_000 };
-  if ([5, 7, 14, 15, 17, 20, 24, 25, 27, 28, 214, 704, 1117].includes(code)) return failure('AUTH', `VK_${code}`, 'VK credentials, community permissions or an account challenge require reconnecting.');
+  if ([5, 7, 14, 17, 20, 24, 25, 28, 214, 704, 1117].includes(code)) return failure('AUTH', `VK_${code}`, 'VK credentials, community permissions or an account challenge require reconnecting.');
   if ([22, 100, 118, 121, 219, 220, 222, 224, 225].includes(code)) return failure('VALIDATION', `VK_${code}`, 'VK rejected the community, text or photo. Check the content and community settings.');
   if (code === 9) return failure('PERMANENT', 'VK_9', 'VK flood control rejected this publication. Review the community before trying again.');
   return mutation ? unknownOutcome() : unavailable();
@@ -31,6 +63,8 @@ function createApi(options: Transport) {
     const unknownOutcome = method === 'photos.saveWallPhoto' ? ambiguousPhotoSave : ambiguous;
     if (!validToken(options.token)) return failure('AUTH', 'VK_RECONNECT_REQUIRED', 'Reconnect the VK account before publishing.');
     if (!/^5\.\d{1,3}$/.test(apiVersion)) return failure('PERMANENT', 'VK_API_VERSION', 'VK API version is not configured correctly on the server.');
+    const stage: VkPublicationDiagnostic['stage'] = method === 'groups.getById' ? 'COMMUNITY_VALIDATION' : method === 'photos.getWallUploadServer' ? 'GET_UPLOAD_SERVER' : method === 'photos.saveWallPhoto' ? 'SAVE_PHOTO' : 'WALL_POST';
+    const diagnose = (result: Failure, extra: Partial<VkPublicationDiagnostic> = {}): Failure => ({ ...result, vkDiagnostic: { stage, method, ...extra } });
     try {
       const body = new URLSearchParams({ ...params, access_token: options.token, v: apiVersion });
       const response = await fetchImpl(`https://api.vk.com/method/${method}`, {
@@ -38,12 +72,15 @@ function createApi(options: Transport) {
         signal: AbortSignal.timeout(30_000),
       });
       const payload = record(await response.json());
-      if (payload?.error) return apiFailure(record(payload.error)?.error_code, mutation, unknownOutcome);
+      if (payload?.error) {
+        const code = record(payload.error)?.error_code;
+        return diagnose(apiFailure(code, mutation, unknownOutcome), typeof code === 'number' && Number.isSafeInteger(code) && code > 0 && code <= 9999 ? { vkErrorCode: code } : {});
+      }
       if (response.ok && payload && Object.hasOwn(payload, 'response')) return { ok: true, result: payload.response };
-      return mutation ? unknownOutcome() : unavailable();
-    } catch {
+      return diagnose(mutation ? unknownOutcome() : unavailable());
+    } catch (error) {
       // Raw transport errors may contain credentials, request bodies or signed upload URLs.
-      return mutation ? unknownOutcome() : unavailable();
+      return diagnose(mutation ? unknownOutcome() : unavailable(), { networkErrorClass: networkErrorClass(error) });
     }
   };
 }
@@ -51,11 +88,13 @@ function createApi(options: Transport) {
 export class VkCommunityValidationError extends Error {
   readonly code: string;
   readonly errorType: PublicationErrorType;
+  readonly vkDiagnostic?: VkPublicationDiagnostic;
   constructor(result: Failure) {
     super(result.message);
     this.name = 'VkCommunityValidationError';
     this.code = result.code ?? 'VK_COMMUNITY';
     this.errorType = result.errorType;
+    this.vkDiagnostic = sanitizeVkPublicationDiagnostic(result.vkDiagnostic);
   }
 }
 
@@ -123,20 +162,38 @@ export function createVkConnector(options: { getAccessToken: (socialAccountId: s
         if (!uploadUrl) return failure('PERMANENT', 'VK_UPLOAD_URL', 'VK did not provide an allowed photo upload destination.');
         if (!Number.isSafeInteger(server?.album_id) || !validPositiveId(server?.user_id) ||
           (server?.group_id !== undefined && (!validPositiveId(server.group_id) || String(server.group_id) !== groupId))) return failure('PERMANENT', 'VK_UPLOAD_RESPONSE', 'VK did not confirm the photo upload community.');
+        const fallbackUrl = allowedVkPhotoUploadDestination(server?.fallback_upload_url, token);
+        let currentUrl = uploadUrl;
+        let attempt: 'PRIMARY' | 'FALLBACK' = 'PRIMARY';
+        let response: Response;
+        const uploadDiagnostic = (): VkPublicationDiagnostic => ({ stage: 'UPLOAD', uploadHostClass: currentUrl.hostname === 'pu.vk.ru' ? 'VK_RU_PHOTO_UPLOAD' : 'VK_COM_PHOTO_UPLOAD', uploadAttempt: attempt });
+        // Only an explicit method rejection permits one fallback. An unknown upload
+        // outcome, redirect or mutation failure never authorizes another endpoint.
+        for (;;) {
+          try { response = await uploadVkPhotoMultipart({uploadUrl: currentUrl, bytes: asset.bytes, mimeType: asset.mimeType, fetchImpl}); }
+          catch (error) { return { ...failure('TEMPORARY', 'VK_UPLOAD_FAILED', 'VK photo upload was not confirmed.'), vkDiagnostic: { ...uploadDiagnostic(), networkErrorClass: networkErrorClass(error) } }; }
+          if (response.status === 405 && attempt === 'PRIMARY' && fallbackUrl && fallbackUrl.href !== uploadUrl.href) {
+            await response.body?.cancel().catch(() => {});
+            currentUrl = fallbackUrl; attempt = 'FALLBACK'; continue;
+          }
+          break;
+        }
+        const diagnostic = { ...uploadDiagnostic(), uploadHttpStatus: response.status };
+        if (response.status >= 300 && response.status < 400) return { ...failure('PERMANENT', 'VK_UPLOAD_REDIRECT', 'VK photo upload destination attempted a redirect.'), vkDiagnostic: diagnostic };
+        if (response.status === 405) return { ...failure('PERMANENT', 'VK_UPLOAD_HTTP_405', 'VK photo upload endpoint rejected POST (HTTP 405).'), vkDiagnostic: diagnostic };
+        if (!response.ok) return { ...failure('TEMPORARY', 'VK_UPLOAD_FAILED', 'VK photo upload was not confirmed.'), vkDiagnostic: diagnostic };
         let uploaded: Record<string, unknown> | null;
-        try {
-          const response = await uploadVkPhotoMultipart({uploadUrl, bytes: asset.bytes, mimeType: asset.mimeType, fetchImpl});
-          if (response.status >= 300 && response.status < 400) return failure('PERMANENT', 'VK_UPLOAD_REDIRECT', 'VK photo upload destination attempted a redirect.');
-          if (!response.ok) return failure('TEMPORARY', 'VK_UPLOAD_FAILED', 'VK photo upload was not confirmed.');
-          uploaded = record(await response.json());
-        } catch { return failure('TEMPORARY', 'VK_UPLOAD_FAILED', 'VK photo upload was not confirmed.'); }
-        if (!validPositiveId(uploaded?.server) || typeof uploaded?.photo !== 'string' || !uploaded.photo.trim() || uploaded.photo.trim() === '[]' || uploaded.photo.length > 1_048_576 || typeof uploaded.hash !== 'string' || !uploaded.hash.trim() || uploaded.hash.length > 8192) return failure('TEMPORARY', 'VK_UPLOAD_RESPONSE', 'VK photo upload response was incomplete.');
+        try { uploaded = record(await response.json()); }
+        catch { return { ...failure('TEMPORARY', 'VK_UPLOAD_RESPONSE', 'VK photo upload response was incomplete.'), vkDiagnostic: { ...diagnostic, stage: 'UPLOAD_RESPONSE' } }; }
+        if (!validPositiveId(uploaded?.server) || typeof uploaded?.photo !== 'string' || !uploaded.photo.trim() || uploaded.photo.trim() === '[]' || uploaded.photo.length > 1_048_576 || typeof uploaded.hash !== 'string' || !uploaded.hash.trim() || uploaded.hash.length > 8192) return { ...failure('TEMPORARY', 'VK_UPLOAD_RESPONSE', 'VK photo upload response was incomplete.'), vkDiagnostic: { ...diagnostic, stage: 'UPLOAD_RESPONSE' } };
         const saved = await call('photos.saveWallPhoto', { group_id: groupId, server: String(uploaded.server), photo: uploaded.photo, hash: uploaded.hash }, true);
         if (!saved.ok) return saved;
         const items = Array.isArray(saved.result) ? saved.result : [];
         const item = items.length === 1 ? record(items[0]) : null;
         // Private access-key attachment semantics are outside the approved public community contract.
-        if (!item || !validPositiveId(item.id) || item.owner_id !== Number(input.destinationId) || item.access_key !== undefined) return failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm the saved community photo.');
+        // A photo may belong to the uploader while wall.post targets the community.
+        // Trust only the owner tied to this authenticated upload preparation or wall.
+        if (!item || !validPositiveId(item.id) || (item.owner_id !== Number(input.destinationId) && item.owner_id !== server.user_id) || item.access_key !== undefined) return { ...failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm the saved community photo.'), vkDiagnostic: { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto' } };
         const attachment = `photo${item.owner_id}_${item.id}`;
         if (attachments.includes(attachment)) return failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm distinct saved community photos.');
         attachments.push(attachment);

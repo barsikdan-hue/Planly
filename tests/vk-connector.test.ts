@@ -139,11 +139,12 @@ test('VK account credential failure is sanitized and does not publish', async ()
   assert.equal(sends, 0);
 });
 
-for (const [code, type] of [[5, 'AUTH'], [27, 'AUTH'], [28, 'AUTH'], [1117, 'AUTH'], [6, 'TEMPORARY'], [29, 'TEMPORARY'], [7, 'AUTH'], [15, 'AUTH'], [20, 'AUTH'], [14, 'AUTH'], [17, 'AUTH'], [24, 'AUTH'], [25, 'AUTH'], [704, 'AUTH'], [100, 'VALIDATION'], [214, 'AUTH'], [222, 'VALIDATION'], [9, 'PERMANENT']] as const) {
+for (const [code, type] of [[5, 'AUTH'], [27, 'PERMANENT'], [28, 'AUTH'], [1117, 'AUTH'], [6, 'TEMPORARY'], [29, 'TEMPORARY'], [7, 'AUTH'], [15, 'PERMANENT'], [20, 'AUTH'], [14, 'AUTH'], [17, 'AUTH'], [24, 'AUTH'], [25, 'AUTH'], [704, 'AUTH'], [100, 'VALIDATION'], [214, 'AUTH'], [222, 'VALIDATION'], [9, 'PERMANENT']] as const) {
   test(`VK explicit error ${code} has bounded ${type} classification with no provider echo`, async () => {
     const { connector, requests } = fixture(() => json({ error: { error_code: code, error_msg: token, request_params: [{ key: 'access_token', value: token }] } }));
     const result = await connector.publish(input);
-    failed(result, type, `VK_${code}`);
+    // Explicit method/resource denial requires permission review, not token reconnect.
+    failed(result, type, code === 27 ? 'VK_GROUP_TOKEN_METHOD_DENIED' : code === 15 ? 'VK_API_ACCESS_NOT_GRANTED' : `VK_${code}`);
     assert.equal(requests.length, 1);
     if (!result.ok && type === 'TEMPORARY') assert.ok(result.retryAfterMs && result.retryAfterMs > 0 && result.retryAfterMs <= 86400000);
   });
