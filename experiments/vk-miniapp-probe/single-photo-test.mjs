@@ -26,10 +26,16 @@ export function inspectPreconditions({active,uploadUrl,image,sensitiveToken}){
   return 'READY';
 }
 export async function publishOne(options){
+  return publishFixed(options,TEST_OPERATION,TEST_MESSAGE);
+}
+export async function publishReceiptPost(options){
+  return publishFixed(options,RECEIPT_POST_OPERATION,RECEIPT_MESSAGE);
+}
+async function publishFixed(options,operation,message){
   const {active,claim,uploadUrl,image,upload,api}=options;
   if(inspectPreconditions(options)!=='READY')return {phase:'TEST_PRECONDITION_FAILED'};
   try{if(!claim())return {phase:'TEST_ALREADY_ATTEMPTED'};}catch{return {phase:'TEST_PRECONDITION_FAILED'};}
-  let stage='UPLOAD_STARTED';
+  let stage=operation===RECEIPT_POST_OPERATION?'SERVER_UPLOAD_PENDING':'UPLOAD_STARTED';
   try{
     const raw=await upload(new URL(uploadUrl).toString(),image);
     stage='UPLOAD_RESPONSE_RECEIVED';
@@ -41,19 +47,24 @@ export async function publishOne(options){
       ||(saved[0].owner_id!==-242095689&&(!positive(options.uploadUserId)||saved[0].owner_id!==options.uploadUserId))
       ||saved[0].access_key!==undefined)throw {};
     stage='POST_STARTED';
-    const receipt=await api('wall.post',{owner_id:-242095689,from_group:1,message:TEST_MESSAGE,
-      attachments:`photo${saved[0].owner_id}_${saved[0].id}`,guid:TEST_OPERATION});
+    const receipt=await api('wall.post',{owner_id:-242095689,from_group:1,message,
+      attachments:`photo${saved[0].owner_id}_${saved[0].id}`,guid:operation});
     stage='POST_RESPONSE_RECEIVED';
     if(!positive(receipt?.post_id))throw {};
     return {phase:'TEST_POST_CONFIRMED',postId:receipt.post_id};
   }catch(error){
     const code=error?.error_data?.error_code??error?.error_code;
-    return {phase:'TEST_OUTCOME_UNKNOWN',stage,errorCode:Number.isSafeInteger(code)&&code>=0&&code<1_000_000?code:null};
+    const diagnostic=error?.relayResult?safeReceiptResult(error.relayResult):null;
+    return {phase:'TEST_OUTCOME_UNKNOWN',stage,errorCode:Number.isSafeInteger(code)&&code>=0&&code<1_000_000?code:null,
+      ...(diagnostic?{uploadDiagnostic:{status:diagnostic.status,...(diagnostic.httpStatus?{httpStatus:diagnostic.httpStatus}:{}),...(diagnostic.diagnostic?{diagnostic:diagnostic.diagnostic}:{})}}:{})};
   }
 }
 
 export async function readTestResult(api,uploadUserId){
   return readFixedTestResult(api,TEST_MESSAGE,uploadUserId);
+}
+export async function readReceiptPostResult(api,uploadUserId){
+  return readFixedTestResult(api,RECEIPT_MESSAGE,uploadUserId);
 }
 export async function readLegacyTestResult(api,uploadUserId){
   return readFixedTestResult(api,LEGACY_TEST_MESSAGE,uploadUserId);
@@ -81,4 +92,10 @@ export function claimTest(storage){
   if(storage.getItem(TEST_OPERATION)!==null)return false;
   storage.setItem(TEST_OPERATION,'ATTEMPTED');
   return storage.getItem(TEST_OPERATION)==='ATTEMPTED';
+}
+import {RECEIPT_POST_OPERATION,RECEIPT_MESSAGE,safeReceiptResult} from '../../public/vk-upload-receipt.mjs';
+export function claimReceiptPost(storage){
+  if(storage.getItem(RECEIPT_POST_OPERATION)!==null)return false;
+  storage.setItem(RECEIPT_POST_OPERATION,'ATTEMPTED');
+  return storage.getItem(RECEIPT_POST_OPERATION)==='ATTEMPTED';
 }

@@ -2,7 +2,7 @@ name: VK audit isolated verification
 
 on:
   pull_request:
-    branches: [codex/vk-miniapp-probe-20261029, codex/lentaro-vk-audit-fixes-20261105]
+    branches: [codex/vk-miniapp-probe-20261029, codex/lentaro-vk-audit-fixes-20261105, codex/vk-post-proof-20261106]
 
 permissions:
   contents: read
@@ -32,6 +32,33 @@ jobs:
         with:
           name: vk-audit-unit-${{ github.run_id }}-${{ github.run_attempt }}
           path: .superpowers/vk-audit-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  web-image:
+    needs: [unit, integration]
+    if: github.event.pull_request.head.ref == 'codex/vk-firstparty-receipt-20261106'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Build and export the verified Linux web image without starting the app
+        env:
+          VK_WEB_IMAGE_SOURCE: ${{ needs.unit.outputs.source }}
+          VK_WEB_IMAGE_RUN_ID: ${{ github.run_id }}
+          VK_WEB_IMAGE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: node scripts/export-vk-web-image.mjs --export
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vk-web-image-${{ needs.unit.outputs.source }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .superpowers/vk-web-image/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -67,7 +94,7 @@ jobs:
           node-version: 22.13.0
       - run: npm install --global pnpm@11.25.0
       - run: pnpm install --frozen-lockfile
-      - name: Attest disposable services, run seven suites and project checks
+      - name: Attest disposable services, run targeted suites and project checks
         env:
           VK_AUDIT_DISPOSABLE_CI: '1'
           VK_AUDIT_UNIT_REVISION: ${{ needs.unit.outputs.source }}

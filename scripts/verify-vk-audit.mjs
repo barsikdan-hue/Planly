@@ -36,7 +36,7 @@ export function verifySourceProvenance(githubActions,dirtyWorktree) {
   if(githubActions)assert.equal(dirtyWorktree,false,'Clean committed source required on GitHub Actions');
 }
 
-const suites = ['vk-audit-races.integration.test.ts','vk-product.integration.test.ts','vk-credentials.integration.test.ts','publication-processor.integration.test.ts','scheduler-worker.integration.test.ts','social-connection-publication.integration.test.ts','vk-authorization.integration.test.ts'];
+const suites = ['vk-audit-races.integration.test.ts','vk-product.integration.test.ts','vk-credentials.integration.test.ts','publication-processor.integration.test.ts','scheduler-worker.integration.test.ts','social-connection-publication.integration.test.ts','vk-authorization.integration.test.ts','vk-receipt-claim.integration.ts'];
 async function main(mode) {
   assert.ok(['--unit','--integration'].includes(mode),'Choose --unit or --integration');
   const root=process.cwd(), output=path.join(root,'.superpowers/vk-audit-ci');
@@ -127,7 +127,7 @@ async function main(mode) {
       await save();
       console.log('Disposable PostgreSQL17/Redis7 identities and nonce sentinels verified; child environment excludes ambient credentials.');
       await run('migrations','pnpm',['db:migrate']);
-      await run('seven-integration-suites',process.execPath,['--test','--test-reporter=spec','--test-concurrency=1','--experimental-strip-types',...suites.map(name=>`tests/${name}`)]);
+      await run('targeted-integration-suites',process.execPath,['--test','--test-reporter=spec','--test-concurrency=1','--experimental-strip-types',...suites.map(name=>`tests/${name}`)]);
 
       // Existing broad regression guards require /planly_test, and its additive
       // migration rehearsal creates its own child databases. Preserve these

@@ -4,3 +4,10 @@ export function uploadWindowResponse():Response{
       'Content-Security-Policy':"default-src 'none'; script-src 'self'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"},
   });
 }
+
+export function receiptWindowResponse():Response{
+  return new Response(`<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Planly — серверная загрузка для одного поста</title><body><main><h1>Одна серверная загрузка для публикации VK</h1><p>Группа №242095689. После вашего подтверждения сервер Lentaro загрузит одну PNG-картинку. Квитанция останется только в памяти Mini App, который сохранит фото и создаст один пост. VK-токен не передаётся этому окну или серверу. Старые блокировки сохраняются, повтор запрещён.</p><p id="status" role="status">Ожидаем Mini App…</p><img id="preview" alt="Картинка для одной публикации" width="400" hidden><p><button id="confirm" disabled>Подтвердить загрузку и один пост</button> <button id="cancel">Отменить</button></p></main><script type="module" src="/vk-upload-receipt-window.mjs"></script></body></html>`,{
+    headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY',
+      'Content-Security-Policy':"default-src 'none'; script-src 'self'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"},
+  });
+}
