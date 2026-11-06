@@ -4,8 +4,9 @@ import { getPool } from '../../../db/index.ts';
 import { getVkConfig, VkOAuthError } from './config.ts';
 import { openVkPayload, sealVkPayload, type VkEnvelope } from './crypto.ts';
 import { requestVkGrant } from './oauth.ts';
+import type { VkPublicationGrant } from './publication-grant.ts';
 
-export type VkCredentialPayload = { accessToken: string; refreshToken: string; deviceId: string; scopes: string[] };
+export type VkCredentialPayload = { accessToken: string; refreshToken: string; deviceId: string; scopes: string[]; publicationGrant?: VkPublicationGrant };
 type CredentialRow = { ciphertext: string; iv: string; tag: string; key_version: string; expires_at: Date; refresh_state: 'READY' | 'UNCERTAIN' };
 export function rowEnvelope(row: { ciphertext: string; iv: string; tag: string; key_version: string }): VkEnvelope {
   return { ciphertext: row.ciphertext, iv: row.iv, tag: row.tag, keyVersion: row.key_version };
@@ -31,7 +32,7 @@ export async function withVkAccountLock<T>(accountId: string, operation: (client
 }
 
 export async function readVkAccount(client: PoolClient, accountId: string, ownerId?: string, requireConnected = false) {
-  const result = await client.query<{ id: string; user_id: string; provider: string; enabled: boolean; connection_status: string }>('SELECT id,user_id,provider,enabled,connection_status FROM social_accounts WHERE id=$1 FOR UPDATE', [accountId]);
+  const result = await client.query<{ id: string; user_id: string; provider: string; enabled: boolean; connection_status: string; connection_generation: number; binding_revision: number }>('SELECT id,user_id,provider,enabled,connection_status,connection_generation,binding_revision FROM social_accounts WHERE id=$1 FOR UPDATE', [accountId]);
   const account = result.rows[0];
   if (!account || account.provider !== 'VK' || (ownerId !== undefined && account.user_id !== ownerId)) throw new VkOAuthError(ownerId === undefined ? 'AUTH' : 'NOT_FOUND');
   if (requireConnected && (!account.enabled || account.connection_status !== 'CONNECTED')) throw new VkOAuthError('AUTH');
@@ -60,8 +61,8 @@ export async function getVkAccessToken(socialAccountId: string): Promise<string>
     // This commit is the safety boundary: no outcome after dispatch may reuse the old refresh.
     await client.query("UPDATE vk_credentials SET refresh_state='UNCERTAIN',updated_at=now() WHERE account_id=$1", [socialAccountId]);
     await client.query('COMMIT');
-    const grant = await requestVkGrant({ grant_type: 'refresh_token', refresh_token: payload.refreshToken, device_id: payload.deviceId, state: randomBytes(32).toString('base64url') }, config, payload.scopes);
-    const envelope = sealVkPayload({ accessToken: grant.accessToken, refreshToken: grant.refreshToken, deviceId: payload.deviceId, scopes: grant.scopes }, binding, config);
+    const grant = await requestVkGrant({ grant_type: 'refresh_token', refresh_token: payload.refreshToken, device_id: payload.deviceId, state: randomBytes(32).toString('base64url') }, config);
+    const envelope = sealVkPayload({ ...payload, accessToken: grant.accessToken, refreshToken: grant.refreshToken, scopes: grant.scopes }, binding, config);
     await client.query('BEGIN');
     await readVkAccount(client, socialAccountId, undefined, true);
     const updated = await client.query("UPDATE vk_credentials SET ciphertext=$2,iv=$3,tag=$4,key_version=$5,expires_at=$6,refresh_state='READY',updated_at=now() WHERE account_id=$1 AND refresh_state='UNCERTAIN'", [socialAccountId, envelope.ciphertext, envelope.iv, envelope.tag, envelope.keyVersion, new Date(Date.now() + grant.expiresIn * 1000)]);

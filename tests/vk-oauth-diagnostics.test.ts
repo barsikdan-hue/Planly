@@ -28,12 +28,12 @@ for (const [scenario, response, stage, reason] of [
   ['unknown provider denial', () => Response.json({ error: synthetic(), error_description: synthetic() }), 'TOKEN_EXCHANGE', 'PROVIDER_REJECTED'],
   ['HTTP rejection without JSON', () => new Response(synthetic(), { status: 503 }), 'TOKEN_EXCHANGE', 'HTTP_REJECTED'],
   ['malformed successful JSON', () => new Response(synthetic()), 'TOKEN_EXCHANGE', 'INVALID_RESPONSE'],
-  ['basic grant', () => Response.json(grant('vkid.personal_info email phone')), 'GRANT_VALIDATION', 'MISSING_PUBLISHING_SCOPES'],
-  ['malformed grant', () => Response.json({ access_token: synthetic() }), 'GRANT_VALIDATION', 'INVALID_RESPONSE'],
+  ['basic grant', (state:string) => Response.json({ ...grant('vkid.personal_info email phone'),state }), 'GRANT_VALIDATION', 'MISSING_PUBLISHING_SCOPES'],
+  ['malformed grant', (state:string) => Response.json({ access_token: synthetic(),state }), 'GRANT_VALIDATION', 'INVALID_RESPONSE'],
 ] as const) {
   test(`code exchange preserves a safe distinct cause for ${scenario}`, async () => {
     const original = globalThis.fetch;
-    globalThis.fetch = async () => response();
+    globalThis.fetch = async (_url,init) => response(new URLSearchParams(String(init?.body)).get('state')??'');
     try { await assert.rejects(() => requestVkGrant({ grant_type: 'authorization_code', code: synthetic(), state: synthetic() }, config()), error => diagnostic(error, stage, reason)); }
     finally { globalThis.fetch = original; }
   });
@@ -59,14 +59,15 @@ test('exchange state mismatch is distinguishable without reflecting the state', 
   finally { globalThis.fetch = original; }
 });
 
-test('refresh still inherits omitted unchanged permissions and refuses an explicit downgrade', async () => {
+test('refresh requires fresh returned permissions and refuses an explicit downgrade', async () => {
   const original = globalThis.fetch;
   const replacement = grant(); delete (replacement as Partial<typeof replacement>).scope;
-  globalThis.fetch = async () => Response.json(replacement);
+  const state=synthetic();
+  globalThis.fetch = async (_url,init) => Response.json({...replacement,state:new URLSearchParams(String(init?.body)).get('state')});
   try {
-    assert.deepEqual((await requestVkGrant({ grant_type: 'refresh_token' }, config(), ['wall', 'photos'])).scopes, ['wall', 'photos']);
-    globalThis.fetch = async () => Response.json(grant('wall'));
-    await assert.rejects(() => requestVkGrant({ grant_type: 'refresh_token' }, config(), ['wall', 'photos']), error => diagnostic(error, 'GRANT_VALIDATION', 'MISSING_PUBLISHING_SCOPES'));
+    await assert.rejects(()=>requestVkGrant({grant_type:'refresh_token',state},config()),error=>diagnostic(error,'GRANT_VALIDATION','INVALID_RESPONSE'));
+    globalThis.fetch = async (_url,init) => Response.json({...grant('wall'),state:new URLSearchParams(String(init?.body)).get('state')});
+    await assert.rejects(() => requestVkGrant({ grant_type: 'refresh_token',state }, config()), error => diagnostic(error, 'GRANT_VALIDATION', 'MISSING_PUBLISHING_SCOPES'));
   } finally { globalThis.fetch = original; }
 });
 
@@ -143,7 +144,8 @@ for (const [failure, expectedStage, expectedReason] of [
     const echo = synthetic(); let intent: Record<string, unknown> | undefined; let connectedWrites = 0; let credentialWrites = 0; let validations = 0;
     // The actual flow, encryption and error propagation run; only PostgreSQL transport is replaced.
     const client = { release() {}, async query(sql: string, values: unknown[] = []) {
-      if (sql.startsWith('SELECT id,user_id')) return { rows: [{ id: 'diagnostic-account', user_id: 'diagnostic-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED' }] };
+      if (sql.startsWith('SELECT id,email')) return { rows: [{ id:'diagnostic-owner',email:'diagnostic@example.test',auth_initialized:true,access_state:'ACTIVE',session_version:0,role:'USER',access_expires_at:null }] };
+      if (sql.startsWith('SELECT id,user_id')) return { rows: [{ id: 'diagnostic-account', user_id: 'diagnostic-owner', provider: 'VK', enabled: false, connection_status: 'DISCONNECTED',connection_generation:0,binding_revision:0 }] };
       if (sql.startsWith('INSERT INTO vk_oauth_intents')) intent = { state_hash: values[0], user_id: values[1], account_id: values[2], community_id: values[3], ciphertext: values[4], iv: values[5], tag: values[6], key_version: values[7], expires_at: values[8] };
       if (sql.startsWith('SELECT account_id FROM vk_oauth_intents')) {
         if (failure === 'intent') throw new Error(echo);
@@ -156,7 +158,7 @@ for (const [failure, expectedStage, expectedReason] of [
       return { rows: [], rowCount: 1 };
     } };
     globals.__planlyPool = { connect: async () => client, query: client.query };
-    globalThis.fetch = async () => Response.json(grant(failure === 'scope' ? 'vkid.personal_info' : 'wall photos'));
+    globalThis.fetch = async (_url,init) => Response.json({...grant(failure === 'scope' ? 'vkid.personal_info' : 'wall photos'),state:new URLSearchParams(String(init?.body)).get('state')});
     try {
       const started = await startVkOAuth('diagnostic-owner', 'diagnostic-account', '242095689');
       assert.equal(new URL(started.authorizationUrl).searchParams.get('scope'), 'wall photos');

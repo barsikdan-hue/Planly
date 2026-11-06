@@ -37,7 +37,7 @@ async function fixture(body: (api: VkApi, pool: Pool, key: { encryptionKey: stri
   const pool = api.getPool();
   try {
     await pool.query('DELETE FROM users WHERE id = ANY($1::text[])', [[ownerId, otherOwner]]);
-    await pool.query('INSERT INTO users(id,email,display_name) VALUES ($1,$2,$3),($4,$5,$6)', [ownerId, 'vk-credentials@example.test', 'VK owner', otherOwner, 'vk-other@example.test', 'Other owner']);
+    await pool.query("INSERT INTO users(id,email,display_name,auth_initialized,access_state) VALUES ($1,$2,$3,true,'ACTIVE'),($4,$5,$6,true,'ACTIVE')", [ownerId, 'vk-credentials@example.test', 'VK owner', otherOwner, 'vk-other@example.test', 'Other owner']);
     await pool.query("INSERT INTO social_accounts(id,user_id,provider,provider_account_id,display_name,enabled,connection_status) VALUES ($1,$2,'VK','-12345','VK',true,'CONNECTED'),('vk-other-account',$3,'VK','-98765','VK other',true,'CONNECTED'),('vk-telegram',$2,'TELEGRAM','-100123','Telegram',true,'CONNECTED')", [accountId, ownerId, otherOwner]);
     await body(api, pool, { encryptionKey: env.VK_CREDENTIAL_ENCRYPTION_KEY, keyVersion: '1' });
   } finally {
@@ -53,6 +53,7 @@ async function seed(api: VkApi, pool: Pool, key: { encryptionKey: string; keyVer
   return tokens;
 }
 function freshGrant() { return { access_token: synthetic(), refresh_token: synthetic(), expires_in: 3600, scope: 'wall photos' }; }
+function grantResponse(grant:ReturnType<typeof freshGrant>,init?:RequestInit){return Response.json({...grant,state:new URLSearchParams(String(init?.body)).get('state')});}
 async function authFailure(action: () => Promise<unknown>) {
   await assert.rejects(action, error => error instanceof Error && 'code' in error && error.code === 'AUTH' && !('cause' in error));
 }
@@ -73,7 +74,7 @@ test('native concurrent refresh commits UNCERTAIN before external call and seria
   globalThis.fetch = async (_url, init) => {
     calls++; const form = new URLSearchParams(String(init?.body)); assert.ok(form.get('refresh_token') === old.refreshToken, 'wrong refresh sent');
     const durable = await pool.query('SELECT refresh_state FROM vk_credentials WHERE account_id=$1', [accountId]); assert.equal(durable.rows[0]?.refresh_state, 'UNCERTAIN');
-    started(); await blocked; return Response.json(replacement);
+    started(); await blocked; return grantResponse(replacement,init);
   };
   const first = api.getVkAccessToken(accountId); let second: Promise<string> | undefined;
   try {
@@ -118,6 +119,21 @@ test('native concurrent refresh commits UNCERTAIN before external call and seria
   const durable = await pool.query('SELECT refresh_state FROM vk_credentials WHERE account_id=$1', [accountId]); assert.equal(durable.rows[0]?.refresh_state, 'READY');
 }));
 
+for(const missing of ['scope','publishing-scope','state'] as const)test(`native refresh ${missing} rejection keeps durable UNCERTAIN and never reuses the old rotating token`,async()=>fixture(async(api,pool,key)=>{
+  await seed(api,pool,key);const before=(await pool.query('SELECT ciphertext,iv,tag,key_version FROM vk_credentials WHERE account_id=$1',[accountId])).rows[0];let calls=0;
+  globalThis.fetch=async(_url,init)=>{
+    calls++;const replacement:Record<string,unknown>={...freshGrant(),state:new URLSearchParams(String(init?.body)).get('state')};
+    if(missing==='scope')delete replacement.scope;
+    if(missing==='publishing-scope')replacement.scope='wall';
+    if(missing==='state')delete replacement.state;
+    return Response.json(replacement);
+  };
+  await authFailure(()=>api.getVkAccessToken(accountId));
+  const after=(await pool.query('SELECT ciphertext,iv,tag,key_version,refresh_state FROM vk_credentials WHERE account_id=$1',[accountId])).rows[0];
+  assert.equal(after.refresh_state,'UNCERTAIN');assert.deepEqual({ciphertext:after.ciphertext,iv:after.iv,tag:after.tag,key_version:after.key_version},before);
+  await authFailure(()=>api.getVkAccessToken(accountId));assert.equal(calls,1);
+}));
+
 test('lost refresh response leaves durable UNCERTAIN and subsequent calls never reuse old refresh', async () => fixture(async (api, pool, key) => {
   await seed(api, pool, key); let calls = 0; const echo = synthetic();
   globalThis.fetch = async () => { calls++; throw new Error(echo); };
@@ -126,7 +142,7 @@ test('lost refresh response leaves durable UNCERTAIN and subsequent calls never 
 }));
 
 test('replacement persistence failure preserves durable UNCERTAIN after successful provider rotation', async () => fixture(async (api, pool, key) => {
-  await seed(api, pool, key); let calls = 0; globalThis.fetch = async () => { calls++; return Response.json(freshGrant()); };
+  await seed(api, pool, key); let calls = 0; globalThis.fetch = async (_url,init) => { calls++; return grantResponse(freshGrant(),init); };
   await pool.query("CREATE FUNCTION vk_fixture_reject_pair() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.refresh_state='UNCERTAIN' AND NEW.refresh_state='READY' THEN RAISE EXCEPTION 'synthetic persistence failure'; END IF; RETURN NEW; END $$");
   await pool.query('CREATE TRIGGER vk_fixture_reject_pair BEFORE UPDATE ON vk_credentials FOR EACH ROW EXECUTE FUNCTION vk_fixture_reject_pair()');
   try {
@@ -136,7 +152,7 @@ test('replacement persistence failure preserves durable UNCERTAIN after successf
 }));
 
 test('disabled or deleted VK accounts fail closed before accessing provider transport', async () => fixture(async (api, pool, key) => {
-  await seed(api, pool, key, true); let calls = 0; globalThis.fetch = async () => { calls++; return Response.json(freshGrant()); };
+  await seed(api, pool, key, true); let calls = 0; globalThis.fetch = async (_url,init) => { calls++; return grantResponse(freshGrant(),init); };
   await pool.query('UPDATE social_accounts SET enabled=false WHERE id=$1', [accountId]); await authFailure(() => api.getVkAccessToken(accountId));
   await pool.query('DELETE FROM social_accounts WHERE id=$1', [accountId]); await authFailure(() => api.getVkAccessToken(accountId)); assert.equal(calls, 0);
 }));
@@ -146,7 +162,7 @@ test('OAuth intent binds owner account community state and encrypted PKCE; callb
   assert.equal(url.protocol, 'https:'); assert.equal(url.searchParams.get('code_challenge_method'), 'S256'); assert.equal(url.searchParams.get('redirect_uri'), process.env.VK_REDIRECT_URI);
   const rows = await pool.query('SELECT * FROM vk_oauth_intents WHERE account_id=$1', [accountId]); assert.equal(rows.rows.length, 1); assert.equal(rows.rows[0].user_id, ownerId); assert.equal(rows.rows[0].community_id, '12345'); assert.equal(rows.rows[0].state_hash, createHash('sha256').update(state).digest('hex'));
   let calls = 0; let validations = 0; const grant = freshGrant();
-  globalThis.fetch = async (_url, init) => { calls++; const form = new URLSearchParams(String(init?.body)); const verifier = form.get('code_verifier'); assert.ok(verifier); assert.equal(JSON.stringify(rows.rows).includes(verifier), false); assert.equal(createHash('sha256').update(verifier).digest('base64url'), url.searchParams.get('code_challenge')); return Response.json(grant); };
+  globalThis.fetch = async (_url, init) => { calls++; const form = new URLSearchParams(String(init?.body)); const verifier = form.get('code_verifier'); assert.ok(verifier); assert.equal(JSON.stringify(rows.rows).includes(verifier), false); assert.equal(createHash('sha256').update(verifier).digest('base64url'), url.searchParams.get('code_challenge')); return grantResponse(grant,init); };
   const input = { state, code: synthetic(), deviceId: synthetic() };
   await assert.rejects(() => api.completeVkOAuth(otherOwner, input, validator)); assert.equal(calls, 0);
   await api.completeVkOAuth(ownerId, input, async (token, community) => { validations++; assert.ok(token === grant.access_token, 'validator did not receive grant'); assert.equal(community, '12345'); return validator(); });
@@ -155,7 +171,7 @@ test('OAuth intent binds owner account community state and encrypted PKCE; callb
 }));
 
 test('expired state missing device and insufficient scopes cannot create credentials', async () => fixture(async (api, pool) => {
-  let calls = 0; globalThis.fetch = async () => { calls++; return Response.json({ ...freshGrant(), scope: 'wall' }); };
+  let calls = 0; globalThis.fetch = async (_url,init) => { calls++; return grantResponse({ ...freshGrant(), scope: 'wall' },init); };
   let started = await api.startVkOAuth(ownerId, accountId, '12345'); let state = new URL(started.authorizationUrl).searchParams.get('state')!;
   await pool.query("UPDATE vk_oauth_intents SET expires_at=now()-interval '1 second' WHERE account_id=$1", [accountId]);
   await assert.rejects(() => api.completeVkOAuth(ownerId, { state, code: synthetic(), deviceId: synthetic() }, validator)); assert.equal(calls, 0);
@@ -167,7 +183,7 @@ test('expired state missing device and insufficient scopes cannot create credent
 
 test('community authority failure never stores OAuth credentials', async () => fixture(async (api, pool) => {
   const started = await api.startVkOAuth(ownerId, accountId, '12345'); const state = new URL(started.authorizationUrl).searchParams.get('state')!;
-  globalThis.fetch = async () => Response.json(freshGrant());
+  globalThis.fetch = async (_url,init) => grantResponse(freshGrant(),init);
   await assert.rejects(() => api.completeVkOAuth(ownerId, { state, code: synthetic(), deviceId: synthetic() }, async () => { throw new Error(synthetic()); }));
   const credentials = await pool.query('SELECT account_id FROM vk_credentials WHERE account_id=$1', [accountId]); assert.equal(credentials.rows.length, 0);
 }));

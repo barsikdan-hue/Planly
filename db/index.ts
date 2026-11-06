@@ -6,6 +6,7 @@ import * as schema from './schema.ts';
 type DbGlobals = typeof globalThis & {
   __planlyPool?: Pool;
   __planlyDb?: NodePgDatabase<typeof schema>;
+  __planlyPublicationLockPool?: Pool;
 };
 
 const globals = globalThis as DbGlobals;
@@ -27,9 +28,22 @@ export function getDb(): NodePgDatabase<typeof schema> {
   return globals.__planlyDb;
 }
 
+// Long provider IO must not reserve every connection needed by ordinary queries.
+// Dedicated, bounded session leases also release automatically after process loss.
+export function getPublicationLockPool(): Pool {
+  globals.__planlyPublicationLockPool ??= new Pool({
+    connectionString: getServerEnv().DATABASE_URL,
+    max: 2, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000,
+  });
+  return globals.__planlyPublicationLockPool;
+}
+
 export async function closeDb(): Promise<void> {
   const pool = globals.__planlyPool;
+  const lockPool = globals.__planlyPublicationLockPool;
   globals.__planlyDb = undefined;
   globals.__planlyPool = undefined;
+  globals.__planlyPublicationLockPool = undefined;
   if (pool) await pool.end();
+  if (lockPool) await lockPool.end();
 }
