@@ -38,6 +38,13 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   const stages={UPLOAD_STARTED:'Запрос загрузки начат; результат не подтверждён.',UPLOAD_RESPONSE_RECEIVED:'Ответ загрузчика получен, но дальнейшие условия не подтверждены.',SAVE_STARTED:'Запрос сохранения фото начат; результат не подтверждён.',SAVE_RESPONSE_RECEIVED:'Ответ сохранения фото получен, но дальнейшие условия не подтверждены.',POST_STARTED:'Запрос создания поста начат; результат не подтверждён.',POST_RESPONSE_RECEIVED:'Ответ создания поста получен, но корректная квитанция не подтверждена.'};
   doc.querySelector('#test-stage').textContent=state.phase==='TEST_OUTCOME_UNKNOWN'?(stages[state.stage]??'Для прошлой попытки этап не записан.'):'';
   if(state.phase==='TEST_OUTCOME_UNKNOWN'&&state.stage==='SERVER_UPLOAD_PENDING')doc.querySelector('#test-stage').textContent='Квитанция серверной загрузки не получена. Сохранение фото и публикация не запускались.';
+  const saveReasons={CANCELLED:'Операция отменена.',RESPONSE_SHAPE:'Ответ не является массивом фотографий.',PHOTO_COUNT:'В ответе не одна фотография.',
+    PHOTO_ID_INVALID:'Идентификатор фото не прошёл проверку.',PHOTO_OWNER_INVALID:'Идентификатор владельца фото не прошёл проверку.',
+    UPLOADER_PROOF_MISSING:'Нет подтверждения владельца-загрузчика.',PHOTO_OWNER_MISMATCH:'Владелец фото не совпадает с группой или подтверждённым загрузчиком.',
+    PHOTO_ACCESS_KEY_PRESENT:'В ответе присутствует access_key; автоматическая публикация остановлена.'};
+  if(state.phase==='TEST_OUTCOME_UNKNOWN'&&state.stage==='SAVE_RESPONSE_RECEIVED'&&Object.hasOwn(saveReasons,state.saveDiagnostic)){
+    doc.querySelector('#test-stage').textContent+=` Проверка фото: ${state.saveDiagnostic}. ${saveReasons[state.saveDiagnostic]} wall.post не запускался.`;
+  }
   if(state.phase==='TEST_OUTCOME_UNKNOWN'&&state.uploadDiagnostic){
     const d=state.uploadDiagnostic;
     doc.querySelector('#test-stage').textContent+=` Сервер: ${d.status}; HTTP=${d.httpStatus??'не подтверждён'}.`+diagnosticText(d.diagnostic);

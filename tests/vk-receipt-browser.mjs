@@ -17,7 +17,7 @@ if(p.method==='wall.post'){if(p.params.guid!==${JSON.stringify(RECEIPT_POST_OPER
 throw Error('Unexpected synthetic API method');}};`;
 const browser=await chromium.launch({headless:true});
 try{
-  for(const scenario of ['success','http405']){
+  for(const scenario of ['success','http405','savedOwnerMismatch']){
   const context=await browser.newContext();let uploads=0,unexpected=0;
   await context.addCookies([{name:'synthetic_owner',value:'fixture-only',url:ORIGIN,httpOnly:true,secure:true,sameSite:'Lax'}]);
   await context.addInitScript(()=>{
@@ -31,7 +31,8 @@ try{
     assert.equal(url.href.includes(token),false);
     if(url.origin==='https://vk.example.test')return route.fulfill({contentType:'text/html',body:`<iframe id="miniapp" src="${ORIGIN}/vk-miniapp-probe/?vk_app_id=54809413"></iframe>`});
     if(url.origin!==ORIGIN){unexpected++;return route.abort();}
-    if(url.pathname==='/fake-bridge.mjs')return route.fulfill({contentType:'text/javascript',body:bridge});
+    if(url.pathname==='/fake-bridge.mjs')return route.fulfill({contentType:'text/javascript',body:scenario==='savedOwnerMismatch'
+      ?bridge.replace('return {response:[{id:7,owner_id:123}]};',"return {response:[{id:7,owner_id:456,access_key:'synthetic-saved-secret'}]};"):bridge});
     if(url.pathname==='/vk-miniapp-probe/'){
       const body=(await readFile('experiments/vk-miniapp-probe/index.html','utf8')).replace('src="./app.js"','src="./main.mjs"');
       return route.fulfill({contentType:'text/html',body});
@@ -68,19 +69,22 @@ try{
   if(scenario==='success'){
     await frame.locator('#post-receipt').waitFor({state:'visible'});
     assert.equal(await frame.locator('#post-receipt').getAttribute('href'),'https://vk.ru/wall-242095689_8');
-  }else{
+  }else if(scenario==='http405'){
     await frame.getByText(/Сервер: UPSTREAM_HTTP_REJECTED; HTTP=405/).waitFor();
+    assert.equal(await frame.locator('#post-receipt').getAttribute('href'),null);
+  }else{
+    await frame.getByText(/Проверка фото: PHOTO_OWNER_MISMATCH/).waitFor({timeout:3000});
     assert.equal(await frame.locator('#post-receipt').getAttribute('href'),null);
   }
   assert.equal(uploads,1);assert.equal(unexpected,0);
   const summary=await frame.locator('body').evaluate(()=>globalThis.receiptTestSummary);
-  assert.deepEqual(summary,scenario==='success'?{saves:1,posts:1}:{saves:0,posts:0});
+  assert.deepEqual(summary,scenario==='success'?{saves:1,posts:1}:scenario==='http405'?{saves:0,posts:0}:{saves:1,posts:0});
   assert.equal(await frame.locator('#publish-test').isDisabled(),true);
   const storage=await frame.locator('body').evaluate(()=>({...localStorage}));
   assert.equal(storage['planly-vk-newphoto-20261029-01'],'ATTEMPTED');assert.equal(storage['planly-vk-newphoto-20261106-01'],'ATTEMPTED');
   assert.equal(storage[RECEIPT_POST_OPERATION],'ATTEMPTED');
   const visible=(await page.locator('body').innerText())+(await frame.locator('body').innerText())+(await popup.locator('body').innerText())+JSON.stringify(storage);
-  for(const privateValue of [token,photo,hash])assert.equal(visible.includes(privateValue),false);
+  for(const privateValue of [token,photo,hash,'synthetic-saved-secret'])assert.equal(visible.includes(privateValue),false);
   const result={status:'SYNTHETIC_RECEIPT_POST_BROWSER_PASS',scenario,providerCalls:0,browserUploadRequests:0,firstPartyUploads:uploads,bridgeSaves:summary.saves,bridgePosts:summary.posts,trustedConfirmationRequired:true,oldMarkersPreserved:true,privateReceiptNotRenderedOrStored:true};
   await mkdir('.superpowers/vk-receipt-browser',{recursive:true});await writeFile(`.superpowers/vk-receipt-browser/${scenario}-result.json`,JSON.stringify(result,null,2));
   console.log(JSON.stringify(result));await context.close();

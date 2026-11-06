@@ -31,11 +31,27 @@ export async function publishOne(options){
 export async function publishReceiptPost(options){
   return publishFixed(options,RECEIPT_POST_OPERATION,RECEIPT_MESSAGE);
 }
+// Classify existing denials without returning any part of the provider receipt.
+function savedPhotoFailure(saved,uploadUserId,active){
+  if(!active())return 'CANCELLED';
+  if(!Array.isArray(saved))return 'RESPONSE_SHAPE';
+  if(saved.length!==1)return 'PHOTO_COUNT';
+  const item=saved[0];
+  if(!positive(item?.id))return 'PHOTO_ID_INVALID';
+  if(!Number.isSafeInteger(item.owner_id)||item.owner_id===0)return 'PHOTO_OWNER_INVALID';
+  if(item.owner_id!==-242095689){
+    if(positive(item.owner_id)&&!positive(uploadUserId))return 'UPLOADER_PROOF_MISSING';
+    if(!positive(uploadUserId)||item.owner_id!==uploadUserId)return 'PHOTO_OWNER_MISMATCH';
+  }
+  if(item.access_key!==undefined)return 'PHOTO_ACCESS_KEY_PRESENT';
+  return null;
+}
 async function publishFixed(options,operation,message){
   const {active,claim,uploadUrl,image,upload,api}=options;
   if(inspectPreconditions(options)!=='READY')return {phase:'TEST_PRECONDITION_FAILED'};
   try{if(!claim())return {phase:'TEST_ALREADY_ATTEMPTED'};}catch{return {phase:'TEST_PRECONDITION_FAILED'};}
   let stage=operation===RECEIPT_POST_OPERATION?'SERVER_UPLOAD_PENDING':'UPLOAD_STARTED';
+  let saveDiagnostic=null;
   try{
     const raw=await upload(new URL(uploadUrl).toString(),image);
     stage='UPLOAD_RESPONSE_RECEIVED';
@@ -43,9 +59,8 @@ async function publishFixed(options,operation,message){
     stage='SAVE_STARTED';
     const saved=await api('photos.saveWallPhoto',{group_id:242095689,server:raw.server,photo:raw.photo,hash:raw.hash});
     stage='SAVE_RESPONSE_RECEIVED';
-    if(!active()||!Array.isArray(saved)||saved.length!==1||!positive(saved[0]?.id)
-      ||(saved[0].owner_id!==-242095689&&(!positive(options.uploadUserId)||saved[0].owner_id!==options.uploadUserId))
-      ||saved[0].access_key!==undefined)throw {};
+    saveDiagnostic=savedPhotoFailure(saved,options.uploadUserId,active);
+    if(saveDiagnostic)throw {};
     stage='POST_STARTED';
     const receipt=await api('wall.post',{owner_id:-242095689,from_group:1,message,
       attachments:`photo${saved[0].owner_id}_${saved[0].id}`,guid:operation});
@@ -56,6 +71,7 @@ async function publishFixed(options,operation,message){
     const code=error?.error_data?.error_code??error?.error_code;
     const diagnostic=error?.relayResult?safeReceiptResult(error.relayResult):null;
     return {phase:'TEST_OUTCOME_UNKNOWN',stage,errorCode:Number.isSafeInteger(code)&&code>=0&&code<1_000_000?code:null,
+      ...(saveDiagnostic?{saveDiagnostic}:{}),
       ...(diagnostic?{uploadDiagnostic:{status:diagnostic.status,...(diagnostic.httpStatus?{httpStatus:diagnostic.httpStatus}:{}),...(diagnostic.diagnostic?{diagnostic:diagnostic.diagnostic}:{})}}:{})};
   }
 }

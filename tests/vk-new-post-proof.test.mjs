@@ -120,3 +120,44 @@ test('malformed uploader or foreign group in VK preparation fails before claimin
     assert.equal(mutations,0);
   }
 });
+
+for(const [reason,saved,uploader] of [
+  ['RESPONSE_SHAPE',{items:[]},123],
+  ['PHOTO_COUNT',[],123],
+  ['PHOTO_COUNT',[{id:7,owner_id:123},{id:8,owner_id:123}],123],
+  ['PHOTO_ID_INVALID',[{id:'7',owner_id:123}],123],
+  ['PHOTO_OWNER_INVALID',[{id:7,owner_id:'123'}],123],
+  ['UPLOADER_PROOF_MISSING',[{id:7,owner_id:123}],undefined],
+  ['PHOTO_OWNER_MISMATCH',[{id:7,owner_id:456}],123],
+  ['PHOTO_OWNER_MISMATCH',[{id:7,owner_id:-999}],123],
+  ['PHOTO_ACCESS_KEY_PRESENT',[{id:7,owner_id:123,access_key:'sensitive-key'}],123],
+])test(`saved-photo rejection exposes only closed ${reason} diagnostic (${JSON.stringify(saved).length})`,async()=>{
+  const {options,calls}=publicationFixture();options.uploadUserId=uploader;
+  options.api=async(method,params)=>{calls.push({method,params});return saved;};
+  const result=await proof.publishReceiptPost(options);
+  assert.deepEqual(result,{phase:'TEST_OUTCOME_UNKNOWN',stage:'SAVE_RESPONSE_RECEIVED',errorCode:null,saveDiagnostic:reason});
+  assert.equal(calls.length,1);assert.equal(calls[0].method,'photos.saveWallPhoto');
+  for(const value of ['sensitive-key','owner_id','uploadUserId','access_key','opaque'])assert.equal(JSON.stringify(result).includes(value),false);
+});
+
+test('cancellation after save is distinguished and never posts',async()=>{
+  const {options}=publicationFixture();let active=true;options.active=()=>active;
+  options.api=async method=>{assert.equal(method,'photos.saveWallPhoto');active=false;return [{id:7,owner_id:123}];};
+  const result=await proof.publishReceiptPost(options);
+  assert.equal(result.stage,'SAVE_RESPONSE_RECEIVED');assert.equal(result.saveDiagnostic,'CANCELLED');
+});
+
+test('provider-thrown diagnostic fields are never trusted or copied',async()=>{
+  const {options,calls}=publicationFixture();
+  options.api=async(method,params)=>{calls.push({method,params});throw {saveDiagnostic:'PHOTO_OWNER_MISMATCH',raw:'sensitive-key',error_code:15};};
+  assert.deepEqual(await proof.publishReceiptPost(options),{phase:'TEST_OUTCOME_UNKNOWN',stage:'SAVE_STARTED',errorCode:15});
+  assert.equal(calls.length,1);
+});
+
+test('valid saved receipt still posts once without rejection diagnostics',async()=>{
+  for(const owner of [123,-242095689]){
+    const {options,calls}=publicationFixture(owner);
+    assert.deepEqual(await proof.publishReceiptPost(options),{phase:'TEST_POST_CONFIRMED',postId:8});
+    assert.equal(calls.filter(call=>call.method==='wall.post').length,1);
+  }
+});
