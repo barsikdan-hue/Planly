@@ -12,7 +12,7 @@ function fixture(){
 test('one upload save and fixed target publication, no second attempt',async()=>{
   const f=fixture();assert.deepEqual(await publishOne(f.o),{phase:'TEST_POST_CONFIRMED',postId:9});
   assert.equal(f.calls.length,3);assert.equal(f.calls[1].method,'photos.saveWallPhoto');
-  assert.deepEqual(f.calls[2],{method:'wall.post',params:{owner_id:-242095689,from_group:1,message:TEST_MESSAGE,attachments:'photo-242095689_7',guid:'planly-vk-newphoto-20261029-01'}});
+  assert.deepEqual(f.calls[2],{method:'wall.post',params:{owner_id:-242095689,from_group:1,message:TEST_MESSAGE,attachments:'photo-242095689_7',guid:'planly-vk-newphoto-20261106-01'}});
   assert.deepEqual(await publishOne(f.o),{phase:'TEST_ALREADY_ATTEMPTED'});assert.equal(f.calls.length,3);
 });
 test('unsafe upload destinations never upload or claim operation',async()=>{

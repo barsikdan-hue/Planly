@@ -2,7 +2,7 @@ name: VK audit isolated verification
 
 on:
   pull_request:
-    branches: [codex/vk-miniapp-probe-20261029]
+    branches: [codex/vk-miniapp-probe-20261029, codex/lentaro-vk-audit-fixes-20261105]
 
 permissions:
   contents: read

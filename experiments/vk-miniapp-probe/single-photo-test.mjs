@@ -1,5 +1,7 @@
-export const TEST_MESSAGE='Тест Planly: автоматическая загрузка нового изображения в VK';
-export const TEST_OPERATION='planly-vk-newphoto-20261029-01';
+export const LEGACY_TEST_MESSAGE='Тест Planly: автоматическая загрузка нового изображения в VK';
+export const LEGACY_TEST_OPERATION='planly-vk-newphoto-20261029-01';
+export const TEST_MESSAGE='Тест Lentaro 06.11.2026: новая картинка и текст через VK API';
+export const TEST_OPERATION='planly-vk-newphoto-20261106-01';
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 const text=(s,max)=>typeof s==='string'&&s.trim().length>0&&s.length<=max;
 // Display-only candidate identification. This does not authorize an upload host.
@@ -35,10 +37,12 @@ export async function publishOne(options){
     stage='SAVE_STARTED';
     const saved=await api('photos.saveWallPhoto',{group_id:242095689,server:raw.server,photo:raw.photo,hash:raw.hash});
     stage='SAVE_RESPONSE_RECEIVED';
-    if(!active()||!Array.isArray(saved)||saved.length!==1||saved[0]?.owner_id!==-242095689||!positive(saved[0]?.id))throw {};
+    if(!active()||!Array.isArray(saved)||saved.length!==1||!positive(saved[0]?.id)
+      ||(saved[0].owner_id!==-242095689&&(!positive(options.uploadUserId)||saved[0].owner_id!==options.uploadUserId))
+      ||saved[0].access_key!==undefined)throw {};
     stage='POST_STARTED';
     const receipt=await api('wall.post',{owner_id:-242095689,from_group:1,message:TEST_MESSAGE,
-      attachments:`photo-242095689_${saved[0].id}`,guid:TEST_OPERATION});
+      attachments:`photo${saved[0].owner_id}_${saved[0].id}`,guid:TEST_OPERATION});
     stage='POST_RESPONSE_RECEIVED';
     if(!positive(receipt?.post_id))throw {};
     return {phase:'TEST_POST_CONFIRMED',postId:receipt.post_id};
@@ -48,12 +52,19 @@ export async function publishOne(options){
   }
 }
 
-export async function readTestResult(api){
+export async function readTestResult(api,uploadUserId){
+  return readFixedTestResult(api,TEST_MESSAGE,uploadUserId);
+}
+export async function readLegacyTestResult(api,uploadUserId){
+  return readFixedTestResult(api,LEGACY_TEST_MESSAGE,uploadUserId);
+}
+async function readFixedTestResult(api,message,uploadUserId){
   try{
     const result=await api('wall.get',{domain:'club242095689',count:5,offset:0,filter:'owner',extended:0});
     if(!result||!Number.isSafeInteger(result.count)||result.count<0||!Array.isArray(result.items)||result.items.length>5)throw {};
-    const match=result.items.find(post=>positive(post?.id)&&post.owner_id===-242095689&&post.text===TEST_MESSAGE
-      &&Array.isArray(post.attachments)&&post.attachments.some(a=>a?.type==='photo'&&a.photo?.owner_id===-242095689&&positive(a.photo?.id)));
+    const match=result.items.find(post=>positive(post?.id)&&post.owner_id===-242095689&&post.text===message
+      &&Array.isArray(post.attachments)&&post.attachments.some(a=>a?.type==='photo'&&positive(a.photo?.id)&&a.photo.access_key===undefined
+        &&(a.photo.owner_id===-242095689||(positive(uploadUserId)&&a.photo.owner_id===uploadUserId))));
     return match?{status:'MATCH_FOUND',postId:match.id}:{status:'NO_MATCH_IN_SAMPLE'};
   }catch{return {status:'READ_UNAVAILABLE'};}
 }
