@@ -1,5 +1,12 @@
 # Lentaro — VK repair checkpoint, 6 November 2026
 
+Separate draft branch codex/vk-post-proof-20261106 from verified c940a43:
+dated operation planly-vk-newphoto-20261106-01 for one explicitly requested post.
+Legacy ATTEMPTED is preserved; no retry/resume/reset of the old operation. MiniApp now safely accepts the authenticated uploader photo owner, matching the backend contract.
+Local421 unit/contract PASS; lint/static build exit0; independent review clear. Exact-head CI pending.
+No provider write or deployment. PR80 remains the separately verified repair.
+Details: [new post proof](docs/verification/2026-11-06-vk-new-post-proof.md).
+
 OAuth follow-up: explicit consent, exact returned state and explicit returned
 scopes on refresh; no fabricated permissions from previously stored labels.
 Local unit/contract411/411 PASS; local typecheck and targeted lint exit0.

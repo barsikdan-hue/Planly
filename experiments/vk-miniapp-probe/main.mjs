@@ -84,7 +84,7 @@ ctx.fillStyle='#edf4ff';ctx.fillRect(0,0,800,500);
 ctx.fillStyle='#0969da';ctx.fillRect(60,60,680,14);
 ctx.font='bold 62px sans-serif';ctx.fillText('PLANLY',60,220);
 ctx.fillStyle='#183047';ctx.font='32px sans-serif';ctx.fillText('VK PHOTO UPLOAD TEST',60,295);
-ctx.font='24px sans-serif';ctx.fillText('29.10.2026',60,360);
+ctx.font='24px sans-serif';ctx.fillText('06.11.2026',60,360);
 doc.querySelector('#authorize').addEventListener('click',()=>{void probe.requestAccess();});
 
 doc.querySelector('#user-token-upload').addEventListener('click',async()=>{

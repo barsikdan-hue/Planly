@@ -38,7 +38,7 @@ async function boundedSend(bridge,method,params){
 
 /** Closure-only credentials. Reads and one-shot publication require explicit actions. */
 export function createProbe(bridge,context,onChange=()=>{}){
-  let token=null,uploadUrl=null,initialized=false,epoch=0;
+  let token=null,uploadUrl=null,uploadUserId=null,initialized=false,epoch=0;
   let state={phase:'NOT_INITIALIZED',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null,userUpload:null};
   const validContext=context?.appId===String(APP_ID);
   const snapshot=()=>({appId:APP_ID,communityId:GROUP_ID,...state,fallbackDiagnostic:state.fallbackDiagnostic?{...state.fallbackDiagnostic}:null,scopes:{...state.scopes},serverUpload:state.serverUpload?{...state.serverUpload}:null,uploadOnly:state.uploadOnly?{...state.uploadOnly}:null,readback:state.readback?{...state.readback}:null,preflight:state.preflight?{...state.preflight}:null,communityDiagnostic:state.communityDiagnostic?{...state.communityDiagnostic}:null});
@@ -55,7 +55,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     return snapshot();
   }
   function reset(){
-    epoch++;token=null;uploadUrl=null;
+    epoch++;token=null;uploadUrl=null;uploadUserId=null;
     state={phase:validContext?(initialized?'READY':'NOT_INITIALIZED'):'OPEN_IN_VK',busy:false,scopes:{wall:false,photos:false,groups:false},expiresIn:null,errorCode:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null,userUpload:null};
     emit();return snapshot();
   }
@@ -69,7 +69,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
   async function requestAccess(){
     if(!initialized)return snapshot();
     return run(async active=>{
-      token=null;uploadUrl=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null});
+      token=null;uploadUrl=null;uploadUserId=null;update({scopes:{wall:false,photos:false,groups:false},expiresIn:null,communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null});
       const grant=await boundedSend(bridge,'VKWebAppGetAuthToken',{app_id:APP_ID,scope:'wall,photos,groups'});
       if(!active())return;
       if(!isRecord(grant)||typeof grant.scope!=='string'||typeof grant.access_token!=='string'||!/^[-A-Za-z0-9_.]{20,16000}$/.test(grant.access_token))throw {};
@@ -84,7 +84,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     if(!initialized||!token)return snapshot();
     return run(async active=>{
       const currentToken=token;
-      uploadUrl=null;
+      uploadUrl=null;uploadUserId=null;
       update({communityDiagnostic:null,fallbackDiagnostic:null,preflight:null,readback:null,stage:null,uploadOnly:null,serverUpload:null});
       const groups=unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method:'groups.get',params:{access_token:currentToken,v:API_VERSION,filter:'editor',extended:0,count:1000,offset:0},
@@ -106,9 +106,12 @@ export function createProbe(bridge,context,onChange=()=>{}){
       }));
       if(!active())return;
       if(!isRecord(photo)||typeof photo.upload_url!=='string')throw {};
+      if(photo.user_id!==undefined&&(!Number.isSafeInteger(photo.user_id)||photo.user_id<=0))throw {};
+      if(photo.group_id!==undefined&&photo.group_id!==GROUP_ID)throw {};
       const url=new URL(photo.upload_url);
       if(url.protocol!=='https:'||!url.hostname||url.username||url.password)throw {};
       uploadUrl=url.toString();
+      uploadUserId=photo.user_id??null;
       update({phase:'PHOTO_ENDPOINT_AVAILABLE',fallbackDiagnostic:fallbackDiagnostic(photo,url)});
     },'CHECK_FAILED');
   }
@@ -121,7 +124,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
       const currentToken=token;
       const image=options.makeImage?await options.makeImage():options.image;
       if(!active())return;
-      const result=await publishOne({...options,image,active,uploadUrl,sensitiveToken:currentToken,api:async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
+      const result=await publishOne({...options,image,active,uploadUrl,uploadUserId,sensitiveToken:currentToken,api:async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method,params:{...params,access_token:currentToken,v:API_VERSION},
       }))});
       if(active())update(result);
@@ -144,7 +147,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
       update({readback:null});
       const result=await readTestResult(async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method,params:{...params,access_token:currentToken,v:API_VERSION},
-      })));
+      })),uploadUserId);
       if(active())update({readback:result});
     },'TEST_READBACK_FAILED');
   }
