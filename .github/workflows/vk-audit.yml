@@ -1,8 +1,6 @@
 name: VK audit isolated verification
 
 on:
-  push:
-    branches: [codex/lentaro-vk-audit-fixes-20261105]
   pull_request:
     branches: [codex/vk-miniapp-probe-20261029]
 

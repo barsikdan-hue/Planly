@@ -61,7 +61,7 @@ export async function getVkAccessToken(socialAccountId: string): Promise<string>
     // This commit is the safety boundary: no outcome after dispatch may reuse the old refresh.
     await client.query("UPDATE vk_credentials SET refresh_state='UNCERTAIN',updated_at=now() WHERE account_id=$1", [socialAccountId]);
     await client.query('COMMIT');
-    const grant = await requestVkGrant({ grant_type: 'refresh_token', refresh_token: payload.refreshToken, device_id: payload.deviceId, state: randomBytes(32).toString('base64url') }, config, payload.scopes);
+    const grant = await requestVkGrant({ grant_type: 'refresh_token', refresh_token: payload.refreshToken, device_id: payload.deviceId, state: randomBytes(32).toString('base64url') }, config);
     const envelope = sealVkPayload({ ...payload, accessToken: grant.accessToken, refreshToken: grant.refreshToken, scopes: grant.scopes }, binding, config);
     await client.query('BEGIN');
     await readVkAccount(client, socialAccountId, undefined, true);

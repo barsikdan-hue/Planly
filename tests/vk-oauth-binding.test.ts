@@ -39,7 +39,7 @@ function fixture() {
     return {from(){return this;},where(){return this;},async limit(){return rows();},then(resolve:(value:unknown)=>unknown){return Promise.resolve(rows()).then(resolve);}};
   }};
   const token = randomBytes(24).toString('hex');
-  globalThis.fetch = async () => { exchanges++; return Response.json({ access_token: token, refresh_token: randomBytes(24).toString('hex'), expires_in: 3600, scope: 'wall photos' }); };
+  globalThis.fetch = async (_url,init) => { exchanges++; return Response.json({ access_token: token, refresh_token: randomBytes(24).toString('hex'), expires_in: 3600, scope: 'wall photos',state:new URLSearchParams(String(init?.body)).get('state') }); };
   return { actor, account, token, get stored() { return stored; }, get exchanges() { return exchanges; }, async begin() {
     const start = await startVkOAuth(actor.id, account.id, '123');
     return { state: new URL(start.authorizationUrl).searchParams.get('state')!, code: 'synthetic-code', deviceId: 'synthetic-device' };

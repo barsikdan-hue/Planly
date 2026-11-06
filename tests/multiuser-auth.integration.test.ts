@@ -1,10 +1,10 @@
 import test, { beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID, createHmac } from 'node:crypto';
+import { randomUUID, createHmac, randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { closeDb, getDb, getPool } from '../db/index.ts';
-import { users, sessions, posts, mediaAssets, libraryItems, socialAccounts, postTargets, publications, postMedia } from '../db/schema.ts';
+import { users, sessions, posts, mediaAssets, libraryItems, socialAccounts, postTargets, publications, postMedia, vkCredentials, vkOAuthIntents } from '../db/schema.ts';
 import { hashOwnerPassword } from '../lib/server/auth/password.ts';
 import { authenticateOwner, ensureOwner, requireApiOwner } from '../lib/server/auth/owner.ts';
 import { createOwnerSession, getOwnerBySessionToken } from '../lib/server/auth/session.ts';
@@ -185,7 +185,7 @@ test('cross-site login/logout and personal mutations cannot alter a session or d
   assert.equal((await editPost(req('/api/posts/p02-a-post',a,'PATCH',{baseText:'attack',status:'DRAFT',targets:[],mediaIds:[]},extra),context('p02-a-post'))).status,403);
   assert.equal((await getOwnerBySessionToken(a))?.id,ids[1]);
 });
-test('new USER cannot use owner connect/OAuth/analytics credentials and real worker sends zero requests',async()=>{
+test('new USER cannot use owner bot setup/analytics credentials and real worker sends zero requests',async()=>{
   const a=await loginToken(1);let calls=0;const original=globalThis.fetch;
   const previousTelegram=process.env.TELEGRAM_BOT_TOKEN,previousMax=process.env.MAX_BOT_TOKEN;
   process.env.TELEGRAM_BOT_TOKEN='fixture-owner-telegram-token';process.env.MAX_BOT_TOKEN='fixture-owner-max-token';
@@ -194,10 +194,6 @@ test('new USER cannot use owner connect/OAuth/analytics credentials and real wor
     assert.equal((await editAccount(req('/api/social-accounts/p02-a-account',a,'PATCH',{destinationId:'-123'}),context('p02-a-account'))).status,403);
     assert.equal((await editAccount(req('/api/social-accounts/p02-a-account',a,'PATCH',{enabled:true}),context('p02-a-account'))).status,403);
     assert.equal((await refreshAnalytics(req('/api/analytics/refresh',a,'POST',{provider:'max',period:7},{'X-Planly-Analytics':'1'}))).status,403);
-    const {POST:startVk}=await import('../app/api/social-accounts/vk/start/route.ts');
-    assert.equal((await startVk(req('/api/social-accounts/vk/start',a,'POST',{accountId:'p02-a-account',communityId:'1'}))).status,403);
-    const {GET:callbackVk}=await import('../app/api/social-accounts/vk/callback/route.ts');
-    assert.equal((await callbackVk(req('/api/social-accounts/vk/callback?code=forged',a))).status,403);
     await db.update(posts).set({status:'READY'}).where(eq(posts.id,'p02-a-post'));
     await db.insert(postTargets).values({id:'p02-target',postId:'p02-a-post',socialAccountId:'p02-a-account'});
     await db.insert(publications).values({id:'p02-publication',postId:'p02-a-post',postTargetId:'p02-target',userId:ids[1],provider:'MAX',status:'QUEUED',idempotencyKey:randomUUID()});
@@ -207,6 +203,64 @@ test('new USER cannot use owner connect/OAuth/analytics credentials and real wor
     await db.insert(publications).values({id:'p02-tg-publication',postId:'p02-a-post',postTargetId:'p02-tg-target',userId:ids[1],provider:'TELEGRAM',status:'QUEUED',idempotencyKey:randomUUID()});
     assert.equal((await processPublication('p02-tg-publication')).status,'REQUIRES_RECONNECT');assert.equal(calls,0);
   }finally{globalThis.fetch=original;if(previousTelegram===undefined)delete process.env.TELEGRAM_BOT_TOKEN;else process.env.TELEGRAM_BOT_TOKEN=previousTelegram;if(previousMax===undefined)delete process.env.MAX_BOT_TOKEN;else process.env.MAX_BOT_TOKEN=previousMax;}
+});
+
+test('personal VK OAuth admits only the owned account and rejects foreign state without provider transport or credential changes',async()=>{
+  const tokens=await Promise.all(ids.map((_,index)=>loginToken(index)));
+  const vkEnv={VK_CLIENT_ID:'54809413',VK_SERVICE_TOKEN:randomBytes(32).toString('hex'),VK_REDIRECT_URI:'https://planly.test/api/social-accounts/vk/callback',VK_CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('base64'),VK_CREDENTIAL_KEY_VERSION:'fixture-v1'};
+  const previousEnv=Object.fromEntries(Object.keys(vkEnv).map(key=>[key,process.env[key]]));
+  const originalFetch=globalThis.fetch,originalWarn=console.warn;
+  let calls=0;const diagnostics:unknown[][]=[];
+  Object.assign(process.env,vkEnv);
+  globalThis.fetch=async()=>{calls++;throw new Error('OAuth isolation must not contact the provider');};
+  console.warn=(...args:unknown[])=>{diagnostics.push(args);};
+  try{
+    // Owner login may already bootstrap its VK account; create only missing
+    // synthetic accounts and retain the established per-user/provider identity.
+    await db.insert(socialAccounts).values(ids.map((userId,index)=>({id:`${userId}-vk-isolation`,userId,provider:'VK' as const,displayName:`VK fixture ${index}`})))
+      .onConflictDoNothing({target:[socialAccounts.userId,socialAccounts.provider]});
+    const accounts=(await db.select().from(socialAccounts).where(inArray(socialAccounts.userId,ids))).filter(account=>account.provider==='VK');
+    const accountIds=ids.map(userId=>{const account=accounts.find(row=>row.userId===userId);assert.ok(account);return account.id;});
+    assert.equal(new Set(accountIds).size,3);
+    const {sealVkPayload}=await import('../lib/server/vk/crypto.ts');
+    const {getVkConfig}=await import('../lib/server/vk/config.ts');
+    const config=getVkConfig(),secrets:string[]=[];
+    for(const [index,accountId] of accountIds.entries()){
+      const accessToken=randomBytes(32).toString('hex'),refreshToken=randomBytes(32).toString('hex');secrets.push(accessToken,refreshToken);
+      const envelope=sealVkPayload({accessToken,refreshToken,deviceId:'synthetic-device',scopes:['wall','photos']},{accountId,provider:'VK',purpose:'CREDENTIALS'},config);
+      await db.insert(vkCredentials).values({accountId,...envelope,expiresAt:new Date(Date.now()+3600_000),refreshState:'READY'});
+      await db.update(socialAccounts).set({providerAccountId:`-${900+index}`,enabled:true,connectionStatus:'CONNECTED'}).where(eq(socialAccounts.id,accountId));
+    }
+    const credentials=()=>db.select().from(vkCredentials).where(inArray(vkCredentials.accountId,accountIds)).orderBy(vkCredentials.accountId);
+    const intents=()=>db.select().from(vkOAuthIntents).where(inArray(vkOAuthIntents.accountId,accountIds)).orderBy(vkOAuthIntents.accountId);
+    const beforeCredentials=await credentials();assert.equal(beforeCredentials.length,3);assert.deepEqual(await intents(),[]);
+    const {POST:startVk}=await import('../app/api/social-accounts/vk/start/route.ts');
+    const {GET:callbackVk}=await import('../app/api/social-accounts/vk/callback/route.ts');
+    const owned=await startVk(req('/api/social-accounts/vk/start',tokens[1],'POST',{accountId:accountIds[1],communityId:'123'},{origin:'https://planly.test'}));
+    assert.equal(owned.status,200);assert.equal(owned.headers.get('cache-control'),'no-store');
+    const ownedBody=await owned.json(),authorization=new URL(ownedBody.authorizationUrl);
+    assert.equal(authorization.origin,'https://id.vk.ru');assert.equal(authorization.searchParams.get('client_id'),'54809413');assert.equal(authorization.searchParams.get('scope'),'wall photos');
+    const state=authorization.searchParams.get('state');assert.ok(state);
+    const ownIntents=await intents();assert.equal(ownIntents.length,1);assert.equal(ownIntents[0].userId,ids[1]);assert.equal(ownIntents[0].accountId,accountIds[1]);
+    assert.deepEqual(await credentials(),beforeCredentials);
+    // Include ADMIN-as-non-owner: management privileges never confer access to
+    // a colleague's VK grant. Failed starts must not replace any intent/grant.
+    for(const [actor,target] of [[1,0],[1,2],[2,1],[0,1]] as const){
+      const denied=await startVk(req('/api/social-accounts/vk/start',tokens[actor],'POST',{accountId:accountIds[target],communityId:'123'},{origin:'https://planly.test'}));
+      assert.equal(denied.status,404);assert.deepEqual(await intents(),ownIntents);assert.deepEqual(await credentials(),beforeCredentials);
+    }
+    for(const [actor,callbackState] of [[2,state],[0,state],[1,randomBytes(32).toString('base64url')],[1,null]] as const){
+      const query=new URLSearchParams({code:'forged-fixture-code',device_id:'synthetic-device'});if(callbackState)query.set('state',callbackState);
+      const rejected=await callbackVk(req(`/api/social-accounts/vk/callback?${query}`,tokens[actor]));
+      assert.equal(rejected.status,303);assert.equal(rejected.headers.get('location'),'https://planly.test/?vk=reconnect#settings');
+      assert.deepEqual(await intents(),ownIntents);assert.deepEqual(await credentials(),beforeCredentials);
+      for(const secret of secrets)assert.equal(JSON.stringify([...rejected.headers]).includes(secret),false);
+    }
+    assert.equal(calls,0);for(const secret of secrets){assert.equal(JSON.stringify(ownedBody).includes(secret),false);assert.equal(JSON.stringify(diagnostics).includes(secret),false);}
+  }finally{
+    globalThis.fetch=originalFetch;console.warn=originalWarn;
+    for(const key of Object.keys(vkEnv)){if(previousEnv[key]===undefined)delete process.env[key];else process.env[key]=previousEnv[key];}
+  }
 });
 for (const index of [1,0]) test(`PUBLISHING without provider access (${index===1?'USER':'blocked owner'}) keeps ambiguous receipt and never resends`,async()=>{
   if(index===0) await db.update(users).set({role:'ADMIN',authInitialized:true,accessState:'BLOCKED'}).where(eq(users.id,ids[0]));

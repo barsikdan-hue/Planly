@@ -1,4 +1,18 @@
-# Lentaro — VK repair checkpoint, 5 November 2026
+# Lentaro — VK repair checkpoint, 6 November 2026
+
+OAuth follow-up: explicit consent, exact returned state and explicit returned
+scopes on refresh; no fabricated permissions from previously stored labels.
+Local unit/contract411/411 PASS; local typecheck and targeted lint exit0.
+Previous exact-head CI14391ea: unit398 PASS; isolated PG17/Redis7 88 PASS;
+full suite1970/1971, one obsolete USER VK403 expectation now replaced with
+per-user account/state isolation. Fresh exact-head CI is pending.
+User-observed native app54809413 grants wall/photos/groups and group authority;
+primary upload-server success is inferred from the displayed fallback block.
+No new upload/save/post. Read-only staging6Nov still web8ebf6a4/worker466a30e,
+credentials0/nonterminal0; existing one-shot marker prohibits blind retry.
+See [6 November evidence](docs/verification/2026-11-06-vk-oauth-permissions.md).
+
+## Previous checkpoint (5 November)
 
 Task branch: `codex/lentaro-vk-audit-fixes-20261105`, base `8ebf6a4`.
 

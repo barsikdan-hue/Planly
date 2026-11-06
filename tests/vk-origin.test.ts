@@ -75,6 +75,7 @@ for (const [label, origin, host, redirectUri, status] of [
         assert.equal(authorization.origin, 'https://id.vk.ru');
         assert.equal(authorization.searchParams.get('redirect_uri'), 'https://planly.example.test/api/social-accounts/vk/callback');
         assert.equal(authorization.searchParams.get('scope'), 'wall photos');
+        assert.equal(authorization.searchParams.get('prompt'),'consent');
         assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256');
         assert.equal(intentWrites, 1);
       } else {

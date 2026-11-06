@@ -30,7 +30,7 @@ beforeEach(async()=>{
     const target=new URL(String(url)),body=new URLSearchParams(String(init?.body));
     if(target.hostname==='id.vk.ru'){
       if(body.get('grant_type')==='refresh_token'){refreshes++;assert.equal(body.get('refresh_token'),refreshToken);}
-      return Response.json({access_token:grantToken,refresh_token:refreshToken,expires_in:3600,scope:'wall photos'});
+      return Response.json({access_token:grantToken,refresh_token:refreshToken,expires_in:3600,scope:'wall photos',state:body.get('state')});
     }
     if(target.hostname==='api.vk.com' && target.pathname.endsWith('groups.getById')){
       if(controlError)return Response.json({error:{error_code:controlError,error_msg:'secret-provider-echo'}});

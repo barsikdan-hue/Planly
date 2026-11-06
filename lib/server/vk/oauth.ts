@@ -19,7 +19,7 @@ export function parseVkGrant(raw: unknown): VkGrant {
   return { accessToken: value.access_token, refreshToken: value.refresh_token, expiresIn: value.expires_in, scopes };
 }
 
-export async function requestVkGrant(fields: Record<string, string>, config: VkConfig, priorScopes?: string[]): Promise<VkGrant> {
+export async function requestVkGrant(fields: Record<string, string>, config: VkConfig): Promise<VkGrant> {
   try {
     const response = await fetch('https://id.vk.ru/oauth2/auth', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...fields, client_id: config.clientId, service_token: config.serviceToken, redirect_uri: config.redirectUri }), redirect: 'error', signal: AbortSignal.timeout(15_000) });
     let raw: unknown;
@@ -30,9 +30,10 @@ export async function requestVkGrant(fields: Record<string, string>, config: VkC
     if (value.error) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: vkProviderFailureReason(value.error) }, value.error === 'invalid_grant' ? vkInvalidGrantReason(value.error_description) : undefined,
       value.error === 'invalid_grant' && fields.grant_type === 'authorization_code' ? vkTokenExchangeMetadata(response.status, value.error_description) : undefined);
     if (!response.ok) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'HTTP_REJECTED' });
-    if (value.state !== undefined && value.state !== fields.state) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'STATE_MISMATCH' });
-    // A refresh may omit unchanged permissions; the initial grant must always be explicit.
-    return parseVkGrant(priorScopes && value.scope === undefined ? { ...value, scope: priorScopes.join(' ') } : value);
+    if (typeof value.state !== 'string' || !fields.state || value.state !== fields.state) throw new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'STATE_MISMATCH' });
+    // Request-scope inheritance does not prove the replacement token's returned
+    // permissions. Both initial and refreshed grants need explicit fresh scope.
+    return parseVkGrant(value);
   } catch (error) { throw error instanceof VkOAuthError ? error : new VkOAuthError('AUTH', { stage: 'TOKEN_EXCHANGE', reason: 'TRANSPORT_FAILED' }); }
 }
 
@@ -60,7 +61,7 @@ export async function startVkOAuth(userId: string, accountId: string, intendedCo
     await client.query('INSERT INTO vk_oauth_intents(state_hash,user_id,account_id,community_id,ciphertext,iv,tag,key_version,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [hashState(state), userId, accountId, community, envelope.ciphertext, envelope.iv, envelope.tag, envelope.keyVersion, new Date(Date.now() + 10 * 60_000)]);
     await client.query('COMMIT');
     const url = new URL('https://id.vk.ru/authorize');
-    url.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: config.redirectUri, state, scope: 'wall photos', code_challenge_method: 'S256', code_challenge: createHash('sha256').update(verifier).digest('base64url') }).toString();
+    url.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: config.redirectUri, state, scope: 'wall photos', prompt: 'consent', code_challenge_method: 'S256', code_challenge: createHash('sha256').update(verifier).digest('base64url') }).toString();
     return { authorizationUrl: url.toString() };
   });
 }
