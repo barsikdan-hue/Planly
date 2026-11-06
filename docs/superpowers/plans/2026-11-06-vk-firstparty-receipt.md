@@ -1,0 +1,17 @@
+# VK upload response CORS repair
+
+Confirmed current console evidence: direct fetch from stage.lentaro.ru to pu.vk.ru cannot expose its response because ACAO is absent. UNKNOWN/UPLOAD_STARTED remains terminal; upload acceptance/upstream status are unknown, save/post were not reached. Do not reset either direct operation or introduce no-cors, CORS/CSP/TLS overrides, generic proxy, retries or foreign OAuth IDs.
+
+Reuse the existing owner-only exact-host DNS-pinned HTTPS transport and first-party popup protocol. Add an isolated receipt operation, leaving every old upload-only contract status-only. The new channel carries only bounded {server,photo,hash} through the owner response/popup/opener memory; it never carries a VK token and never places receipt in render/snapshot/storage/log/diagnostic. Existing closure Bridge save/post follows the receipt using fresh scope/group/uploader proof.
+
+Fixed interface: public/vk-upload-receipt.mjs exports RECEIPT_OPERATION=vk-upload-receipt-20261106-01, RECEIPT_POST_OPERATION=planly-vk-receipt-post-20261106-01, RECEIPT_MESSAGE=Тест Lentaro 06.11.2026: серверная загрузка новой картинки в VK, RECEIPT_WINDOW_PATH=/social-connections/vk-upload-receipt-test, RECEIPT_ENDPOINT=/api/social-accounts/vk/upload-receipt-test, sanitizeUploadReceipt/safeReceiptResult. New per-owner Redis NX upload claim and distinct browser publication claim are permanent. No old ID is reused.
+
+Execution: native parent frontend, backend/protocol and CI in independent file ownership, then independent whole-delta review. Existing isolated worktree, branch codex/vk-firstparty-receipt-20261106 from23589fd; PR80/81 remain unchanged. Source/tests/build preparation is authorized by the original fix/post request. Web+static staging release and at-most-one later counted operation require precise separate owner approval; the previous static23589fd gate does not cover them.
+
+TDD tasks:
+- Protocol/handler/transport: private receipt only valid success, old status-only unchanged, strict new header/path, owner/body/URL/DNS/TLS/redirect/deadline guards, HTTP405 closeddiagnostic, malformed/ambiguous failures no retry.
+- Shared popup factories default to legacy unchanged; fixed receipt wrappers use their own operation/endpoint/result policy. Preserve origin/source/nonce/TTL/ACK, frozen payload, double owner admission, cancellation and trusted click. Render receives safe status only; opener receives private receipt only in the new contract.
+- Controller/single-photo/main reuse fixed sequence with a new hardcoded publication contract and transport; no direct browser upload in its new UI path. Missing/failed popup receipt must never call save/post, and reset/epoch/timeout must stop continuation. Pin actual photo owner from fresh VK server response.
+- Intercepted browser test: zero upload before trusted confirmation, one owned endpoint POST, no pu.vk.ru browser fetch, token not exported, receipt not DOM/storage, one Bridge save/post stub, repeat blocked.
+- Unit first; same-source disposable PG17/Redis7 integration/full regression/typecheck/lint/build. Exact-head static package and immutable Linux web image after gates, with source/imageID/platform/archive digest manifest. No application/worker execution or provider credentials in image proof.
+- Review candidate, prepare web-only+static release/rollback with unchanged worker/DB/Redis/env/CSP/production/main, then seek the concrete owner release and counted operation decisions. Green CI is not live upload or publication acceptance.

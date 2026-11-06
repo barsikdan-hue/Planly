@@ -1,13 +1,19 @@
 import {resolve4} from 'node:dns/promises';
 import {request} from 'node:https';
 import {randomBytes} from 'node:crypto';
-import {isPublicRelayIpv4,type RelayInput,type RelayResult} from './upload-relay.ts';
+import {isPublicRelayIpv4,parseRelayUploadUrl,type RelayInput,type RelayResult,type RelayReceiptResult} from './upload-relay.ts';
 import {classifyRejection} from './upload-rejection.ts';
+import {sanitizeUploadReceipt} from '../../../public/vk-upload-receipt.mjs';
 
 type RelayNetwork={resolve:(host:string)=>Promise<string[]>;request:typeof request};
 export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve:host=>resolve4(host),request}):Promise<RelayResult>{
+  const result=await relayUploadReceipt(input,network);
+  return {status:result.status,...(result.httpStatus!==undefined?{httpStatus:result.httpStatus}:{}),...(result.diagnostic?{diagnostic:result.diagnostic}:{})};
+}
+export async function relayUploadReceipt(input:RelayInput,network:RelayNetwork={resolve:host=>resolve4(host),request}):Promise<RelayReceiptResult>{
   // Resolve only the already validated exact host and pin the TCP destination.
-  if(input.uploadUrl.hostname!=='pu.vk.ru')return {status:'UPSTREAM_UNCONFIRMED'};
+  let uploadUrl:URL;
+  try{uploadUrl=parseRelayUploadUrl(input.uploadUrl.toString());}catch{return {status:'UPSTREAM_UNCONFIRMED'};}
   let dnsTimer:ReturnType<typeof setTimeout>|undefined;
   let addresses:string[];
   try{
@@ -18,9 +24,11 @@ export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve
   const payload=Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="planly-server-test.png"\r\nContent-Type: image/png\r\n\r\n`),input.image,Buffer.from(`\r\n--${boundary}--\r\n`)]);
   return new Promise(resolve=>{
     let settled=false;
+    const deadline:{timer?:ReturnType<typeof setTimeout>}={};
     let incompleteRejection:(()=>void)|undefined;
-    const done=(value:RelayResult)=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};
-    const req=network.request(input.uploadUrl,{method:'POST',family:4,agent:false,servername:'pu.vk.ru',
+    const done=(value:RelayReceiptResult)=>{if(settled)return;settled=true;clearTimeout(deadline.timer);resolve(value);};
+    let req:ReturnType<typeof request>;
+    try{req=network.request(uploadUrl,{method:'POST',family:4,agent:false,servername:'pu.vk.ru',rejectUnauthorized:true,
       lookup:(_host,_options,callback)=>callback(null,addresses[0],4),
       headers:{'Content-Type':`multipart/form-data; boundary=${boundary}`,'Content-Length':String(payload.length)}},res=>{
       const code=res.statusCode;
@@ -41,18 +49,19 @@ export async function relayUpload(input:RelayInput,network:RelayNetwork={resolve
         res.on('end',()=>rejected('COMPLETE'));return;
       }
       const chunks:Buffer[]=[];let size=0;
-      res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>1_100_000){res.destroy();done({status:'UPSTREAM_RESPONSE_INVALID',httpStatus:code});}else chunks.push(chunk);});
+      res.on('data',(chunk:Buffer)=>{if(settled)return;size+=chunk.length;if(size>1_100_000){done({status:'UPSTREAM_RESPONSE_INVALID',httpStatus:code});res.destroy();}else chunks.push(chunk);});
       res.on('error',()=>done({status:'UPSTREAM_UNCONFIRMED'}));
       res.on('end',()=>{
+        if(settled)return;
         try{
-          const raw=JSON.parse(Buffer.concat(chunks).toString('utf8')) as {server?:unknown;photo?:unknown;hash?:unknown};
-          if(!Number.isSafeInteger(raw?.server)||Number(raw.server)<=0||typeof raw.photo!=='string'||!raw.photo.trim()||raw.photo.trim()==='[]'||raw.photo.length>1_048_576||typeof raw.hash!=='string'||!raw.hash.trim()||raw.hash.length>8192)throw {};
-          done({status:'UPLOAD_CONFIRMED',httpStatus:code});
+          const receipt=sanitizeUploadReceipt(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+          if(!receipt)throw {};
+          done({status:'UPLOAD_CONFIRMED',httpStatus:code,receipt});
         }catch{done({status:'UPSTREAM_RESPONSE_INVALID',httpStatus:code});}
       });
-    });
+    });}catch{done({status:'UPSTREAM_UNCONFIRMED'});return;}
     req.on('error',()=>{if(incompleteRejection)incompleteRejection();else done({status:'UPSTREAM_UNCONFIRMED'});});
-    const timer=setTimeout(()=>{incompleteRejection?.();req.destroy();done({status:'UPSTREAM_UNCONFIRMED'});},30_000);
-    req.end(payload);
+    deadline.timer=setTimeout(()=>{incompleteRejection?.();req.destroy();done({status:'UPSTREAM_UNCONFIRMED'});},30_000);
+    try{req.end(payload);}catch{req.destroy();done({status:'UPSTREAM_UNCONFIRMED'});}
   });
 }

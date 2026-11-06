@@ -1,9 +1,10 @@
 import bridge from '@vkontakte/vk-bridge';
 import {createProbe} from './controller.mjs';
-import {TEST_MESSAGE,TEST_OPERATION,claimTest,uploadPhoto} from './single-photo-test.mjs';
+import {claimReceiptPost as claimTest} from './single-photo-test.mjs';
+import {RECEIPT_MESSAGE as TEST_MESSAGE,RECEIPT_POST_OPERATION as TEST_OPERATION} from '../../public/vk-upload-receipt.mjs';
 import {UPLOAD_ONLY_OPERATION,claimUploadOnly} from './upload-only.mjs';
 import {SERVER_UPLOAD_OPERATION,claimServerUpload} from './server-upload-only.mjs';
-import {openFirstPartyUpload} from './first-party-upload.mjs';
+import {openFirstPartyUpload,openReceiptUpload} from './first-party-upload.mjs';
 import {openUserTokenUpload} from './user-token-upload.mjs';
 import {USER_UPLOAD_OPERATION} from '../../public/vk-user-upload-core.mjs';
 import {userUploadDiagnosticText} from '../../public/vk-user-upload-diagnostic.mjs';
@@ -36,6 +37,11 @@ const probe=createProbe(bridge,{appId:new URL(globalThis.location.href).searchPa
   doc.querySelector('#error').textContent=state.errorCode===null?'':`Код VK: ${state.errorCode}`;
   const stages={UPLOAD_STARTED:'Запрос загрузки начат; результат не подтверждён.',UPLOAD_RESPONSE_RECEIVED:'Ответ загрузчика получен, но дальнейшие условия не подтверждены.',SAVE_STARTED:'Запрос сохранения фото начат; результат не подтверждён.',SAVE_RESPONSE_RECEIVED:'Ответ сохранения фото получен, но дальнейшие условия не подтверждены.',POST_STARTED:'Запрос создания поста начат; результат не подтверждён.',POST_RESPONSE_RECEIVED:'Ответ создания поста получен, но корректная квитанция не подтверждена.'};
   doc.querySelector('#test-stage').textContent=state.phase==='TEST_OUTCOME_UNKNOWN'?(stages[state.stage]??'Для прошлой попытки этап не записан.'):'';
+  if(state.phase==='TEST_OUTCOME_UNKNOWN'&&state.stage==='SERVER_UPLOAD_PENDING')doc.querySelector('#test-stage').textContent='Квитанция серверной загрузки не получена. Сохранение фото и публикация не запускались.';
+  if(state.phase==='TEST_OUTCOME_UNKNOWN'&&state.uploadDiagnostic){
+    const d=state.uploadDiagnostic;
+    doc.querySelector('#test-stage').textContent+=` Сервер: ${d.status}; HTTP=${d.httpStatus??'не подтверждён'}.`+diagnosticText(d.diagnostic);
+  }
   doc.querySelector('#readback-test').disabled=state.busy||!state.scopes.wall||!state.scopes.photos||!state.scopes.groups;
   const rb=state.readback;
   const rlabels={MATCH_FOUND:'Найден пост с точным тестовым текстом и фотографией. Откройте его для проверки.',NO_MATCH_IN_SAMPLE:'Среди последних пяти постов совпадения нет. Это не разрешение на повторную отправку.',READ_UNAVAILABLE:'VK не подтвердил чтение стены. Повторная отправка не разрешена.'};
@@ -95,7 +101,7 @@ doc.querySelector('#user-token-upload').addEventListener('click',async()=>{
 });
 doc.querySelector('#check').addEventListener('click',()=>{void probe.checkPhoto();});
 doc.querySelector('#reset').addEventListener('click',()=>{windowFlow?.cancel();probe.reset();});
-doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackTest();});
+doc.querySelector('#readback-test').addEventListener('click',()=>{void probe.readbackReceiptTest();});
 doc.querySelector('#server-upload-test').addEventListener('click',async()=>{
   if(!globalThis.navigator?.locks||windowFlow)return;
   const flow=openFirstPartyUpload();
@@ -126,11 +132,14 @@ doc.querySelector('#inspect-test').addEventListener('click',()=>{void probe.insp
   storageStatus:()=>globalThis.localStorage.getItem(TEST_OPERATION)===null?'AVAILABLE':'ATTEMPTED',
 });});
 doc.querySelector('#publish-test').addEventListener('click',async()=>{
-  if(!globalThis.navigator?.locks)return;
-  await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
-    if(!lock)return;
-    await probe.publishTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimTest(globalThis.localStorage),upload:uploadPhoto});
-  });
+  if(!globalThis.navigator?.locks||windowFlow)return;
+  const flow=openReceiptUpload();windowFlow=flow;
+  try{
+    await globalThis.navigator.locks.request(TEST_OPERATION,{ifAvailable:true},async lock=>{
+      if(!lock)return;
+      await probe.publishReceiptTest({makeImage:()=>new Promise(resolve=>canvas.toBlob(resolve,'image/png')),claim:()=>claimTest(globalThis.localStorage),transport:flow.run});
+    });
+  }finally{flow.cancel();if(windowFlow===flow)windowFlow=null;}
 });
 globalThis.addEventListener('pagehide',()=>{windowFlow?.cancel();probe.reset();});
 void probe.initialize();

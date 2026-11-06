@@ -1,5 +1,15 @@
 # Lentaro — VK repair checkpoint, 6 November 2026
 
+New source branch codex/vk-firstparty-receipt-20261106 from23589fd:
+current direct-browser upload CORS failure is confirmed by user console.
+Separate first-party owner relay receipt feeds existing Bridge save/post;
+old upload-only contracts and both consumed direct markers are preserved.
+Local456 unit PASS and typecheck exit0; intercepted success/HTTP405 browser PASS,
+providerCalls0. Real Redis claim race is prepared for attested CI only.
+No new provider operation or rollout. Required next gate is exact-source CI,
+immutable Linux web+static artifacts, then separate owner web/static staging decision.
+Details: [CORS transport repair](docs/verification/2026-11-06-vk-firstparty-receipt.md).
+
 Separate draft branch codex/vk-post-proof-20261106 from verified c940a43:
 dated operation planly-vk-newphoto-20261106-01 for one explicitly requested post.
 Legacy ATTEMPTED is preserved; no retry/resume/reset of the old operation. MiniApp now safely accepts the authenticated uploader photo owner, matching the backend contract.

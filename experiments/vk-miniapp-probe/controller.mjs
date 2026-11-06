@@ -1,4 +1,5 @@
-import {publishOne,inspectPreconditions,safeUploadHost,readTestResult} from './single-photo-test.mjs';
+import {publishOne,publishReceiptPost,inspectPreconditions,safeUploadHost,readTestResult,readReceiptPostResult} from './single-photo-test.mjs';
+import {safeReceiptResult} from '../../public/vk-upload-receipt.mjs';
 import {uploadOnly} from './upload-only.mjs';
 import {serverUploadOnly} from './server-upload-only.mjs';
 import {safeUserUploadResult} from '../../public/vk-user-upload-core.mjs';
@@ -48,7 +49,7 @@ export function createProbe(bridge,context,onChange=()=>{}){
     if(state.busy)return snapshot();
     const current=epoch;
     const active=()=>epoch===current;
-    update({busy:true,errorCode:null});
+    update({busy:true,errorCode:null,uploadDiagnostic:null});
     try{await work(active);}
     catch(error){if(active())update({phase:failurePhase,errorCode:errorCode(error)});}
     finally{if(active())update({busy:false});}
@@ -115,8 +116,11 @@ export function createProbe(bridge,context,onChange=()=>{}){
       update({phase:'PHOTO_ENDPOINT_AVAILABLE',fallbackDiagnostic:fallbackDiagnostic(photo,url)});
     },'CHECK_FAILED');
   }
-  async function publishTest(options){
+  async function publishTest(options){return publishUsing(options,publishOne);}
+  async function publishReceiptTest(options){return publishUsing(options,publishReceiptPost);}
+  async function publishUsing(options,publisher){
     if(state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token)return snapshot();
+    if(publisher===publishReceiptPost&&typeof options.transport!=='function'){update({phase:'TEST_PRECONDITION_FAILED'});return snapshot();}
     const startedEpoch=epoch;
     await checkPhoto();
     if(epoch!==startedEpoch||state.busy||state.phase!=='PHOTO_ENDPOINT_AVAILABLE'||!token||!uploadUrl)return snapshot();
@@ -124,7 +128,12 @@ export function createProbe(bridge,context,onChange=()=>{}){
       const currentToken=token;
       const image=options.makeImage?await options.makeImage():options.image;
       if(!active())return;
-      const result=await publishOne({...options,image,active,uploadUrl,uploadUserId,sensitiveToken:currentToken,api:async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
+      const upload=publisher===publishReceiptPost?async(url,image)=>{
+        const result=safeReceiptResult(await options.transport({active,uploadUrl:url,image}));
+        if(result.status!=='UPLOAD_CONFIRMED'||!result.receipt)throw {relayResult:result};
+        return result.receipt;
+      }:options.upload;
+      const result=await publisher({...options,image,active,uploadUrl,uploadUserId,upload,sensitiveToken:currentToken,api:async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method,params:{...params,access_token:currentToken,v:API_VERSION},
       }))});
       if(active())update(result);
@@ -140,12 +149,14 @@ export function createProbe(bridge,context,onChange=()=>{}){
       update({preflight:{reason,storage,host:safeUploadHost(uploadUrl,token)}});
     },'TEST_DIAGNOSTIC_FAILED');
   }
-  async function readbackTest(){
+  async function readbackTest(){return readbackUsing(readTestResult);}
+  async function readbackReceiptTest(){return readbackUsing(readReceiptPostResult);}
+  async function readbackUsing(reader){
     if(state.busy||!token||!initialized)return snapshot();
     return run(async active=>{
       const currentToken=token;
       update({readback:null});
-      const result=await readTestResult(async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
+      const result=await reader(async(method,params)=>unpack(await boundedSend(bridge,'VKWebAppCallAPIMethod',{
         method,params:{...params,access_token:currentToken,v:API_VERSION},
       })),uploadUserId);
       if(active())update({readback:result});
@@ -183,5 +194,5 @@ export function createProbe(bridge,context,onChange=()=>{}){
       if(active())update({userUpload:safeUserUploadResult(result)});
     },'SERVER_UPLOAD_FAILED');
   }
-  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,inspectTest,readbackTest,uploadOnlyTest,serverUploadTest,userTokenUploadTest,reset};
+  return {snapshot,initialize,requestAccess,checkPhoto,publishTest,publishReceiptTest,inspectTest,readbackTest,readbackReceiptTest,uploadOnlyTest,serverUploadTest,userTokenUploadTest,reset};
 }

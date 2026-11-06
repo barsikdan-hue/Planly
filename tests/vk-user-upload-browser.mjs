@@ -21,7 +21,7 @@ try{
     if(url.pathname==='/fixture')return route.fulfill({contentType:'text/html',body:fixture});
     if(['/boot','/app.js','/style.css'].includes(url.pathname))return route.fulfill({contentType:url.pathname==='/boot'?'text/html':url.pathname==='/app.js'?'text/javascript':'text/css',body:await readFile('experiments/vk-miniapp-probe/dist/'+(url.pathname==='/boot'?'index.html':url.pathname.slice(1)),'utf8')});
     if(url.pathname==='/user-token-upload.mjs')return route.fulfill({contentType:'text/javascript',body:await readFile('experiments/vk-miniapp-probe/user-token-upload.mjs','utf8')});
-    if(/^\/(?:public\/)?vk-(?:user-upload-(?:core|protocol|window|diagnostic)|upload-window-core|upload-diagnostic)\.mjs$/.test(url.pathname)){
+    if(/^\/(?:public\/)?vk-(?:user-upload-(?:core|protocol|window|diagnostic)|upload-window-core|upload-diagnostic|upload-receipt)\.mjs$/.test(url.pathname)){
       return route.fulfill({contentType:'text/javascript',body:await readFile('public/'+url.pathname.split('/').at(-1),'utf8')});
     }
     if(url.pathname==='/social-connections/vk-user-upload-test'){

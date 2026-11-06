@@ -1,4 +1,5 @@
 import {DIAGNOSTIC_OPERATION,sanitizeRejectionDiagnostic} from './vk-upload-diagnostic.mjs';
+import {RECEIPT_OPERATION,RECEIPT_ENDPOINT,safeReceiptResult} from './vk-upload-receipt.mjs';
 export const ORIGIN='https://stage.lentaro.ru';
 export const WINDOW_PATH='/social-connections/vk-upload-test';
 export const TTL=120_000;
@@ -32,8 +33,14 @@ export function safeResult(raw){
   return {status,...(Number.isSafeInteger(raw?.httpStatus)&&raw.httpStatus>=100&&raw.httpStatus<=599?{httpStatus:raw.httpStatus}:{}),...(diagnostic?{diagnostic}:{})};
 }
 export async function ownerAdmission(fetchImpl){
+  return admitAt(fetchImpl,'/api/social-accounts/vk/upload-test');
+}
+export async function receiptOwnerAdmission(fetchImpl){
+  return admitAt(fetchImpl,RECEIPT_ENDPOINT);
+}
+async function admitAt(fetchImpl,endpoint){
   try{
-    const r=await fetchImpl('/api/social-accounts/vk/upload-test',{credentials:'same-origin',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(10_000)});
+    const r=await fetchImpl(endpoint,{credentials:'same-origin',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(10_000)});
     const body=await r.json();
     if(r.status===200&&body?.status==='OWNER_SESSION_RECOGNIZED')return {status:'OWNER_SESSION_RECOGNIZED'};
     if(r.status===401&&body?.status==='OWNER_SESSION_REQUIRED')return {status:'OWNER_SESSION_REQUIRED'};
@@ -41,23 +48,29 @@ export async function ownerAdmission(fetchImpl){
   }catch{/* no private error reflection */}
   return {status:'ADMISSION_UNAVAILABLE'};
 }
-export async function executeUpload({payload,active,storage,locks,fetchImpl}){
+export async function executeUpload(options){
+  return executeAt(options,OPERATION,'/api/social-accounts/vk/upload-test',DIAGNOSTIC_OPERATION,safeResult);
+}
+export async function executeReceiptUpload(options){
+  return executeAt(options,'planly-'+RECEIPT_OPERATION,RECEIPT_ENDPOINT,RECEIPT_OPERATION,safeReceiptResult);
+}
+async function executeAt({payload,active,storage,locks,fetchImpl},key,endpoint,operation,sanitize){
   try{
     const input=validatePayload(payload);
     if(!active())return {status:'CANCELLED'};
     if(!locks)return {status:'MARKER_UNAVAILABLE'};
-    return await locks.request(OPERATION,{ifAvailable:true},async lock=>{
+    return await locks.request(key,{ifAvailable:true},async lock=>{
       if(!lock)return {status:'ALREADY_ATTEMPTED'};
       if(!active())return {status:'CANCELLED'};
       try{
-        if(storage.getItem(OPERATION)!==null)return {status:'ALREADY_ATTEMPTED'};
-        storage.setItem(OPERATION,'ATTEMPTED');
-        if(storage.getItem(OPERATION)!=='ATTEMPTED')return {status:'MARKER_UNAVAILABLE'};
+        if(storage.getItem(key)!==null)return {status:'ALREADY_ATTEMPTED'};
+        storage.setItem(key,'ATTEMPTED');
+        if(storage.getItem(key)!=='ATTEMPTED')return {status:'MARKER_UNAVAILABLE'};
       }catch{return {status:'MARKER_UNAVAILABLE'};}
       if(!active())return {status:'CANCELLED'};
-      const r=await fetchImpl('/api/social-accounts/vk/upload-test',{method:'POST',credentials:'same-origin',redirect:'error',cache:'no-store',
-        headers:{'Content-Type':'application/json','X-Planly-VK-Diagnostic':DIAGNOSTIC_OPERATION},body:JSON.stringify(input),signal:AbortSignal.timeout(45_000)});
-      return safeResult(await r.json());
+      const r=await fetchImpl(endpoint,{method:'POST',credentials:'same-origin',redirect:'error',cache:'no-store',
+        headers:{'Content-Type':'application/json','X-Planly-VK-Diagnostic':operation},body:JSON.stringify(input),signal:AbortSignal.timeout(45_000)});
+      return sanitize(await r.json());
     });
   }catch{return {status:'SERVER_UPLOAD_UNCONFIRMED'};}
 }
@@ -76,12 +89,14 @@ export function requestPeerConfirmation({opener,nonce,active,events,send,randomN
     try{send({type:'CONFIRM_REQUEST',nonce,challenge});}catch{finish(false);}
   });
 }
-export function createReceiver({opener,now,admit,confirmPeer,execute,send,preview,render}){
+export function createReceiver(options){return receiverFor(options,DIAGNOSTIC_OPERATION,safeResult);}
+export function createReceiptReceiver(options){return receiverFor(options,RECEIPT_OPERATION,safeReceiptResult);}
+function receiverFor({opener,now,admit,confirmPeer,execute,send,preview,render},operation,sanitize){
   let nonce=null,expires=now()+TTL,phase='WAITING',payload=null;
   const active=()=>phase!=='DONE'&&nonce!==null&&now()<expires;
   const finish=raw=>{
     if(phase==='DONE')return;
-    phase='DONE';payload=null;const result=safeResult(raw);render(result.status,result);
+    phase='DONE';payload=null;const result=sanitize(raw);render(result.status,safeResult(result));
     if(nonce)send({type:'RESULT',nonce,result});
   };
   const expire=()=>finish({status:phase==='UPLOADING'?'SERVER_UPLOAD_UNCONFIRMED':'WINDOW_EXPIRED'});
@@ -89,7 +104,7 @@ export function createReceiver({opener,now,admit,confirmPeer,execute,send,previe
     if(phase==='DONE'||event.origin!==ORIGIN||event.source!==opener||!record(event.data))return;
     if(now()>=expires){expire();return;}
     const m=event.data;
-    if(m.type==='HELLO'&&phase==='WAITING'&&validNonce(m.nonce)&&m.operation===DIAGNOSTIC_OPERATION&&Object.keys(m).sort().join(',')==='nonce,operation,type'){
+    if(m.type==='HELLO'&&phase==='WAITING'&&validNonce(m.nonce)&&m.operation===operation&&Object.keys(m).sort().join(',')==='nonce,operation,type'){
       nonce=m.nonce;phase='ADMITTING';render(phase);
       let result;try{result=await admit();}catch{result={status:'ADMISSION_UNAVAILABLE'};}
       if(!active()){finish({status:'WINDOW_EXPIRED'});return;}
