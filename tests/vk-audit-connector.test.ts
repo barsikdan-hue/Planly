@@ -157,3 +157,46 @@ for (const [errorCode, category] of [['ENOTFOUND', 'DNS'], ['ECONNRESET', 'CONNE
     assert.deepEqual(requests, ['photos.getWallUploadServer', 'pu.vk.ru']);
   });
 }
+
+for (const [reason, saved] of [
+  ['RESPONSE_SHAPE', { items: [receipt] }],
+  ['PHOTO_COUNT', []],
+  ['PHOTO_COUNT', [receipt, receipt]],
+  ['PHOTO_ID_INVALID', [null]],
+  ['PHOTO_ID_INVALID', [{ id: '44', owner_id: -123 }]],
+  ['PHOTO_OWNER_INVALID', [{ id: 44, owner_id: '88' }]],
+  ['PHOTO_OWNER_MISMATCH', [{ id: 44, owner_id: 89 }]],
+  ['PHOTO_OWNER_MISMATCH', [{ id: 44, owner_id: -999 }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: secret }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ id: 44, owner_id: 88, access_key: '' }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: null }]],
+] as const) test(`server saved-photo denial reports closed ${reason} (${JSON.stringify(saved).length}) without wall.post`, async () => {
+  const { connector, requests } = fixture({ saved });
+  const result = failure(await connector.publish(input));
+  assert.equal(result.code, 'VK_PHOTO_RECEIPT');
+  assert.deepEqual(result.vkDiagnostic, { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: reason });
+  assert.equal(requests.at(-1), 'photos.saveWallPhoto');
+  assert.equal(requests.includes('wall.post'), false);
+  for (const field of ['owner_id', 'access_key', 'opaque-photo', 'opaque-hash']) assert.equal(JSON.stringify(result).includes(field), false);
+});
+
+test('duplicate saved attachment retains receipt-stage reason and never dispatches a wall post', async () => {
+  const { connector, requests } = fixture();
+  const result = failure(await connector.publish({ ...input, media: [input.media![0], { ...input.media![0], name: 'second.png' }] }));
+  assert.equal(result.code, 'VK_PHOTO_RECEIPT');
+  assert.deepEqual(result.vkDiagnostic, { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: 'DUPLICATE_ATTACHMENT' });
+  assert.equal(requests.filter(stage => stage === 'photos.saveWallPhoto').length, 2);
+  assert.equal(requests.includes('wall.post'), false);
+});
+
+test('receipt reason crosses sanitizer only as a closed string at PHOTO_RECEIPT', () => {
+  const sanitize = vkModule.sanitizeVkPublicationDiagnostic;
+  const reason = 'PHOTO_OWNER_MISMATCH';
+  assert.deepEqual(sanitize({ stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: reason, owner_id: 89, receipt: { access_key: secret }, signedUrl: primary }),
+    { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: reason });
+  for (const value of [secret, { toString: () => reason }, ['PHOTO_COUNT'], null]) assert.deepEqual(sanitize({ stage: 'PHOTO_RECEIPT', photoReceiptReason: value }), { stage: 'PHOTO_RECEIPT' });
+  assert.deepEqual(sanitize({ stage: 'WALL_POST', photoReceiptReason: reason }), { stage: 'WALL_POST' });
+  let reads = 0;
+  assert.deepEqual(sanitize({ stage: 'PHOTO_RECEIPT', get photoReceiptReason() { return ++reads === 1 ? reason : secret; } }), { stage: 'PHOTO_RECEIPT', photoReceiptReason: reason });
+  assert.equal(reads, 1);
+});
