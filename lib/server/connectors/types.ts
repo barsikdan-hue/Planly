@@ -9,6 +9,7 @@ export type VkPublicationDiagnostic = {
   uploadHostClass?: 'VK_RU_PHOTO_UPLOAD' | 'VK_COM_PHOTO_UPLOAD';
   uploadAttempt?: 'PRIMARY' | 'FALLBACK';
   networkErrorClass?: 'TIMEOUT' | 'DNS' | 'CONNECTION' | 'TLS' | 'OTHER';
+  photoReceiptReason?: 'RESPONSE_SHAPE' | 'PHOTO_COUNT' | 'PHOTO_ID_INVALID' | 'PHOTO_OWNER_INVALID' | 'PHOTO_OWNER_MISMATCH' | 'PHOTO_ACCESS_KEY_PRESENT' | 'DUPLICATE_ATTACHMENT';
 };
 
 export type PublishInput = {

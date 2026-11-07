@@ -100,3 +100,16 @@ for(const revision of ['a'.repeat(40),'secret-build-input']) test(`real worker f
     assert.equal(JSON.stringify([logs,f.publication]).includes('secret-'),false);
   }finally{console.info=savedLog;if(savedRevision===undefined)delete process.env.PLANLY_BUILD_REVISION;else process.env.PLANLY_BUILD_REVISION=savedRevision;f.restore();}
 });
+
+test('server receipt rejection reason survives actual processor DB message and log without private fields',async()=>{
+  const f=fixture(),savedLog=console.info;const logs:string[]=[];console.info=(value:unknown)=>logs.push(String(value));
+  try{
+    const safe={stage:'PHOTO_RECEIPT',method:'photos.saveWallPhoto',photoReceiptReason:'PHOTO_OWNER_MISMATCH'};
+    const diagnostic={...safe,owner_id:89,photo_id:44,raw:{access_key:'private-saved-key'},signedUrl:'private-signed-url'};
+    await processPublication(f.publication.id,()=>({provider:'VK',async publish(){return {ok:false,errorType:'PERMANENT',code:'VK_PHOTO_RECEIPT',message:'Photo rejected.',vkDiagnostic:diagnostic} as Extract<PublishResult,{ok:false}>;}}));
+    assert.equal(f.publication.status,'FAILED');assert.equal(f.publication.providerRemoteId,null);
+    assert.ok(f.publication.providerErrorMessage?.includes('"photoReceiptReason":"PHOTO_OWNER_MISMATCH"'));
+    assert.equal(logs.length,1);assert.deepEqual(JSON.parse(logs[0]).diagnostic,safe);
+    for(const value of ['private-','owner_id','photo_id','access_key','signedUrl'])assert.equal(JSON.stringify([logs,f.publication]).includes(value),false);
+  }finally{console.info=savedLog;f.restore();}
+});

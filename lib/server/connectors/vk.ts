@@ -13,6 +13,20 @@ const validPositiveId = (value: unknown): value is number => typeof value === 'n
 const validCommunity = (value: unknown): value is string => typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value) && Number.isSafeInteger(Number(value));
 const validDestination = (value: unknown): value is string => typeof value === 'string' && value.startsWith('-') && validCommunity(value.slice(1));
 const validToken = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 16384 && !/\s/.test(value);
+const photoReceiptReasons = ['RESPONSE_SHAPE', 'PHOTO_COUNT', 'PHOTO_ID_INVALID', 'PHOTO_OWNER_INVALID', 'PHOTO_OWNER_MISMATCH', 'PHOTO_ACCESS_KEY_PRESENT', 'DUPLICATE_ATTACHMENT'] as const;
+type PhotoReceiptCheck = { ok: true; id: number; ownerId: number } | { ok: false; reason: NonNullable<VkPublicationDiagnostic['photoReceiptReason']> };
+
+function checkSavedPhoto(value: unknown, destination: number, uploader: unknown): PhotoReceiptCheck {
+  if (!Array.isArray(value)) return { ok: false, reason: 'RESPONSE_SHAPE' };
+  if (value.length !== 1) return { ok: false, reason: 'PHOTO_COUNT' };
+  const item = record(value[0]);
+  if (!item || !validPositiveId(item.id)) return { ok: false, reason: 'PHOTO_ID_INVALID' };
+  const owner = item.owner_id;
+  if (typeof owner !== 'number' || !Number.isSafeInteger(owner) || owner === 0) return { ok: false, reason: 'PHOTO_OWNER_INVALID' };
+  if (owner !== destination && owner !== uploader) return { ok: false, reason: 'PHOTO_OWNER_MISMATCH' };
+  if (item.access_key !== undefined) return { ok: false, reason: 'PHOTO_ACCESS_KEY_PRESENT' };
+  return { ok: true, id: item.id, ownerId: owner };
+}
 
 // Rebuild at the worker boundary: never serialize arbitrary connector properties.
 export function sanitizeVkPublicationDiagnostic(value: unknown): VkPublicationDiagnostic | undefined {
@@ -20,7 +34,7 @@ export function sanitizeVkPublicationDiagnostic(value: unknown): VkPublicationDi
   const candidate = record(value);
   if (!candidate) return;
   // Snapshot once so a mutable getter cannot change a value after validation.
-  const { stage, method, vkErrorCode, uploadHttpStatus, uploadHostClass, uploadAttempt, networkErrorClass: networkClass } = candidate;
+  const { stage, method, vkErrorCode, uploadHttpStatus, uploadHostClass, uploadAttempt, networkErrorClass: networkClass, photoReceiptReason } = candidate;
   if (typeof stage !== 'string' || !['COMMUNITY_VALIDATION', 'GET_UPLOAD_SERVER', 'UPLOAD', 'UPLOAD_RESPONSE', 'SAVE_PHOTO', 'PHOTO_RECEIPT', 'WALL_POST'].includes(stage)) return;
   const safe: VkPublicationDiagnostic = { stage: stage as VkPublicationDiagnostic['stage'] };
   if (typeof method === 'string' && ['groups.getById', 'photos.getWallUploadServer', 'photos.saveWallPhoto', 'wall.post'].includes(method)) safe.method = method as VkPublicationDiagnostic['method'];
@@ -29,6 +43,8 @@ export function sanitizeVkPublicationDiagnostic(value: unknown): VkPublicationDi
   if (uploadHostClass === 'VK_RU_PHOTO_UPLOAD' || uploadHostClass === 'VK_COM_PHOTO_UPLOAD') safe.uploadHostClass = uploadHostClass;
   if (uploadAttempt === 'PRIMARY' || uploadAttempt === 'FALLBACK') safe.uploadAttempt = uploadAttempt;
   if (typeof networkClass === 'string' && ['TIMEOUT', 'DNS', 'CONNECTION', 'TLS', 'OTHER'].includes(networkClass)) safe.networkErrorClass = networkClass as VkPublicationDiagnostic['networkErrorClass'];
+  const reason = typeof photoReceiptReason === 'string' ? photoReceiptReasons.find(value => value === photoReceiptReason) : undefined;
+  if (stage === 'PHOTO_RECEIPT' && reason) safe.photoReceiptReason = reason;
   return safe;
   } catch { return undefined; }
 }
@@ -188,14 +204,13 @@ export function createVkConnector(options: { getAccessToken: (socialAccountId: s
         if (!validPositiveId(uploaded?.server) || typeof uploaded?.photo !== 'string' || !uploaded.photo.trim() || uploaded.photo.trim() === '[]' || uploaded.photo.length > 1_048_576 || typeof uploaded.hash !== 'string' || !uploaded.hash.trim() || uploaded.hash.length > 8192) return { ...failure('TEMPORARY', 'VK_UPLOAD_RESPONSE', 'VK photo upload response was incomplete.'), vkDiagnostic: { ...diagnostic, stage: 'UPLOAD_RESPONSE' } };
         const saved = await call('photos.saveWallPhoto', { group_id: groupId, server: String(uploaded.server), photo: uploaded.photo, hash: uploaded.hash }, true);
         if (!saved.ok) return saved;
-        const items = Array.isArray(saved.result) ? saved.result : [];
-        const item = items.length === 1 ? record(items[0]) : null;
         // Private access-key attachment semantics are outside the approved public community contract.
         // A photo may belong to the uploader while wall.post targets the community.
         // Trust only the owner tied to this authenticated upload preparation or wall.
-        if (!item || !validPositiveId(item.id) || (item.owner_id !== Number(input.destinationId) && item.owner_id !== server.user_id) || item.access_key !== undefined) return { ...failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm the saved community photo.'), vkDiagnostic: { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto' } };
-        const attachment = `photo${item.owner_id}_${item.id}`;
-        if (attachments.includes(attachment)) return failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm distinct saved community photos.');
+        const checked = checkSavedPhoto(saved.result, Number(input.destinationId), server.user_id);
+        if (!checked.ok) return { ...failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm the saved community photo.'), vkDiagnostic: { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: checked.reason } };
+        const attachment = `photo${checked.ownerId}_${checked.id}`;
+        if (attachments.includes(attachment)) return { ...failure('PERMANENT', 'VK_PHOTO_RECEIPT', 'VK did not confirm distinct saved community photos.'), vkDiagnostic: { stage: 'PHOTO_RECEIPT', method: 'photos.saveWallPhoto', photoReceiptReason: 'DUPLICATE_ATTACHMENT' } };
         attachments.push(attachment);
       }
       const result = await call('wall.post', {
