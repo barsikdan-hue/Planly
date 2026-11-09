@@ -13,6 +13,7 @@ const files=[
   '.next/server/app/api/social-accounts/vk/upload-receipt-test/route.js',
   '.next/server/app/social-connections/vk-upload-receipt-test/route.js',
   'public/vk-upload-receipt.mjs','public/vk-upload-receipt-window.mjs','public/vk-upload-window-core.mjs',
+  '.next/server/app/api/social-accounts/vk/callback/route.js',
 ];
 const hashPattern=/^[a-f0-9]{64}$/;
 const sourcePattern=/^[a-f0-9]{40}$/;

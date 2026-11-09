@@ -10,7 +10,9 @@ import { processPublication } from '../lib/server/scheduler/processor.ts';
 import { observePublicationAuthorization } from '../lib/server/social-connections/publication-authorization.ts';
 import { revokeUserSessions } from '../lib/server/auth/access.ts';
 import { openVkPayload } from '../lib/server/vk/crypto.ts';
-import { getVkConfig } from '../lib/server/vk/config.ts';
+import { getVkConfig, VkOAuthError } from '../lib/server/vk/config.ts';
+import { logVkOAuthFailure } from '../lib/server/vk/diagnostics.ts';
+import { validateVkCommunity } from '../lib/server/connectors/vk.ts';
 import { setSocialAccountEnabled } from '../lib/server/social-accounts.ts';
 
 const ids=['vk-auth-agent-a','vk-auth-agent-b'];
@@ -108,4 +110,41 @@ test('VK stale generic disable cannot delete credentials issued after a session 
   const [after]=await getDb().select().from(vkCredentials).where(eq(vkCredentials.accountId,a.accountId));assert.deepEqual(after,before);
   const [account]=await getDb().select().from(socialAccounts).where(eq(socialAccounts.id,a.accountId));assert.equal(account.enabled,true);
   const p=await work(a.id);assert.equal((await processPublication(p.id)).status,'PUBLISHED');assert.deepEqual(sends,[{token:renewed.token,destination:'-123'}]);
+});
+
+for (const foreignError of [false, true]) test(`VK actual OAuth community failure preserves ${foreignError ? 'generic rejection' : 'closed provider diagnosis'} without persisting a credential`, async () => {
+  const id = ids[0], accountId = `${id}-vk`, communityId = '123';
+  grantToken = randomBytes(24).toString('hex'); refreshToken = randomBytes(24).toString('hex');
+  const started = await startVkOAuth(id, accountId, communityId);
+  controlError = 15;
+  let rejected: unknown;
+  await assert.rejects(() => completeVkOAuth(id, {
+    state: new URL(started.authorizationUrl).searchParams.get('state')!, code: 'synthetic-code', deviceId: 'synthetic-device',
+  }, async (token, community) => {
+    if (foreignError) throw Object.assign(new Error('secret-provider-echo'), { code: 'VK_API_ACCESS_NOT_GRANTED', errorType: 'PERMANENT' });
+    return validateVkCommunity({ token, communityId: community });
+  }), error => {
+    rejected = error;
+    assert.ok(error instanceof VkOAuthError);
+    assert.equal(error.code, 'AUTH');
+    assert.deepEqual(error.diagnostic, { stage: 'COMMUNITY_VALIDATION', reason: 'FAILED' });
+    assert.deepEqual(error.communityValidationMetadata, foreignError ? undefined : { connectorCode: 'VK_API_ACCESS_NOT_GRANTED', errorType: 'PERMANENT', vkErrorCode: 15 });
+    return true;
+  });
+  const lines: string[] = [], warn = console.warn;
+  console.warn = line => { lines.push(String(line)); };
+  try { logVkOAuthFailure(rejected); } finally { console.warn = warn; }
+  assert.deepEqual(JSON.parse(lines[0]), {
+    event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'COMMUNITY_VALIDATION', reason: 'FAILED',
+    ...(!foreignError ? { communityValidation: { connectorCode: 'VK_API_ACCESS_NOT_GRANTED', errorType: 'PERMANENT', vkErrorCode: 15 } } : {}),
+  });
+  assert.equal(lines.join('').includes('secret-provider-echo'), false);
+  assert.equal(lines.join('').includes(grantToken), false);
+  assert.equal(sends.length, 0); assert.equal(refreshes, 0);
+  const state = await getPool().query(`SELECT
+    (SELECT count(*)::int FROM vk_credentials WHERE account_id=$1) AS credentials,
+    (SELECT count(*)::int FROM vk_oauth_intents WHERE account_id=$1) AS intents`, [accountId]);
+  assert.deepEqual(state.rows[0], { credentials: 0, intents: 0 });
+  const [account] = await getDb().select().from(socialAccounts).where(eq(socialAccounts.id, accountId));
+  assert.equal(account.enabled, false); assert.equal(account.connectionStatus, 'DISCONNECTED'); assert.equal(account.providerAccountId, null);
 });
