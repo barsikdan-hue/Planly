@@ -1,4 +1,36 @@
-import { VkOAuthError, type VkOAuthDiagnostic, type VkInvalidGrantReason, type VkDescriptionState, type VkDescriptionMention, type VkTokenExchangeMetadata, type VkServiceTokenTerm } from './config.ts';
+import { VkOAuthError, type VkOAuthDiagnostic, type VkInvalidGrantReason, type VkDescriptionState, type VkDescriptionMention, type VkTokenExchangeMetadata, type VkServiceTokenTerm, type VkCommunityValidationMetadata } from './config.ts';
+import { sanitizeVkPublicationDiagnostic, VkCommunityValidationError } from '../connectors/vk.ts';
+
+function safeCommunityValidationMetadata(value: unknown): VkCommunityValidationMetadata | undefined {
+  try {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    // Snapshot each untrusted field once; never retain a caller-owned object/getter.
+    const { connectorCode, errorType, vkErrorCode, networkErrorClass } = value as Record<string, unknown>;
+    const codes: readonly unknown[] = ['VK_COMMUNITY', 'VK_POST_PERMISSION', 'VK_RECONNECT_REQUIRED', 'VK_API_VERSION', 'VK_UNAVAILABLE',
+      'VK_METHOD_PROFILE_DENIED', 'VK_GROUP_TOKEN_METHOD_DENIED', 'VK_API_ACCESS_NOT_GRANTED',
+      'VK_5', 'VK_6', 'VK_7', 'VK_9', 'VK_14', 'VK_17', 'VK_20', 'VK_22', 'VK_24', 'VK_25', 'VK_28', 'VK_29',
+      'VK_100', 'VK_118', 'VK_121', 'VK_214', 'VK_219', 'VK_220', 'VK_222', 'VK_224', 'VK_225', 'VK_704', 'VK_1117'];
+    if (!codes.includes(connectorCode) || !['TEMPORARY', 'AUTH', 'VALIDATION', 'PERMANENT'].includes(errorType as string)) return;
+    const safe: VkCommunityValidationMetadata = { connectorCode: connectorCode as VkCommunityValidationMetadata['connectorCode'], errorType: errorType as VkCommunityValidationMetadata['errorType'] };
+    if (typeof vkErrorCode === 'number' && Number.isSafeInteger(vkErrorCode) && vkErrorCode > 0 && vkErrorCode <= 9999) safe.vkErrorCode = vkErrorCode;
+    if (typeof networkErrorClass === 'string' && ['TIMEOUT', 'DNS', 'CONNECTION', 'TLS', 'OTHER'].includes(networkErrorClass)) safe.networkErrorClass = networkErrorClass as VkCommunityValidationMetadata['networkErrorClass'];
+    return safe;
+  } catch { return undefined; }
+}
+
+// Preserve only the connector's closed diagnosis, never its Error/message/cause.
+export function vkCommunityOAuthFailure(error: unknown): VkOAuthError {
+  let metadata: VkCommunityValidationMetadata | undefined;
+  try {
+    if (error instanceof VkCommunityValidationError) {
+      const { code, errorType, vkDiagnostic } = error;
+      const diagnostic = sanitizeVkPublicationDiagnostic(vkDiagnostic);
+      const community = diagnostic?.stage === 'COMMUNITY_VALIDATION' && (!diagnostic.method || diagnostic.method === 'groups.getById') ? diagnostic : undefined;
+      metadata = safeCommunityValidationMetadata({ connectorCode: code, errorType, vkErrorCode: community?.vkErrorCode, networkErrorClass: community?.networkErrorClass });
+    }
+  } catch { /* Unknown/mutable errors retain only the OAuth stage. */ }
+  return new VkOAuthError('AUTH', { stage: 'COMMUNITY_VALIDATION', reason: 'FAILED' }, undefined, undefined, metadata);
+}
 
 // Mentions are lexical signals only, not provider-reported causes or proof of a request bug.
 // Retain no description/body. Bound work before trimming or matching untrusted text.
@@ -63,10 +95,14 @@ export function vkProviderFailureReason(value: unknown): VkOAuthDiagnostic['reas
 // Never pass errors, URLs, grant bodies, state, codes, IDs or provider text to the logger.
 // Recheck allowlists here, rather than trusting mutable error properties at runtime.
 export function logVkOAuthFailure(error: unknown): void {
+  let output: Record<string, unknown> = { event: 'VK_OAUTH_FAILURE', code: 'AUTH', stage: 'CALLBACK', reason: 'FAILED' };
+  try {
   const codes: readonly unknown[] = ['AUTH', 'CONFIG', 'NOT_FOUND', 'STATE', 'VALIDATION'];
   const stages: readonly unknown[] = ['CALLBACK', 'OAUTH_INTENT', 'TOKEN_EXCHANGE', 'GRANT_VALIDATION', 'COMMUNITY_VALIDATION', 'CREDENTIAL_PERSISTENCE'];
   const reasons: readonly unknown[] = ['FAILED', 'INVALID_SCOPE', 'INVALID_GRANT', 'INVALID_CLIENT', 'ACCESS_DENIED', 'PROVIDER_REJECTED', 'HTTP_REJECTED', 'INVALID_RESPONSE', 'TRANSPORT_FAILED', 'STATE_MISMATCH', 'MISSING_PUBLISHING_SCOPES'];
   const known = error instanceof VkOAuthError ? error : undefined;
+  const diagnostic = known?.diagnostic;
+  const code = known?.code, stage = diagnostic?.stage, reason = diagnostic?.reason;
   const invalidGrantReasons: readonly unknown[] = ['PKCE_MISMATCH', 'CODE_VERIFIER_REJECTED', 'CODE_INVALID_EXPIRED_OR_USED', 'DEVICE_ID_REJECTED', 'REDIRECT_REJECTED', 'SERVICE_TOKEN_REJECTED', 'OTHER_INVALID_GRANT'];
   const descriptionStates: readonly unknown[] = ['MISSING', 'NON_STRING', 'EMPTY', 'PRESENT', 'TOO_LONG'];
   const descriptionMentions: readonly unknown[] = ['PKCE', 'CODE', 'DEVICE_ID', 'REDIRECT_URI', 'SERVICE_TOKEN'];
@@ -85,14 +121,19 @@ export function logVkOAuthFailure(error: unknown): void {
     providerDescriptionMentions: [...new Set(mentions)],
     ...(safeTerms ? { providerServiceTokenTerms: safeTerms } : {}),
   } : undefined;
-  console.warn(JSON.stringify({
+  const communityValidation = stage === 'COMMUNITY_VALIDATION' ? safeCommunityValidationMetadata(known?.communityValidationMetadata) : undefined;
+  const invalidGrantReason = known?.invalidGrantReason;
+  output = {
     event: 'VK_OAUTH_FAILURE',
-    code: known && codes.includes(known.code) ? known.code : 'AUTH',
-    stage: stages.includes(known?.diagnostic?.stage) ? known?.diagnostic?.stage : 'CALLBACK',
-    reason: reasons.includes(known?.diagnostic?.reason) ? known?.diagnostic?.reason : 'FAILED',
-    ...(known?.diagnostic?.stage === 'TOKEN_EXCHANGE' && known.diagnostic.reason === 'INVALID_GRANT' ? {
-      invalidGrantReason: invalidGrantReasons.includes(known.invalidGrantReason) ? known.invalidGrantReason : 'OTHER_INVALID_GRANT',
+    code: codes.includes(code) ? code : 'AUTH',
+    stage: stages.includes(stage) ? stage : 'CALLBACK',
+    reason: reasons.includes(reason) ? reason : 'FAILED',
+    ...(communityValidation ? { communityValidation } : {}),
+    ...(stage === 'TOKEN_EXCHANGE' && reason === 'INVALID_GRANT' ? {
+      invalidGrantReason: invalidGrantReasons.includes(invalidGrantReason) ? invalidGrantReason : 'OTHER_INVALID_GRANT',
       ...safeMetadata,
     } : {}),
-  }));
+  };
+  } catch { /* A throwing getter must not escape or enter the log. */ }
+  console.warn(JSON.stringify(output));
 }

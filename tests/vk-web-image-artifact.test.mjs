@@ -10,6 +10,7 @@ const proof=()=>({buildIdSha256:'3'.repeat(64),files:[
   {path:'public/vk-upload-receipt.mjs',bytes:102,sha256:'6'.repeat(64)},
   {path:'public/vk-upload-receipt-window.mjs',bytes:103,sha256:'7'.repeat(64)},
   {path:'public/vk-upload-window-core.mjs',bytes:104,sha256:'8'.repeat(64)},
+  {path:'.next/server/app/api/social-accounts/vk/callback/route.js',bytes:105,sha256:'9'.repeat(64)},
 ]});
 const publicHashes={'public/vk-upload-receipt.mjs':'6'.repeat(64),'public/vk-upload-receipt-window.mjs':'7'.repeat(64),'public/vk-upload-window-core.mjs':'8'.repeat(64)};
 
@@ -32,7 +33,7 @@ test('image validation binds source, immutable image id, platform and nonroot ru
   for(const override of [{Id:'mutable-tag'},{Architecture:'arm64'},{Os:'windows'},{Config:{...image().Config,User:'root'}},{Config:{...image().Config,Labels:{'org.opencontainers.image.revision':'9'.repeat(40)}}},{Config:{...image().Config,Env:['VK_SERVICE_TOKEN=must-not-be-baked']}}])assert.throws(()=>validateImageMetadata({...image(),...override},source));
 });
 
-test('filesystem proof requires both compiled routes and exact public bytes, rejects incomplete or forged receipts',()=>{
+test('filesystem proof requires compiled upload and OAuth callback routes and exact public bytes',()=>{
   assert.deepEqual(validateFilesystemProof(proof(),publicHashes),proof());
   const missing=proof();missing.files.pop();assert.throws(()=>validateFilesystemProof(missing,publicHashes));
   const wrong=proof();wrong.files[2].sha256='9'.repeat(64);assert.throws(()=>validateFilesystemProof(wrong,publicHashes));

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { getPool } from '../../../db/index.ts';
 import { getVkConfig, VkOAuthError, type VkConfig, type VkOAuthDiagnostic } from './config.ts';
-import { vkInvalidGrantReason, vkProviderFailureReason, vkTokenExchangeMetadata } from './diagnostics.ts';
+import { vkCommunityOAuthFailure, vkInvalidGrantReason, vkProviderFailureReason, vkTokenExchangeMetadata } from './diagnostics.ts';
 import { openVkPayload, sealVkPayload } from './crypto.ts';
 import { readVkAccount, rowEnvelope, withVkAccountLock } from './credentials.ts';
 import type { PoolClient } from 'pg';
@@ -87,7 +87,7 @@ export async function completeVkOAuth(userId: string, input: { state: string; co
       const grant = await requestVkGrant({ grant_type: 'authorization_code', code: input.code, device_id: input.deviceId, state: input.state, code_verifier: decrypted.verifier }, config);
       stage = 'COMMUNITY_VALIDATION';
       let destination: { destinationId: string; displayName: string };
-      try { destination = await validateCommunity(grant.accessToken, intent.community_id); } catch { throw new VkOAuthError('AUTH'); }
+      try { destination = await validateCommunity(grant.accessToken, intent.community_id); } catch (error) { throw vkCommunityOAuthFailure(error); }
       if (destination.destinationId !== `-${intent.community_id}` || !destination.displayName || destination.displayName.length > 512) throw new VkOAuthError('VALIDATION');
       stage = 'CREDENTIAL_PERSISTENCE';
       await client.query('BEGIN'); const currentActor=await readVkActor(client,userId,decrypted.sessionVersion as number); const currentAccount=await readVkAccount(client, accountId, userId);

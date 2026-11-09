@@ -1,3 +1,11 @@
+# Lentaro — VK OAuth community diagnostic checkpoint, 9 November 2026
+
+Deployed staging remains d297890/image9bd9c95b; five VK fields configured for Web54809575 after closed manual key correction. Gateway no-send fence active, worker stopped, BullMQ paused, counts4users/4posts/3publications/credentials0/nonterminal0, old receipt marker1permanent preserved. Production/main untouched. Three owner OAuth attempts07:37:52/07:38:05/07:39:14UTC reached COMMUNITY_VALIDATION then AUTH/FAILED. By exact deployed source ordering, returnedstate and required access/refresh/expiry/wall/photos grant checks passed before that stage; actual refresh and publishing remain unverified. The concrete group/API/network rejection is unavailable because the OAuth catch discarded VkCommunityValidationError. DNS/TLS-only probes07:43UTC passed for api.vk.com/api.vk.ru; no HTTP/API/token used. Official schema5.199 matches the current validator; no basis to relax guards or switch domains.
+
+Source branch codex/vk-oauth-community-diag-20261109 from6db307b fixes only that proven diagnostic loss: typed closed connectorCode/errorType/vkErrorCode/networkErrorClass survives the catch, is revalidated at logging and appears only under COMMUNITY_VALIDATION. Foreign errors stay generic. Validation and authorization acceptance, persistence, retry and publishing behavior are unchanged. New14unit RED→GREEN, focused112PASS, typecheck/diff-check0; actual OAuth2integration regressions are added but await attested CI. Independent Critic no blockers. Artifact proof now requires compiled OAuth callback bytes; targeted artifact6PASS after meaningful missing-callback RED. Workflow adds exact stacked PR base and image export only after unit→isolatedintegration. No new source deploy/OAuth/provider request; existing staging fence remains in place. Exact-source CI/image results are PENDING at this checkpoint and must be reported separately; do not treat local checks as runtime proof.
+
+Plan: docs/superpowers/plans/2026-11-09-vk-oauth-community-diagnostics.md. Existing historical checkpoint follows.
+
 # Lentaro — VK repair checkpoint, 6 November 2026
 
 New source branch codex/vk-firstparty-receipt-20261106 from23589fd:

@@ -2,7 +2,7 @@ name: VK audit isolated verification
 
 on:
   pull_request:
-    branches: [codex/vk-miniapp-probe-20261029, codex/lentaro-vk-audit-fixes-20261105, codex/vk-post-proof-20261106, codex/vk-firstparty-receipt-20261106, codex/vk-save-receipt-diagnostics-20261106]
+    branches: [codex/vk-miniapp-probe-20261029, codex/lentaro-vk-audit-fixes-20261105, codex/vk-post-proof-20261106, codex/vk-firstparty-receipt-20261106, codex/vk-save-receipt-diagnostics-20261106, codex/vk-server-readiness-20261107]
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
 
   web-image:
     needs: [unit, integration]
-    if: github.event.pull_request.head.ref == 'codex/vk-firstparty-receipt-20261106'
+    if: github.event.pull_request.head.ref == 'codex/vk-firstparty-receipt-20261106' || github.event.pull_request.head.ref == 'codex/vk-oauth-community-diag-20261109'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
