@@ -7,6 +7,7 @@ on:
       - 'tests/vk-render-*.test.mjs'
       - 'tests/vk-upload-reply-diagnostic.test.mjs'
       - 'tests/vk-upload-wire.test.mjs'
+      - 'tests/vk-jpeg-operation.test.mjs'
       - '.github/workflows/vk-render-check.yml'
 permissions:
   contents: read
@@ -29,5 +30,6 @@ jobs:
           node --check experiments/vk-render-check/controller.mjs
           node --check experiments/vk-render-check/page.mjs
           node --check experiments/vk-render-check/upload-diagnostic.mjs
-          node --experimental-strip-types --test tests/vk-render-check.test.mjs tests/vk-render-http.test.mjs tests/vk-render-controller.test.mjs tests/vk-upload-reply-diagnostic.test.mjs tests/vk-upload-wire.test.mjs
+          node --experimental-strip-types --test tests/vk-render-check.test.mjs tests/vk-render-http.test.mjs tests/vk-render-controller.test.mjs tests/vk-upload-reply-diagnostic.test.mjs tests/vk-upload-wire.test.mjs tests/vk-jpeg-operation.test.mjs
           test -s experiments/vk-render-check/fixture.png
+          test -s experiments/vk-render-check/fixture.jpg

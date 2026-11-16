@@ -3,6 +3,12 @@ import {allowedVkPhotoUploadDestination,createVkConnector,validateVkCommunity,sa
 import {inspectUploadReply} from './upload-diagnostic.mjs';
 
 export const OPERATION='vk-render-photo-20261116-01';
+export const JPEG_OPERATION='vk-render-jpeg-20261116-02';
+export function getOperationSpec(operation=OPERATION){
+ if(operation===OPERATION)return Object.freeze({operation,mimeType:'image/png',fileName:'vk-api-test.png',fixture:'fixture.png'});
+ if(operation===JPEG_OPERATION)return Object.freeze({operation,mimeType:'image/jpeg',fileName:'vk-api-test.jpg',fixture:'fixture.jpg'});
+ throw new Error('OPERATION_CONFIG');
+}
 export const MESSAGE='Проверка VK API 16.11.2026: публикация картинки и текста через приложение Planly.';
 export const CLIENT_ID='54809575';
 export const COMMUNITY='242095689';
@@ -14,14 +20,16 @@ class ClosedError extends Error {constructor(reason,stage,code){super(reason);th
 function roleState(group){return {isAdmin:group?.is_admin===1?'YES':group?.is_admin===0?'NO':group?.is_admin===undefined?'MISSING':'INVALID',adminLevel:typeof group?.admin_level==='number'?({0:'NONE',1:'MODERATOR',2:'EDITOR',3:'ADMIN'})[group.admin_level]??'INVALID':group?.admin_level===undefined?'MISSING':'INVALID'};}
 function validOrigin(value){const u=new URL(value);if(u.protocol!=='https:'||u.origin!==value||u.username||u.password)throw new Error('ORIGIN_CONFIG');return u.origin;}
 
-export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=globalThis.fetch,now=Date.now,image}){
+export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=globalThis.fetch,now=Date.now,image,operation=OPERATION}){
+ const spec=getOperationSpec(operation);
  origin=validOrigin(origin);
  if(serviceToken!==undefined&&!validToken(serviceToken))throw new Error('SERVICE_TOKEN_CONFIG');
  const key=createPublicKey(permitPublicKey);if(key.asymmetricKeyType!=='ed25519')throw new Error('PERMIT_KEY_CONFIG');
  if(!(image instanceof Uint8Array)||image.length<8||image.length>1_000_000)throw new Error('IMAGE_CONFIG');
+ if(operation===JPEG_OPERATION&&(image[0]!==255||image[1]!==216||image[2]!==255||image.at(-2)!==255||image.at(-1)!==217))throw new Error('IMAGE_CONFIG');
  const imageCopy=new Uint8Array(image);
  const bootId=random();let intent,access,credentialExpiry=0,attempted=false,expectedAttachment;
- let view={status:serviceToken?'READY_FOR_AUTH':'SERVICE_TOKEN_REQUIRED',stage:'CONFIG',appId:CLIENT_ID,communityId:COMMUNITY,bootId,operation:OPERATION};
+ let view={status:serviceToken?'READY_FOR_AUTH':'SERVICE_TOKEN_REQUIRED',stage:'CONFIG',appId:CLIENT_ID,communityId:COMMUNITY,bootId,operation,imageMimeType:spec.mimeType};
  const status=()=>structuredClone({...view,credentialExpired:credentialExpiry>0&&now()>=credentialExpiry,attempted});
  const set=(values)=>{view={...view,...values};return status();};
  const transport=async(url,init)=>{
@@ -37,7 +45,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   if(method==='photos.saveWallPhoto')view.stage='SAVE_PHOTO';
   if(method==='wall.post'){
    view.stage='WALL_POST';const fields=Object.fromEntries(init.body);
-   if(fields.owner_id!==`-${COMMUNITY}`||fields.message!==MESSAGE||fields.guid!==OPERATION||fields.from_group!=='1')throw new ClosedError('TRANSPORT_POLICY','WALL_POST');
+   if(fields.owner_id!==`-${COMMUNITY}`||fields.message!==MESSAGE||fields.guid!==operation||fields.from_group!=='1')throw new ClosedError('TRANSPORT_POLICY','WALL_POST');
    expectedAttachment=fields.attachments;
   }
   if(allowedUpload&&!allowedAPI&&!allowedOAuth)view.stage='UPLOAD';
@@ -113,7 +121,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
    if(!object(permit)||Object.keys(permit).sort().join(',')!=='payload,signature'||typeof permit.payload!=='string'||permit.payload.length>2048||!/^[A-Za-z0-9_-]+$/.test(permit.payload)||typeof permit.signature!=='string'||!/^[A-Za-z0-9_-]{86}$/.test(permit.signature))return false;
    if(!verify(null,Buffer.from(permit.payload),key,Buffer.from(permit.signature,'base64url')))return false;
    const p=JSON.parse(Buffer.from(permit.payload,'base64url').toString('utf8'));
-   return object(p)&&Object.keys(p).sort().join(',')==='bootId,expiresAt,grantId,operation'&&p.operation===OPERATION&&p.bootId===bootId&&p.grantId===view.grantId&&Number.isSafeInteger(p.expiresAt)&&p.expiresAt>now()&&p.expiresAt<=now()+60_000;
+   return object(p)&&Object.keys(p).sort().join(',')==='bootId,expiresAt,grantId,operation'&&p.operation===operation&&p.bootId===bootId&&p.grantId===view.grantId&&Number.isSafeInteger(p.expiresAt)&&p.expiresAt>now()&&p.expiresAt<=now()+60_000;
   }catch{return false;}
  }
  async function publish(permit){
@@ -123,7 +131,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   attempted=true;set({status:'ATTEMPTED',stage:'GET_UPLOAD_SERVER',reason:'OUTCOME_PENDING'});
   try{
    const connector=createVkConnector({getAccessToken:async()=>access,fetchImpl:transport});
-   const result=await connector.publish({publicationId:OPERATION,socialAccountId:OPERATION,provider:'VK',destinationId:`-${COMMUNITY}`,text:MESSAGE,media:[{name:'vk-api-test.png',mimeType:'image/png',bytes:imageCopy}]});
+   const result=await connector.publish({publicationId:operation,socialAccountId:operation,provider:'VK',destinationId:`-${COMMUNITY}`,text:MESSAGE,media:[{name:spec.fileName,mimeType:spec.mimeType,bytes:imageCopy}]});
    if(!result.ok){const diagnostic=sanitizeVkPublicationDiagnostic(result.vkDiagnostic);return set({status:'OUTCOME_UNCONFIRMED',reason:result.code,stage:diagnostic?.stage??view.stage,diagnostic});}
    const match=/^-242095689_([1-9]\d*)$/.exec(result.remoteId);
    if(!match)throw new ClosedError('RECEIPT_INVALID','WALL_POST');

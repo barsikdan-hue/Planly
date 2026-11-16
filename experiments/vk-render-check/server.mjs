@@ -2,7 +2,7 @@ import {createServer} from 'node:http';
 import {randomBytes,timingSafeEqual,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {createVerifier} from './core.mjs';
+import {createVerifier,getOperationSpec} from './core.mjs';
 import {renderPage} from './page.mjs';
 const same=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function readJson(req){
@@ -20,7 +20,7 @@ export function createTestServer(config){
   try{
    if(!req.url||req.url.length>35000)return json(414,{status:'INVALID_REQUEST'});
    const u=new URL(req.url,config.origin);const path=u.pathname;
-   if(req.method==='GET'&&path==='/health')return json(200,{status:'ok',source:config.source??'unknown',vkConfigured:!!config.serviceToken,publicationMode:'LOCAL_SIGNED_ONE_SHOT',imageSha256:createHash('sha256').update(config.image).digest('hex')});
+   if(req.method==='GET'&&path==='/health'){const spec=getOperationSpec(config.operation);return json(200,{status:'ok',source:config.source??'unknown',vkConfigured:!!config.serviceToken,publicationMode:'LOCAL_SIGNED_ONE_SHOT',operation:spec.operation,imageMimeType:spec.mimeType,imageSha256:createHash('sha256').update(config.image).digest('hex')});}
    if(req.method==='GET'&&path==='/'&&!u.search){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});return res.end(renderPage(nonce));}
    if(!['/api/login','/api/status','/api/start','/api/publish','/oauth/callback'].includes(path))return json(404,{status:'NOT_FOUND'});
    if(path!=='/oauth/callback'&&u.search)return json(400,{status:'INVALID_REQUEST'});
@@ -61,8 +61,9 @@ export function createTestServer(config){
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{
   const origin=process.env.RENDER_EXTERNAL_URL;const ownerKey=process.env.VK_CHECK_OWNER_KEY;const permitPublicKey=process.env.VK_CHECK_PERMIT_PUBLIC_KEY;
-  const image=readFileSync(new URL('./fixture.png',import.meta.url));
-  const server=createTestServer({origin,ownerKey,permitPublicKey,serviceToken:process.env.VK_SERVICE_TOKEN||undefined,source:process.env.RENDER_GIT_COMMIT??'unknown',image});
+  const spec=getOperationSpec(process.env.VK_CHECK_OPERATION);
+  const image=readFileSync(new URL('./'+spec.fixture,import.meta.url));
+  const server=createTestServer({origin,ownerKey,permitPublicKey,serviceToken:process.env.VK_SERVICE_TOKEN||undefined,source:process.env.RENDER_GIT_COMMIT??'unknown',image,operation:spec.operation});
   server.listen(Number(process.env.PORT??10000),'0.0.0.0',()=>console.log('VK_CHECK_LISTENING'));
   for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),5000).unref();});
  }catch{console.error('VK_CHECK_CONFIG_INVALID');process.exitCode=1;}

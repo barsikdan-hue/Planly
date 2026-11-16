@@ -3,7 +3,7 @@ import {mkdirSync,writeFileSync,readFileSync,openSync,closeSync,fsyncSync,lstatS
 import {join,isAbsolute,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
-import {OPERATION} from './core.mjs';
+import {OPERATION,JPEG_OPERATION,getOperationSpec} from './core.mjs';
 import {sanitizeUploadReply} from './upload-diagnostic.mjs';
 const configFile=dir=>join(dir,'config.json');
 function loadConfig(dir){
@@ -29,6 +29,8 @@ export function publicEnvironment(dir){const c=loadConfig(dir);return [{key:'NOD
 function safeState(raw){
  const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED'];
  out.status=states.includes(raw?.status)?raw.status:'OUTCOME_UNCONFIRMED';
+ if([OPERATION,JPEG_OPERATION].includes(raw?.operation))out.operation=raw.operation;
+ if(['image/jpeg','image/png'].includes(raw?.imageMimeType))out.imageMimeType=raw.imageMimeType;
  if(['EDITOR_FILTER','ROLE_FIELDS'].includes(raw?.managementProof))out.managementProof=raw.managementProof;
  const uploadResponse=sanitizeUploadReply(raw?.uploadResponse);if(uploadResponse)out.uploadResponse=uploadResponse;
  for(const field of ['reason','stage'])if(typeof raw?.[field]==='string'&&/^[A-Z0-9_]{1,64}$/.test(raw[field]))out[field]=raw[field];
@@ -46,18 +48,19 @@ async function request(c,path,fetchImpl,body){
  if(!response.ok)throw new Error('SERVER_REJECTED');return response.json();
 }
 export async function readStatus(dir,{fetchImpl=globalThis.fetch}={}){return safeState(await request(loadConfig(dir),'/api/status',fetchImpl));}
-export async function publishOnce(dir,{fetchImpl=globalThis.fetch,now=Date.now}={}){
- const marker=join(dir,'ATTEMPTED.json');if(existsSync(marker))throw new Error('ALREADY_ATTEMPTED');
+export async function publishOnce(dir,{fetchImpl=globalThis.fetch,now=Date.now,operation=OPERATION}={}){
+ getOperationSpec(operation);
+ const marker=join(dir,operation===OPERATION?'ATTEMPTED.json':'JPEG_ATTEMPTED.json');if(existsSync(marker))throw new Error('ALREADY_ATTEMPTED');
  const c=loadConfig(dir);const state=await request(c,'/api/status',fetchImpl);
- if(state.status!=='PERMISSIONS_VERIFIED'||state.attempted||typeof state.bootId!=='string'||typeof state.grantId!=='string'||state.expiresAt<=now())throw new Error('NOT_READY');
- const fields={operation:OPERATION,bootId:state.bootId,grantId:state.grantId,expiresAt:now()+45_000};
+ if(state.status!=='PERMISSIONS_VERIFIED'||state.operation!==operation||state.attempted||typeof state.bootId!=='string'||typeof state.grantId!=='string'||state.expiresAt<=now())throw new Error('NOT_READY');
+ const fields={operation,bootId:state.bootId,grantId:state.grantId,expiresAt:now()+45_000};
  let fd;try{fd=openSync(marker,'wx',0o600);}catch{throw new Error('ALREADY_ATTEMPTED');}
- try{writeFileSync(fd,JSON.stringify({operation:OPERATION,claimedAt:now(),bootId:state.bootId,grantId:state.grantId}));fsyncSync(fd);}finally{closeSync(fd);}
+ try{writeFileSync(fd,JSON.stringify({operation,claimedAt:now(),bootId:state.bootId,grantId:state.grantId}));fsyncSync(fd);}finally{closeSync(fd);}
  if(process.platform!=='win32'){const parent=openSync(dir,'r');try{fsyncSync(parent);}finally{closeSync(parent);}}
  // Nothing after this point may automatically retry, including an HTTP rejection.
  const payload=Buffer.from(JSON.stringify(fields)).toString('base64url');const signature=sign(null,Buffer.from(payload),c.privateKey).toString('base64url');
  let result;try{result=safeState(await request(c,'/api/publish',fetchImpl,{payload,signature}));}catch{result={status:'OUTCOME_UNCONFIRMED',reason:'NO_RETRY_AFTER_LOCAL_CLAIM'};}
- writeFileSync(join(dir,'result.json'),JSON.stringify(result,null,2),{flag:'wx',mode:0o600});return result;
+ writeFileSync(join(dir,operation===OPERATION?'result.json':'jpeg-result.json'),JSON.stringify(result,null,2),{flag:'wx',mode:0o600});return result;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,dir,arg]=process.argv.slice(2);
@@ -66,6 +69,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   else if(mode==='origin')console.log(JSON.stringify(configureOrigin(dir,arg)));
   else if(mode==='status')console.log(JSON.stringify(await readStatus(dir)));
   else if(mode==='publish-once')console.log(JSON.stringify(await publishOnce(dir)));
+  else if(mode==='publish-jpeg-once')console.log(JSON.stringify(await publishOnce(dir,{operation:JPEG_OPERATION})));
   else if(mode==='open'){
    const c=loadConfig(dir);if(!c.origin)throw new Error('ORIGIN_CONFIG');
    execFileSync('python',['-c','import sys,webbrowser; webbrowser.open(sys.stdin.read().strip())'],{input:c.origin+'/#'+c.ownerKey,stdio:['pipe','ignore','ignore'],windowsHide:true});console.log('OWNER_BROWSER_OPENED');

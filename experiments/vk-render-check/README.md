@@ -1,5 +1,14 @@
 # Isolated VK verification on Render
 
+## Owner-requested JPG comparison, operation02
+Owner explicitly requested JPG instead of PNG after the consumed PNG upload attempt. `VK_CHECK_OPERATION=vk-render-jpeg-20261116-02` selects ONLY the compiled JPEG fixture/MIME/filename. Default remains the original PNG operation01. No Node/Undici/multipart/CRLF, OAuth scopes, target, message, photo receipt or save-owner validation change is part of this comparison.
+
+The JPG is the same1000x600 test card, JPEGquality90,37492bytes,SHA256ef1719b302758a7235fe532244754e74a623168104ed0ca38994bf104c71e97e. Native JPEG decoding, SOF dimensions/magic/end markers and visual inspection confirm a true JPEG, not renamed PNG. Core checks JPEG signature before any provider access; the native helper chooses image/jpeg/photo.jpg. Bounded upload-response shape diagnostics are included without changing receipt acceptance.
+
+The same private owner/signing configuration is retained. Use the explicit controller `publish-jpeg-once DIRECTORY`; it requires server operation02, then exclusively creates JPEG_ATTEMPTED.json before signing/posting and retains jpeg-result.json. Original ATTEMPTED.json/result.json are neither reset nor overwritten. Old operation01 permits fail against operation02, and mismatched server mode fails before any local claim or mutation. No arbitrary operation names/targets/images are accepted.
+
+Before execution: exactCI/review, separate exact-SHA test-service deploy/env decision, health source+operation02+image/jpeg+JPEGhash readback, ONE fresh manual OAuth, then ONE already requested JPEG publication only when permission/role/upload-server checks pass. No further image fallback or repeat on unknown result. Existing production/main/NEWVPS unchanged.
+
 Owned Web54809575, VK profile815727447, group242095689. One new operation `vk-render-photo-20261116-01`; no production app, database, worker, scheduler, refresh loop or old-marker reset. Not a replacement OAuth integration: `core.mjs` uses the shared VK connector's role/upload/save/photo-owner/wall checks. Following the observed omission of optional role fields, only their joint absence now permits one positive current-user groups.get(filter=editor) proof of the same editor/admin authority; explicit/partial/invalid roles still deny. No added scopes. Test fixture is neutral Planly/VK API text, generated locally without external content.
 
 ## Checks before release

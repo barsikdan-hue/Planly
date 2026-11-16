@@ -61,3 +61,12 @@ Actual db6ec6e grant/role/upload-server checks succeeded. One locally claimed up
 - [x] RED18 classifier cases and RED1 verifier observation/terminal/no-retry case; add finite field-shape observer to existing bounded bytes, preserving response and acceptance checks.
 - [ ] Independent reviewer and exact-head CI on Render-matching Node22.13, unit before isolatedPG/Redis/full regression.
 - [ ] Report prepared source/runtime wire facts, preserve previous marker, no speculative production fix or provider retry; await support/new explicit operation decision.
+
+### Owner-requested JPG experiment — one new operation02
+User: «А попробуй выложить jpg файл а не png». This authorizes one JPEG provider experiment; previous PNG attempt stays consumed. Prepare only file-format change and its mandatory separate one-shot controls. Keep Node22.13, multipart helper, message, app54809575, owner815727447/group242095689, scopes and all security checks unchanged. Diagnostic040 metadata included; it observes but never decides acceptance.
+- [x] Encode same card to trueJPEG1000x600/quality90/37492bytes/SHAef1719b302758a7235fe532244754e74a623168104ed0ca38994bf104c71e97e; decode, inspect image and JPEG SOF/end markers.
+- [x] RED4 new experiment/control tests before implementation; fixed-literal operation spec selectsPNG01/JPEG02; no arbitrary body/MIME override.
+- [x] Add JPEGmarker/result alongside previous immutable PNGfiles; stronger current-operation check before claim; old controller fixtures include existing real server operation field.
+- [x] Local actual PNG/JPEG wire payload tests + JPEG positive readback and invalid-receipt no-save/no-post/terminal tests.
+- [ ] Independent review and exact-head ordered CI.
+- [ ] Exact test-service deploy/env authorization, then onefreshmanualOAuth and oneJPEGpublish-once; preserve old hashes and report safe result, no automatic retry.

@@ -16,17 +16,17 @@ test('actual fixture PNG has valid chunks/CRC, dimensions, complete pixels and e
  assert.equal(offset,image.length);assert.ok(end);assert.equal(header.readUInt32BE(0),1000);assert.equal(header.readUInt32BE(4),600);assert.equal(header[8],8);assert.ok([2,6].includes(header[9]));assert.equal(header[12],0);
  const pixels=inflateSync(Buffer.concat(chunks));const stride=1+1000*(header[9]===6?4:3);assert.equal(pixels.length,stride*600);for(let row=0;row<600;row++)assert.ok(pixels[row*stride]<=4);
 });
-test('unchanged native upload sender delivers one complete photo part to loopback, exact bytes and length, no credential headers',async()=>{
+for(const asset of [{bytes:image,mime:'image/png',filename:'photo.png'},{bytes:readFileSync(new URL('../experiments/vk-render-check/fixture.jpg',import.meta.url)),mime:'image/jpeg',filename:'photo.jpg'}])test('unchanged native '+asset.mime+' sender delivers one complete photo part to loopback, exact bytes and length, no credential headers',async()=>{
  let requests=0,resolveBody;const received=new Promise(r=>resolveBody=r);
  const server=createServer(async(req,res)=>{requests++;const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=Buffer.concat(chunks);resolveBody({body,headers:req.headers,method:req.method,url:req.url});res.writeHead(200,{'content-type':'application/json'});res.end('{"server":12,"photo":"opaque","hash":"fixture"}');});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  try{
-  const response=await uploadVkPhotoMultipart({uploadUrl:new URL(`http://127.0.0.1:${server.address().port}/fixture-upload`),bytes:image,mimeType:'image/png',fetchImpl:globalThis.fetch});assert.equal(response.status,200);assert.equal((await response.json()).server,12);
+  const response=await uploadVkPhotoMultipart({uploadUrl:new URL(`http://127.0.0.1:${server.address().port}/fixture-upload`),bytes:asset.bytes,mimeType:asset.mime,fetchImpl:globalThis.fetch});assert.equal(response.status,200);assert.equal((await response.json()).server,12);
   const {body,headers,method,url}=await received;assert.equal(requests,1);assert.equal(method,'POST');assert.equal(url,'/fixture-upload');assert.equal(headers.authorization,undefined);assert.equal(headers.cookie,undefined);assert.equal(headers['transfer-encoding'],undefined);assert.equal(Number(headers['content-length']),body.length);
   const boundary=/boundary=(?:"([^"]+)"|([^;]+))/.exec(headers['content-type']);assert.ok(boundary);const delimiter=boundary[1]??boundary[2];assert.ok(body.subarray(0,delimiter.length+4).equals(Buffer.from(`--${delimiter}\r\n`)));
-  const split=body.indexOf('\r\n\r\n');assert.ok(split>0);const partHeader=body.subarray(0,split).toString('utf8');assert.match(partHeader,/name="photo"; filename="photo.png"/);assert.match(partHeader,/Content-Type: image\/png/i);
-  const closing=Buffer.from(`\r\n--${delimiter}--`);const end=body.indexOf(closing,split+4);assert.ok(end>split);assert.deepEqual(body.subarray(split+4,end),image);assert.ok([0,2].includes(body.length-end-closing.length));
+  const split=body.indexOf('\r\n\r\n');assert.ok(split>0);const partHeader=body.subarray(0,split).toString('utf8');assert.ok(partHeader.includes('name="photo"; filename="'+asset.filename+'"'));assert.ok(partHeader.includes('Content-Type: '+asset.mime));
+  const closing=Buffer.from(`\r\n--${delimiter}--`);const end=body.indexOf(closing,split+4);assert.ok(end>split);assert.deepEqual(body.subarray(split+4,end),asset.bytes);assert.ok([0,2].includes(body.length-end-closing.length));
   const tail=body.subarray(end+closing.length);if(tail.length)assert.equal(tail.toString(),'\r\n');
-  console.log('VK_LOCAL_WIRE '+JSON.stringify({node:process.version,undici:process.versions.undici,contentLength:true,transferEncoding:false,photoPartCount:1,imageBytes:image.length,closingCRLF:tail.length===2,providerCalls:0}));
+  console.log('VK_LOCAL_WIRE '+JSON.stringify({node:process.version,undici:process.versions.undici,contentLength:true,transferEncoding:false,photoPartCount:1,imageMime:asset.mime,imageBytes:asset.bytes.length,closingCRLF:tail.length===2,providerCalls:0}));
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
