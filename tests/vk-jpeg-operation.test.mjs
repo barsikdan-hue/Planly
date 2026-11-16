@@ -57,7 +57,7 @@ test('mismatched server operation fails before JPEG claim/send',async()=>{
   await assert.rejects(publishOnce(dir,{fetchImpl,operation:jpegOperation}),/NOT_READY/);assert.equal(calls,1);assert.equal(existsSync(join(dir,'JPEG_ATTEMPTED.json')),false);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
-test('JPEG valid upload/save/post receipt uses new operation and exact text/photo readback once',async()=>{
+for(const selectedOperation of [jpegOperation,'vk-render-jpeg-20261116-03']) test(`JPEG ${selectedOperation} valid save with optional access_key and exact readback once`,async()=>{
  let uploads=0,posts=0;
  const fetchImpl=async(url,init)=>{const m=new URL(url).pathname.split('/').at(-1),p=init.body instanceof URLSearchParams?Object.fromEntries(init.body):{};
   if(m==='auth')return Response.json({state:p.state,access_token:'jpeg-token',expires_in:3600,scope:'wall photos'});
@@ -66,13 +66,27 @@ test('JPEG valid upload/save/post receipt uses new operation and exact text/phot
   if(m==='groups.get'){assert.equal(p.filter,'editor');assert.equal(p.user_id,undefined);return Response.json({response:{count:1,items:[242095689]}});}
   if(m==='photos.getWallUploadServer')return Response.json({response:{album_id:-14,user_id:815727447,group_id:242095689,upload_url:'https://pu.vk.ru/c1/ss1/upload.php?act=do_add&wallphoto=1'}});
   if(m==='upload.php'){uploads++;assert.equal(init.body.get('photo').type,'image/jpeg');return Response.json({server:12,photo:'opaque-jpeg',hash:'private-hash'});}
-  if(m==='photos.saveWallPhoto')return Response.json({response:[{id:43,owner_id:815727447}]});
-  if(m==='wall.post'){posts++;assert.equal(p.guid,jpegOperation);assert.equal(p.message,MESSAGE);assert.equal(p.attachments,'photo815727447_43');return Response.json({response:{post_id:53}});}
+  if(m==='photos.saveWallPhoto')return Response.json({response:[{id:43,owner_id:815727447,access_key:'private-photo-key'}]});
+  if(m==='wall.post'){posts++;assert.equal(p.guid,selectedOperation);assert.equal(p.message,MESSAGE);assert.equal(p.attachments,'photo815727447_43');return Response.json({response:{post_id:53}});}
   if(m==='wall.getById')return Response.json({response:{items:[{id:53,owner_id:-242095689,text:MESSAGE,attachments:[{type:'photo',photo:{id:43,owner_id:815727447}}]}]}});
   assert.fail('unexpected provider method');
  };
- const v=createVerifier({origin:'https://jpeg.example',serviceToken:'s',permitPublicKey:publicKey.export({type:'spki',format:'pem'}),fetchImpl,image,operation:jpegOperation});
+ const v=createVerifier({origin:'https://jpeg.example',serviceToken:'s',permitPublicKey:publicKey.export({type:'spki',format:'pem'}),fetchImpl,image,operation:selectedOperation});
  const u=new URL(v.start('jpeg-owner-session'));await v.callback('jpeg-owner-session',new URLSearchParams({state:u.searchParams.get('state'),code:'c',device_id:'d'}));assert.equal(v.status().managementProof,'EDITOR_FILTER');
- const s=v.status();const payload=Buffer.from(JSON.stringify({operation:jpegOperation,bootId:s.bootId,grantId:s.grantId,expiresAt:Date.now()+30000})).toString('base64url');const permit={payload,signature:sign(null,Buffer.from(payload),privateKey).toString('base64url')};
+ const s=v.status();const payload=Buffer.from(JSON.stringify({operation:selectedOperation,bootId:s.bootId,grantId:s.grantId,expiresAt:Date.now()+30000})).toString('base64url');const permit={payload,signature:sign(null,Buffer.from(payload),privateKey).toString('base64url')};
+ if(selectedOperation.endsWith('-03')){const old=Buffer.from(JSON.stringify({operation:jpegOperation,bootId:s.bootId,grantId:s.grantId,expiresAt:Date.now()+30000})).toString('base64url');await assert.rejects(v.publish({payload:old,signature:sign(null,Buffer.from(old),privateKey).toString('base64url')}),/PERMIT/);assert.equal(uploads,0);assert.equal(v.status().attempted,false);}
  assert.equal((await v.publish(permit)).status,'POST_CONFIRMED');assert.equal(uploads,1);assert.equal(posts,1);await assert.rejects(v.publish(permit),/ATTEMPTED/);
+});
+
+test('JPEG03 uses separate durable claim while preserving consumed PNG01/JPEG02',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'vk-jpeg03-'));const dir=join(root,'private');
+ try{createPrivateConfig(dir);configureOrigin(dir,'https://vk-check.onrender.com');
+ for(const name of ['ATTEMPTED.json','JPEG_ATTEMPTED.json','result.json','jpeg-result.json'])writeFileSync(join(dir,name),'consumed');
+ let posts=0;const operation='vk-render-jpeg-20261116-03';
+ const fetchImpl=async(url)=>{if(url.endsWith('/api/status'))return Response.json({status:'PERMISSIONS_VERIFIED',operation,bootId:'b',grantId:'g',expiresAt:Date.now()+60000});posts++;assert.ok(existsSync(join(dir,'JPEG03_ATTEMPTED.json')));return Response.json({status:'POST_CONFIRMED',operation});};
+ assert.equal((await publishOnce(dir,{operation,fetchImpl})).status,'POST_CONFIRMED');
+ await assert.rejects(publishOnce(dir,{operation,fetchImpl}),/ALREADY_ATTEMPTED/);assert.equal(posts,1);
+ for(const name of ['ATTEMPTED.json','JPEG_ATTEMPTED.json','result.json','jpeg-result.json'])assert.equal(readFileSync(join(dir,name),'utf8'),'consumed');
+ assert.ok(existsSync(join(dir,'jpeg03-result.json')));
+ }finally{rmSync(root,{recursive:true,force:true});}
 });

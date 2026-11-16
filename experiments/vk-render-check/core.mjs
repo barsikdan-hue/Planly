@@ -4,9 +4,10 @@ import {inspectUploadReply} from './upload-diagnostic.mjs';
 
 export const OPERATION='vk-render-photo-20261116-01';
 export const JPEG_OPERATION='vk-render-jpeg-20261116-02';
+export const JPEG03_OPERATION='vk-render-jpeg-20261116-03';
 export function getOperationSpec(operation=OPERATION){
  if(operation===OPERATION)return Object.freeze({operation,mimeType:'image/png',fileName:'vk-api-test.png',fixture:'fixture.png'});
- if(operation===JPEG_OPERATION)return Object.freeze({operation,mimeType:'image/jpeg',fileName:'vk-api-test.jpg',fixture:'fixture.jpg'});
+ if([JPEG_OPERATION,JPEG03_OPERATION].includes(operation))return Object.freeze({operation,mimeType:'image/jpeg',fileName:'vk-api-test.jpg',fixture:'fixture.jpg'});
  throw new Error('OPERATION_CONFIG');
 }
 export const MESSAGE='Проверка VK API 16.11.2026: публикация картинки и текста через приложение Planly.';
@@ -26,7 +27,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
  if(serviceToken!==undefined&&!validToken(serviceToken))throw new Error('SERVICE_TOKEN_CONFIG');
  const key=createPublicKey(permitPublicKey);if(key.asymmetricKeyType!=='ed25519')throw new Error('PERMIT_KEY_CONFIG');
  if(!(image instanceof Uint8Array)||image.length<8||image.length>1_000_000)throw new Error('IMAGE_CONFIG');
- if(operation===JPEG_OPERATION&&(image[0]!==255||image[1]!==216||image[2]!==255||image.at(-2)!==255||image.at(-1)!==217))throw new Error('IMAGE_CONFIG');
+ if([JPEG_OPERATION,JPEG03_OPERATION].includes(operation)&&(image[0]!==255||image[1]!==216||image[2]!==255||image.at(-2)!==255||image.at(-1)!==217))throw new Error('IMAGE_CONFIG');
  const imageCopy=new Uint8Array(image);
  const bootId=random();let intent,access,credentialExpiry=0,attempted=false,expectedAttachment;
  let view={status:serviceToken?'READY_FOR_AUTH':'SERVICE_TOKEN_REQUIRED',stage:'CONFIG',appId:CLIENT_ID,communityId:COMMUNITY,bootId,operation,imageMimeType:spec.mimeType};
