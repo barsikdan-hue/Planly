@@ -4,6 +4,7 @@ import {join,isAbsolute,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {OPERATION} from './core.mjs';
+import {sanitizeUploadReply} from './upload-diagnostic.mjs';
 const configFile=dir=>join(dir,'config.json');
 function loadConfig(dir){
  if(!isAbsolute(dir)||lstatSync(dir).isSymbolicLink()||lstatSync(configFile(dir)).isSymbolicLink())throw new Error('PRIVATE_PATH');
@@ -29,6 +30,7 @@ function safeState(raw){
  const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED'];
  out.status=states.includes(raw?.status)?raw.status:'OUTCOME_UNCONFIRMED';
  if(['EDITOR_FILTER','ROLE_FIELDS'].includes(raw?.managementProof))out.managementProof=raw.managementProof;
+ const uploadResponse=sanitizeUploadReply(raw?.uploadResponse);if(uploadResponse)out.uploadResponse=uploadResponse;
  for(const field of ['reason','stage'])if(typeof raw?.[field]==='string'&&/^[A-Z0-9_]{1,64}$/.test(raw[field]))out[field]=raw[field];
  for(const field of ['identityMatches','attempted','credentialExpired'])if(typeof raw?.[field]==='boolean')out[field]=raw[field];
  if(raw?.scopes&&typeof raw.scopes.wall==='boolean'&&typeof raw.scopes.photos==='boolean')out.scopes={wall:raw.scopes.wall,photos:raw.scopes.photos};

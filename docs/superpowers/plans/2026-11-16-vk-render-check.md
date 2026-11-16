@@ -54,3 +54,10 @@ Root cause of the first local stop is proven: current token wall/photos and self
 - [ ] Exact-head unit→isolatedPG/Redis→full/typecheck/lint/build CI and DraftPR update.
 - [ ] Separate exact-SHA Owner deploy decision, then ONE fresh OAuth (previous token erased on failure); publish only if all real checks pass and local attempt marker remains absent.
 CurrentRender fa1d is intentionally unchanged while preparing this repair. No new provider or publication attempt has occurred.
+
+### Offline preparation while awaiting VK support
+Actual db6ec6e grant/role/upload-server checks succeeded. One locally claimed upload returned200 but the unchanged receipt guard stopped before save/post. Raw response was not retained; exact root cause is NOT_PROVEN. Owner sent support request and asked what can be done now. Current operation stays consumed; no deploy/newOAuth/upload/post.
+- [x] Verify local PNGCRC/pixels/hash and unchanged multipart bytes/header/length/part count on loopback only; record runtime-specific closing-CRLF observation without inventing a VK requirement.
+- [x] RED18 classifier cases and RED1 verifier observation/terminal/no-retry case; add finite field-shape observer to existing bounded bytes, preserving response and acceptance checks.
+- [ ] Independent reviewer and exact-head CI on Render-matching Node22.13, unit before isolatedPG/Redis/full regression.
+- [ ] Report prepared source/runtime wire facts, preserve previous marker, no speculative production fix or provider retry; await support/new explicit operation decision.

@@ -1,5 +1,6 @@
 import {randomBytes,createHash,createPublicKey,verify} from 'node:crypto';
 import {allowedVkPhotoUploadDestination,createVkConnector,validateVkCommunity,sanitizeVkPublicationDiagnostic,VkCommunityValidationError} from '../../lib/server/connectors/vk.ts';
+import {inspectUploadReply} from './upload-diagnostic.mjs';
 
 export const OPERATION='vk-render-photo-20261116-01';
 export const MESSAGE='Проверка VK API 16.11.2026: публикация картинки и текста через приложение Planly.';
@@ -45,7 +46,9 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   if(Number(response.headers.get('content-length'))>1_048_576){await response.body?.cancel();throw new ClosedError('RESPONSE_LIMIT',view.stage);}
   const chunks=[];let length=0;
   if(response.body){const reader=response.body.getReader();for(;;){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>1_048_576){await reader.cancel();throw new ClosedError('RESPONSE_LIMIT',view.stage);}chunks.push(value);}}
-  return new Response(chunks.length?Buffer.concat(chunks):null,{status:response.status,headers:response.headers});
+  const bytes=chunks.length?Buffer.concat(chunks):null;
+  if(allowedUpload&&!allowedAPI&&!allowedOAuth)view.uploadResponse=inspectUploadReply(bytes??new Uint8Array(),response.headers.get('content-type'));
+  return new Response(bytes,{status:response.status,headers:response.headers});
  };
  async function jsonRequest(url,fields,stage){
   view.stage=stage;
@@ -121,7 +124,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   try{
    const connector=createVkConnector({getAccessToken:async()=>access,fetchImpl:transport});
    const result=await connector.publish({publicationId:OPERATION,socialAccountId:OPERATION,provider:'VK',destinationId:`-${COMMUNITY}`,text:MESSAGE,media:[{name:'vk-api-test.png',mimeType:'image/png',bytes:imageCopy}]});
-   if(!result.ok)return set({status:'OUTCOME_UNCONFIRMED',reason:result.code,diagnostic:sanitizeVkPublicationDiagnostic(result.vkDiagnostic)});
+   if(!result.ok){const diagnostic=sanitizeVkPublicationDiagnostic(result.vkDiagnostic);return set({status:'OUTCOME_UNCONFIRMED',reason:result.code,stage:diagnostic?.stage??view.stage,diagnostic});}
    const match=/^-242095689_([1-9]\d*)$/.exec(result.remoteId);
    if(!match)throw new ClosedError('RECEIPT_INVALID','WALL_POST');
    set({postUrl:`https://vk.com/wall${result.remoteId}`,postId:Number(match[1]),stage:'READBACK'});
