@@ -4,9 +4,10 @@ import {inspectUploadReply} from './upload-diagnostic.mjs';
 
 export const OPERATION='vk-render-photo-20261116-01';
 export const JPEG_OPERATION='vk-render-jpeg-20261116-02';
+export const PNG04_OPERATION='vk-render-png-20261116-04';
 export const JPEG03_OPERATION='vk-render-jpeg-20261116-03';
 export function getOperationSpec(operation=OPERATION){
- if(operation===OPERATION)return Object.freeze({operation,mimeType:'image/png',fileName:'vk-api-test.png',fixture:'fixture.png'});
+ if([OPERATION,PNG04_OPERATION].includes(operation))return Object.freeze({operation,mimeType:'image/png',fileName:'vk-api-test.png',fixture:'fixture.png'});
  if([JPEG_OPERATION,JPEG03_OPERATION].includes(operation))return Object.freeze({operation,mimeType:'image/jpeg',fileName:'vk-api-test.jpg',fixture:'fixture.jpg'});
  throw new Error('OPERATION_CONFIG');
 }
