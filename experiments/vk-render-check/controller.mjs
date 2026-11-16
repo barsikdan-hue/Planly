@@ -28,6 +28,7 @@ export function publicEnvironment(dir){const c=loadConfig(dir);return [{key:'NOD
 function safeState(raw){
  const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED'];
  out.status=states.includes(raw?.status)?raw.status:'OUTCOME_UNCONFIRMED';
+ if(['EDITOR_FILTER','ROLE_FIELDS'].includes(raw?.managementProof))out.managementProof=raw.managementProof;
  for(const field of ['reason','stage'])if(typeof raw?.[field]==='string'&&/^[A-Z0-9_]{1,64}$/.test(raw[field]))out[field]=raw[field];
  for(const field of ['identityMatches','attempted','credentialExpired'])if(typeof raw?.[field]==='boolean')out[field]=raw[field];
  if(raw?.scopes&&typeof raw.scopes.wall==='boolean'&&typeof raw.scopes.photos==='boolean')out.scopes={wall:raw.scopes.wall,photos:raw.scopes.photos};

@@ -37,7 +37,7 @@ export function sanitizeVkPublicationDiagnostic(value: unknown): VkPublicationDi
   const { stage, method, vkErrorCode, uploadHttpStatus, uploadHostClass, uploadAttempt, networkErrorClass: networkClass, photoReceiptReason } = candidate;
   if (typeof stage !== 'string' || !['COMMUNITY_VALIDATION', 'GET_UPLOAD_SERVER', 'UPLOAD', 'UPLOAD_RESPONSE', 'SAVE_PHOTO', 'PHOTO_RECEIPT', 'WALL_POST'].includes(stage)) return;
   const safe: VkPublicationDiagnostic = { stage: stage as VkPublicationDiagnostic['stage'] };
-  if (typeof method === 'string' && ['groups.getById', 'photos.getWallUploadServer', 'photos.saveWallPhoto', 'wall.post'].includes(method)) safe.method = method as VkPublicationDiagnostic['method'];
+  if (typeof method === 'string' && ['groups.getById', 'groups.get', 'photos.getWallUploadServer', 'photos.saveWallPhoto', 'wall.post'].includes(method)) safe.method = method as VkPublicationDiagnostic['method'];
   if (typeof vkErrorCode === 'number' && Number.isSafeInteger(vkErrorCode) && vkErrorCode > 0 && vkErrorCode <= 9999) safe.vkErrorCode = vkErrorCode;
   if (typeof uploadHttpStatus === 'number' && Number.isInteger(uploadHttpStatus) && uploadHttpStatus >= 100 && uploadHttpStatus <= 599) safe.uploadHttpStatus = uploadHttpStatus;
   if (uploadHostClass === 'VK_RU_PHOTO_UPLOAD' || uploadHostClass === 'VK_COM_PHOTO_UPLOAD') safe.uploadHostClass = uploadHostClass;
@@ -75,11 +75,11 @@ function apiFailure(code: unknown, mutation: boolean, unknownOutcome: () => Fail
 function createApi(options: Transport) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const apiVersion = options.apiVersion ?? '5.199';
-  return async (method: 'wall.post' | 'photos.getWallUploadServer' | 'photos.saveWallPhoto' | 'groups.getById', params: Record<string, string>, mutation = false): Promise<ApiResult> => {
+  return async (method: 'wall.post' | 'photos.getWallUploadServer' | 'photos.saveWallPhoto' | 'groups.getById' | 'groups.get', params: Record<string, string>, mutation = false): Promise<ApiResult> => {
     const unknownOutcome = method === 'photos.saveWallPhoto' ? ambiguousPhotoSave : ambiguous;
     if (!validToken(options.token)) return failure('AUTH', 'VK_RECONNECT_REQUIRED', 'Reconnect the VK account before publishing.');
     if (!/^5\.\d{1,3}$/.test(apiVersion)) return failure('PERMANENT', 'VK_API_VERSION', 'VK API version is not configured correctly on the server.');
-    const stage: VkPublicationDiagnostic['stage'] = method === 'groups.getById' ? 'COMMUNITY_VALIDATION' : method === 'photos.getWallUploadServer' ? 'GET_UPLOAD_SERVER' : method === 'photos.saveWallPhoto' ? 'SAVE_PHOTO' : 'WALL_POST';
+    const stage: VkPublicationDiagnostic['stage'] = method === 'groups.getById' || method === 'groups.get' ? 'COMMUNITY_VALIDATION' : method === 'photos.getWallUploadServer' ? 'GET_UPLOAD_SERVER' : method === 'photos.saveWallPhoto' ? 'SAVE_PHOTO' : 'WALL_POST';
     const diagnose = (result: Failure, extra: Partial<VkPublicationDiagnostic> = {}): Failure => ({ ...result, vkDiagnostic: { stage, method, ...extra } });
     try {
       const body = new URLSearchParams({ ...params, access_token: options.token, v: apiVersion });
@@ -114,7 +114,7 @@ export class VkCommunityValidationError extends Error {
   }
 }
 
-export async function validateVkCommunity(options: Transport & { communityId: string }): Promise<{ destinationId: string; displayName: string }> {
+export async function validateVkCommunity(options: Transport & { communityId: string }): Promise<{ destinationId: string; displayName: string; authorizationProof?: 'EDITOR_FILTER' }> {
   if (!validCommunity(options.communityId)) throw new VkCommunityValidationError(failure('VALIDATION', 'VK_COMMUNITY', 'Use a positive numeric VK community ID.'));
   const result = await createApi(options)('groups.getById', { group_ids: options.communityId, fields: 'is_admin,admin_level' });
   if (!result.ok) throw new VkCommunityValidationError(result);
@@ -123,10 +123,23 @@ export async function validateVkCommunity(options: Transport & { communityId: st
   if (!group || !validPositiveId(group.id) || String(group.id) !== options.communityId || !['group', 'page', 'event'].includes(String(group.type)) || group.deactivated !== undefined) {
     throw new VkCommunityValidationError(failure('VALIDATION', 'VK_COMMUNITY', 'VK did not confirm the selected active community.'));
   }
-  if (group.is_admin !== 1 || (group.admin_level !== 2 && group.admin_level !== 3)) throw new VkCommunityValidationError(failure('AUTH', 'VK_POST_PERMISSION', 'VK requires editor or administrator authority in the selected community.'));
+  let authorizationProof: 'EDITOR_FILTER' | undefined;
+  if (group.is_admin !== 1 || (group.admin_level !== 2 && group.admin_level !== 3)) {
+    // VK schema 5.199 makes these fields optional. Never reinterpret an explicit
+    // deny, partial role or malformed role as permission. Only their joint absence
+    // permits a different positive proof of the SAME editor/admin requirement.
+    if (Object.hasOwn(group, 'is_admin') || Object.hasOwn(group, 'admin_level')) throw new VkCommunityValidationError(failure('AUTH', 'VK_POST_PERMISSION', 'VK requires editor or administrator authority in the selected community.'));
+    // Official groups.get filter=editor includes editors and administrators.
+    // Omit user_id: proof must concern this token's current user, never a supplied owner.
+    const membership = await createApi(options)('groups.get', { filter: 'editor', extended: '0', count: '1000' });
+    if (!membership.ok) throw new VkCommunityValidationError(membership);
+    const list = record(membership.result), items = list?.items, count = list?.count;
+    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 || !Array.isArray(items) || items.length > 1000 || count < items.length || !items.every(validPositiveId) || new Set(items).size !== items.length || !items.includes(Number(options.communityId))) throw new VkCommunityValidationError(failure('AUTH', 'VK_POST_PERMISSION', 'VK did not confirm editor or administrator membership in the selected community.'));
+    authorizationProof = 'EDITOR_FILTER';
+  }
   // The account title is not a diagnostic, but an echoed token must not enter its public DTO either.
   const displayName = typeof group.name === 'string' && !group.name.includes(options.token) ? group.name.slice(0, 200) : 'VK';
-  return { destinationId: `-${options.communityId}`, displayName };
+  return { destinationId: `-${options.communityId}`, displayName, ...(authorizationProof ? { authorizationProof } : {}) };
 }
 
 export function allowedVkPhotoUploadDestination(value: unknown, token: string): URL | null {

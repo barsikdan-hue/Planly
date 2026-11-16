@@ -15,6 +15,7 @@ function fixture(overrides={}) {
   const payload={auth:{access_token:'PRIVATE_ACCESS',refresh_token:'PRIVATE_REFRESH',state:body.state,expires_in:3600,scope:'wall photos'},
    'users.get':{response:[{id:815727447}]},
    'groups.getById':{response:{groups:[{id:242095689,type:'group',is_admin:1,admin_level:3,name:'test'}]}},
+   'groups.get':{response:{count:1,items:[242095689]}},
    'photos.getWallUploadServer':{response:{upload_url:'https://pu.vk.ru/c1/ss1/upload.php?act=do_add&wallphoto=1',album_id:-14,user_id:815727447,group_id:242095689}},
    'upload.php':{server:1,photo:'[{"photo":"opaque"}]',hash:'opaque'},
    'photos.saveWallPhoto':{response:[{id:42,owner_id:815727447}]},
@@ -60,6 +61,8 @@ test('strict editor/admin gate remains intact with finite role diagnostics',asyn
  const f=fixture({'groups.getById':()=>({response:{groups:[{id:242095689,type:'group',is_admin:0,admin_level:1}]}})});
  await f.connect();assert.equal(f.v.status().status,'AUTH_FAILED');assert.equal(f.v.status().reason,'VK_POST_PERMISSION');assert.equal(f.v.status().roles.adminLevel,'MODERATOR');assert.equal(f.calls.length,3);
 });
+test('observed missing role fields use positive editor-list proof and remain upload/post free',async()=>{const f=fixture({'groups.getById':()=>({response:{groups:[{id:242095689,type:'group',name:'test'}]}})});const r=await f.connect();assert.equal(r.status,'PERMISSIONS_VERIFIED');assert.deepEqual(r.roles,{isAdmin:'MISSING',adminLevel:'MISSING'});assert.equal(r.managementProof,'EDITOR_FILTER');assert.deepEqual(f.calls.map(c=>c.method),['auth','users.get','groups.getById','groups.get','photos.getWallUploadServer']);assert.equal(f.calls.find(c=>c.method==='groups.get').body.user_id,undefined);});
+test('missing role proof API denial is reported before any upload/post or false permission success',async()=>{const f=fixture({'groups.getById':()=>({response:{groups:[{id:242095689,type:'group'}]}}),'groups.get':()=>({error:{error_code:1051,error_msg:'PRIVATE_ACCESS'}})});const r=await f.connect();assert.equal(r.status,'AUTH_FAILED');assert.equal(r.diagnostic.vkErrorCode,1051);assert.equal(r.diagnostic.stage,'COMMUNITY_VALIDATION');assert.equal(f.calls.length,4);assert.equal(JSON.stringify(r).includes('PRIVATE_ACCESS'),false);});
 test('role diagnostics do not label string role values as valid numbers',async()=>{const f=fixture({'groups.getById':()=>({response:{groups:[{id:242095689,type:'group',is_admin:'1',admin_level:'2'}]}})});await f.connect();assert.equal(f.v.status().roles.isAdmin,'INVALID');assert.equal(f.v.status().roles.adminLevel,'INVALID');assert.equal(f.v.status().status,'AUTH_FAILED');});
 test('1051 is reported as provider denial without a fallback or mutation',async()=>{const f=fixture({'photos.getWallUploadServer':()=>({error:{error_code:1051,error_msg:'PRIVATE_ACCESS'}})});await f.connect();const r=f.v.status();assert.equal(r.vkErrorCode,1051);assert.equal(r.status,'AUTH_FAILED');assert.equal(JSON.stringify(r).includes('PRIVATE'),false);assert.equal(f.calls.length,4);});
 test('authorization callback is single-use and never uploads/posts',async()=>{const f=fixture();await f.connect();const count=f.calls.length;const r=await f.v.callback('owner-session',new URLSearchParams({state:'anything',code:'c',device_id:'d'}));assert.equal(r.status,'PERMISSIONS_VERIFIED');assert.equal(f.calls.length,count);});

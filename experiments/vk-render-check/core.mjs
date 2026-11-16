@@ -27,11 +27,11 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   const u=new URL(url);const method=u.pathname.split('/').at(-1);
   // All destinations originate in fixed APIs or the unchanged connector's upload allowlist.
   if(init?.method!=='POST'||init.redirect!=='error')throw new ClosedError('TRANSPORT_POLICY','TRANSPORT');
-  const allowedAPI=u.origin==='https://api.vk.com'&&['users.get','groups.getById','photos.getWallUploadServer','photos.saveWallPhoto','wall.post','wall.getById'].some(m=>u.pathname===`/method/${m}`)&&!u.search;
+  const allowedAPI=u.origin==='https://api.vk.com'&&['users.get','groups.getById','groups.get','photos.getWallUploadServer','photos.saveWallPhoto','wall.post','wall.getById'].some(m=>u.pathname===`/method/${m}`)&&!u.search;
   const allowedOAuth=u.href==='https://id.vk.ru/oauth2/auth';
   const allowedUpload=access&&allowedVkPhotoUploadDestination(url,access);
   if(!allowedAPI&&!allowedOAuth&&!allowedUpload)throw new ClosedError('TRANSPORT_POLICY','TRANSPORT');
-  if(method==='groups.getById')view.stage='COMMUNITY_VALIDATION';
+  if(method==='groups.getById'||method==='groups.get')view.stage='COMMUNITY_VALIDATION';
   if(method==='photos.getWallUploadServer')view.stage='GET_UPLOAD_SERVER';
   if(method==='photos.saveWallPhoto')view.stage='SAVE_PHOTO';
   if(method==='wall.post'){
@@ -97,8 +97,9 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
    view.identityMatches=Array.isArray(users)&&users.length===1&&users[0]?.id===EXPECTED_USER;
    if(!view.identityMatches)throw new ClosedError('IDENTITY_MISMATCH','IDENTITY');
    // Capture finite role fields while letting the original validator make the admission decision.
-   const groupTransport=async(url,init)=>{const response=await transport(url,init);const raw=await response.clone().json();view.roles=roleState(raw?.response?.groups?.[0]);return response;};
-   await validateVkCommunity({token:access,communityId:COMMUNITY,fetchImpl:groupTransport});
+   const groupTransport=async(url,init)=>{const response=await transport(url,init);if(new URL(url).pathname==='/method/groups.getById'){const raw=await response.clone().json();view.roles=roleState(raw?.response?.groups?.[0]);}return response;};
+   const destination=await validateVkCommunity({token:access,communityId:COMMUNITY,fetchImpl:groupTransport});
+   view.managementProof=destination.authorizationProof??'ROLE_FIELDS';
    const upload=await api('photos.getWallUploadServer',{group_id:COMMUNITY});
    if(!allowedVkPhotoUploadDestination(upload?.upload_url,access)||!Number.isSafeInteger(upload?.album_id)||upload?.user_id!==EXPECTED_USER||(upload.group_id!==undefined&&upload.group_id!==Number(COMMUNITY)))throw new ClosedError('UPLOAD_SERVER_INVALID','GET_UPLOAD_SERVER');
    return set({status:'PERMISSIONS_VERIFIED',stage:'GET_UPLOAD_SERVER',grantId:random(),reason:'NO_UPLOAD_OR_POST',expiresAt:credentialExpiry});

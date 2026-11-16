@@ -44,3 +44,13 @@ Files: .github/workflows/vk-render-check.yml; service README and evidence.
 Task1/2: RED19 core, RED6 HTTP, RED5 controller observed before implementation; GREEN32 new tests +80 original connector tests. Targeted eslint0errors/0warnings and diff-check passed. Numeric role diagnostic coercion and stale repeated-auth report each reproduced RED then fixed: nonnumeric role INVALID; only one OAuth start per boot. Ruling: use Node controller instead of proposed Python file so Ed25519 uses built-ins and adds no package/runtime dependencies. Windows local private dir requires explicit ACL verification; token lifetime20min/restarts fail closed. Final independent review in progress, no provider calls or new service yet.
 
 Independent review:32new tests rerun, no remaining blockers; parent-directory fsync implemented on POSIX, Windows limitation documented. DraftPR86/sourceb40a848 standalone GitHub check43820997349 succeeded. Existing audit workflow did NOT trigger because its pull_request base filter lacked the0710 branch; extend only that filter to include the actual stacked PR base, preserving all jobs/checks/guards. No test skips or relaxed assertions. This is required to obtain the specified ordered unit→isolated DB evidence on this source.
+
+
+### Scoped repair — observed optional role omission
+Root cause of the first local stop is proven: current token wall/photos and self identity valid, exact active group valid, both optional role properties absent, strict property check denies. Why VK omits them is UNVERIFIED; do not change scopes/client/provider constraints. Primary source: VKCOM/vk-api-schema groups/methods.json and groups/objects.json version5.199, fetched live16November.
+- [x] RED28 role-proof cases +2 checker transport cases before implementation; existing explicit-deny tests retained.
+- [x] Only joint absence may use one server-filtered current-user editor membership proof; no explicit user_id, no missing-target permission inference; roles proof safe enum.
+- [x] Independent reviewer fetched primaryschema and reran62focusedcases,0fail0skip; no blocking findings.
+- [ ] Exact-head unit→isolatedPG/Redis→full/typecheck/lint/build CI and DraftPR update.
+- [ ] Separate exact-SHA Owner deploy decision, then ONE fresh OAuth (previous token erased on failure); publish only if all real checks pass and local attempt marker remains absent.
+CurrentRender fa1d is intentionally unchanged while preparing this repair. No new provider or publication attempt has occurred.
