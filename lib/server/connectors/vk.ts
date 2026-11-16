@@ -24,7 +24,7 @@ function checkSavedPhoto(value: unknown, destination: number, uploader: unknown)
   const owner = item.owner_id;
   if (typeof owner !== 'number' || !Number.isSafeInteger(owner) || owner === 0) return { ok: false, reason: 'PHOTO_OWNER_INVALID' };
   if (owner !== destination && owner !== uploader) return { ok: false, reason: 'PHOTO_OWNER_MISMATCH' };
-  if (item.access_key !== undefined) return { ok: false, reason: 'PHOTO_ACCESS_KEY_PRESENT' };
+  if (item.access_key !== undefined && (typeof item.access_key !== 'string' || !item.access_key.trim() || item.access_key.length > 8192 || /[\x00-\x20\x7f]/.test(item.access_key))) return { ok: false, reason: 'PHOTO_ACCESS_KEY_PRESENT' };
   return { ok: true, id: item.id, ownerId: owner };
 }
 
@@ -217,7 +217,8 @@ export function createVkConnector(options: { getAccessToken: (socialAccountId: s
         if (!validPositiveId(uploaded?.server) || typeof uploaded?.photo !== 'string' || !uploaded.photo.trim() || uploaded.photo.trim() === '[]' || uploaded.photo.length > 1_048_576 || typeof uploaded.hash !== 'string' || !uploaded.hash.trim() || uploaded.hash.length > 8192) return { ...failure('TEMPORARY', 'VK_UPLOAD_RESPONSE', 'VK photo upload response was incomplete.'), vkDiagnostic: { ...diagnostic, stage: 'UPLOAD_RESPONSE' } };
         const saved = await call('photos.saveWallPhoto', { group_id: groupId, server: String(uploaded.server), photo: uploaded.photo, hash: uploaded.hash }, true);
         if (!saved.ok) return saved;
-        // Private access-key attachment semantics are outside the approved public community contract.
+        // VK photos_photo permits an optional access_key. Validate its shape but never
+        // forward it: this public community path uses only the verified owner and photo ID.
         // A photo may belong to the uploader while wall.post targets the community.
         // Trust only the owner tied to this authenticated upload preparation or wall.
         const checked = checkSavedPhoto(saved.result, Number(input.destinationId), server.user_id);

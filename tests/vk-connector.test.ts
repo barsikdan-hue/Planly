@@ -207,7 +207,7 @@ for (const receipt of [{}, { server: 1, photo: '', hash: 'hash' }, { server: 1, 
     assert.equal(requests.length, 2);
   });
 }
-for (const saved of [[], [{ id: 1, owner_id: -999 }], [{ id: 0, owner_id: -123 }], [{ id: 1, owner_id: -123, access_key: token }], [{ id: 1, owner_id: -123 }, { id: 2, owner_id: -123 }]]) {
+for (const saved of [[], [{ id: 1, owner_id: -999 }], [{ id: 0, owner_id: -123 }], [{ id: 1, owner_id: -123, access_key: { unexpected: token } }], [{ id: 1, owner_id: -123 }, { id: 2, owner_id: -123 }]]) {
   test('VK missing, nonmatching or unsafe photo save receipt never causes wall publication', async () => {
     const { connector, requests } = fixture(request => {
       if (request.url.hostname !== 'api.vk.com') return json({ server: 1, photo: 'opaque', hash: 'hash' });
