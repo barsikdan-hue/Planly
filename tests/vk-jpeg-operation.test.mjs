@@ -57,8 +57,8 @@ test('mismatched server operation fails before JPEG claim/send',async()=>{
   await assert.rejects(publishOnce(dir,{fetchImpl,operation:jpegOperation}),/NOT_READY/);assert.equal(calls,1);assert.equal(existsSync(join(dir,'JPEG_ATTEMPTED.json')),false);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
-for(const selectedOperation of [jpegOperation,'vk-render-jpeg-20261116-03','vk-render-png-20261116-04']) test(`Image ${selectedOperation} valid save with optional access_key and exact readback once`,async()=>{
- const isPng=selectedOperation.endsWith('-04');const selectedImage=isPng?readFileSync(new URL('../experiments/vk-render-check/fixture.png',import.meta.url)):image;
+for(const selectedOperation of [jpegOperation,'vk-render-jpeg-20261116-03','vk-render-png-20261116-04','vk-render-diagnostic-20261118-05']) test(`Image ${selectedOperation} valid save with optional access_key and exact readback once`,async()=>{
+ const isPng=selectedOperation.endsWith('-04')||selectedOperation.endsWith('-05');const selectedImage=isPng?readFileSync(new URL('../experiments/vk-render-check/fixture.png',import.meta.url)):image;
  let uploads=0,posts=0;
  const fetchImpl=async(url,init)=>{const m=new URL(url).pathname.split('/').at(-1),p=init.body instanceof URLSearchParams?Object.fromEntries(init.body):{};
   if(m==='auth')return Response.json({state:p.state,access_token:'jpeg-token',expires_in:3600,scope:'wall photos'});
@@ -101,5 +101,20 @@ test('PNG04 is a distinct fixed PNG operation, not a replay of consumed PNG01',a
  const fetchImpl=async(url)=>{if(url.endsWith('/api/status'))return Response.json({status:'PERMISSIONS_VERIFIED',operation,bootId:'b',grantId:'g',expiresAt:Date.now()+60000});posts++;assert.ok(existsSync(join(dir,'PNG04_ATTEMPTED.json')));return Response.json({status:'POST_CONFIRMED',operation});};
  assert.equal((await publishOnce(dir,{operation,fetchImpl})).status,'POST_CONFIRMED');await assert.rejects(publishOnce(dir,{operation,fetchImpl}),/ALREADY_ATTEMPTED/);assert.equal(posts,1);
  for(const name of old)assert.equal(readFileSync(join(dir,name),'utf8'),'consumed');assert.ok(existsSync(join(dir,'png04-result.json')));
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('DIAG05 retains its own one-shot claim and per-predicate result without replaying01–04',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'vk-diag05-'));const dir=join(root,'private');
+ try{
+  createPrivateConfig(dir);configureOrigin(dir,'https://vk-check.onrender.com');
+  const old=['ATTEMPTED.json','result.json','JPEG_ATTEMPTED.json','jpeg-result.json','JPEG03_ATTEMPTED.json','jpeg03-result.json','PNG04_ATTEMPTED.json','png04-result.json'];for(const name of old)writeFileSync(join(dir,name),'consumed');
+  const operation='vk-render-diagnostic-20261118-05';let calls=0;
+  const fetchImpl=async(url,init)=>{if(url.endsWith('/api/status'))return Response.json({status:'PERMISSIONS_VERIFIED',operation,bootId:'b',grantId:'g',expiresAt:Date.now()+60000});
+   calls++;assert.ok(existsSync(join(dir,'DIAG05_ATTEMPTED.json')));const permit=JSON.parse(Buffer.from(JSON.parse(init.body).payload,'base64url'));assert.equal(permit.operation,operation);
+   return Response.json({status:'OUTCOME_UNCONFIRMED',operation,readbackDiagnostic:{reason:'READBACK_MISMATCH',responseType:'OBJECT',itemsCount:1,postIdMatches:true,wallOwnerMatches:true,textMatches:true,photoCountMatches:true,photoIdentityMatches:false,unavailable:{}}});};
+  const result=await publishOnce(dir,{operation,fetchImpl});assert.equal(result.readbackDiagnostic.photoIdentityMatches,false);assert.equal(result.readbackDiagnostic.textMatches,true);
+  await assert.rejects(publishOnce(dir,{operation,fetchImpl}),/ALREADY_ATTEMPTED/);assert.equal(calls,1);assert.deepEqual(JSON.parse(readFileSync(join(dir,'diag05-result.json'),'utf8')),result);
+  for(const name of old)assert.equal(readFileSync(join(dir,name),'utf8'),'consumed');
  }finally{rmSync(root,{recursive:true,force:true});}
 });
