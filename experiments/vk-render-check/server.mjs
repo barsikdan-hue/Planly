@@ -20,9 +20,9 @@ export function createTestServer(config){
   try{
    if(!req.url||req.url.length>35000)return json(414,{status:'INVALID_REQUEST'});
    const u=new URL(req.url,config.origin);const path=u.pathname;
-   if(req.method==='GET'&&path==='/health'){const spec=getOperationSpec(config.operation);return json(200,{status:'ok',source:config.source??'unknown',vkConfigured:!!config.serviceToken,publicationMode:'LOCAL_SIGNED_ONE_SHOT',operation:spec.operation,imageMimeType:spec.mimeType,imageSha256:createHash('sha256').update(config.image).digest('hex')});}
-   if(req.method==='GET'&&path==='/'&&!u.search){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});return res.end(renderPage(nonce));}
-   if(!['/api/login','/api/status','/api/start','/api/publish','/oauth/callback'].includes(path))return json(404,{status:'NOT_FOUND'});
+   if(req.method==='GET'&&path==='/health'){const spec=getOperationSpec(config.operation);return json(200,{status:'ok',source:config.source??'unknown',vkConfigured:!!config.serviceToken,publicationMode:config.readbackOnly?'READ_ONLY_EXISTING_POSTS':'LOCAL_SIGNED_ONE_SHOT',operation:spec.operation,imageMimeType:spec.mimeType,imageSha256:createHash('sha256').update(config.image).digest('hex')});}
+   if(req.method==='GET'&&path==='/'&&!u.search){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});return res.end(renderPage(nonce,config.readbackOnly));}
+   if(!['/api/login','/api/status','/api/start','/api/publish','/api/readback-existing','/oauth/callback'].includes(path))return json(404,{status:'NOT_FOUND'});
    if(path!=='/oauth/callback'&&u.search)return json(400,{status:'INVALID_REQUEST'});
    const cookie=(req.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith(cookieName+'='))?.slice(cookieName.length+1);
    const ownerSession=typeof session==='string'&&Date.now()<sessionExpires&&same(cookie??'',session);
@@ -44,11 +44,17 @@ export function createTestServer(config){
    if(req.method!=='POST')return json(405,{status:'METHOD_NOT_ALLOWED'});
    if(!controller&&req.headers.origin!==config.origin)return json(403,{status:'ORIGIN_DENIED'});
    const body=await readJson(req);
+   if(path==='/api/readback-existing'){
+    if(!controller||!config.readbackOnly)return json(403,{status:'READBACK_DENIED'});
+    if(!body||Object.keys(body).length)return json(400,{status:'INVALID_REQUEST'});
+    try{return json(200,await v.readExisting());}catch{return json(409,{status:'READBACK_DENIED'});}
+   }
    if(path==='/api/start'){
     if(!ownerSession||Object.keys(body??{}).length)return json(403,{status:'OWNER_SESSION_REQUIRED'});
     try{return json(200,{authorizationUrl:v.start(session)});}catch{return json(409,v.status());}
    }
    if(path==='/api/publish'){
+    if(config.readbackOnly)return json(403,{status:'READ_ONLY_MODE'});
     if(!controller)return json(403,{status:'LOCAL_CONTROLLER_REQUIRED'});
     try{return json(200,await v.publish(body));}catch{return json(409,{status:'PUBLICATION_DENIED',current:v.status()});}
    }
@@ -63,7 +69,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const origin=process.env.RENDER_EXTERNAL_URL;const ownerKey=process.env.VK_CHECK_OWNER_KEY;const permitPublicKey=process.env.VK_CHECK_PERMIT_PUBLIC_KEY;
   const spec=getOperationSpec(process.env.VK_CHECK_OPERATION);
   const image=readFileSync(new URL('./'+spec.fixture,import.meta.url));
-  const server=createTestServer({origin,ownerKey,permitPublicKey,serviceToken:process.env.VK_SERVICE_TOKEN||undefined,source:process.env.RENDER_GIT_COMMIT??'unknown',image,operation:spec.operation});
+   const readOnlySetting=process.env.VK_CHECK_READBACK_ONLY;
+   if(readOnlySetting!==undefined&&!['true','false'].includes(readOnlySetting))throw new Error('READ_ONLY_CONFIG');
+   const server=createTestServer({origin,ownerKey,permitPublicKey,serviceToken:process.env.VK_SERVICE_TOKEN||undefined,source:process.env.RENDER_GIT_COMMIT??'unknown',image,operation:spec.operation,readbackOnly:readOnlySetting==='true'});
   server.listen(Number(process.env.PORT??10000),'0.0.0.0',()=>console.log('VK_CHECK_LISTENING'));
   for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),5000).unref();});
  }catch{console.error('VK_CHECK_CONFIG_INVALID');process.exitCode=1;}

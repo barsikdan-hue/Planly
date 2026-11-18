@@ -5,6 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {OPERATION,JPEG_OPERATION,JPEG03_OPERATION,PNG04_OPERATION,getOperationSpec} from './core.mjs';
 import {sanitizeUploadReply} from './upload-diagnostic.mjs';
+import {sanitizeReadbackDiagnostic} from './readback-diagnostic.mjs';
 const configFile=dir=>join(dir,'config.json');
 function loadConfig(dir){
  if(!isAbsolute(dir)||lstatSync(dir).isSymbolicLink()||lstatSync(configFile(dir)).isSymbolicLink())throw new Error('PRIVATE_PATH');
@@ -27,12 +28,17 @@ export function configureOrigin(dir,origin){
 // For the Render connector only; CLI intentionally has no secret-printing/export mode.
 export function publicEnvironment(dir){const c=loadConfig(dir);return [{key:'NODE_VERSION',value:'22.13.0'},{key:'VK_CHECK_OWNER_KEY',value:c.ownerKey},{key:'VK_CHECK_PERMIT_PUBLIC_KEY',value:c.publicKey}];}
 function safeState(raw){
- const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED'];
+ const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED','READBACK_OBSERVED'];
  out.status=states.includes(raw?.status)?raw.status:'OUTCOME_UNCONFIRMED';
  if([OPERATION,JPEG_OPERATION,JPEG03_OPERATION,PNG04_OPERATION].includes(raw?.operation))out.operation=raw.operation;
  if(['image/jpeg','image/png'].includes(raw?.imageMimeType))out.imageMimeType=raw.imageMimeType;
  if(['EDITOR_FILTER','ROLE_FIELDS'].includes(raw?.managementProof))out.managementProof=raw.managementProof;
  const uploadResponse=sanitizeUploadReply(raw?.uploadResponse);if(uploadResponse)out.uploadResponse=uploadResponse;
+ const readbackDiagnostic=sanitizeReadbackDiagnostic(raw?.readbackDiagnostic);if(readbackDiagnostic)out.readbackDiagnostic=readbackDiagnostic;
+ if(Array.isArray(raw?.observations)&&raw.observations.length<=2)out.observations=raw.observations.flatMap(entry=>{
+  const readbackDiagnostic=sanitizeReadbackDiagnostic(entry?.readbackDiagnostic);
+  return [5,6].includes(entry?.postNumber)&&readbackDiagnostic?[{postNumber:entry.postNumber,readbackDiagnostic}]:[];
+ });
  for(const field of ['reason','stage'])if(typeof raw?.[field]==='string'&&/^[A-Z0-9_]{1,64}$/.test(raw[field]))out[field]=raw[field];
  for(const field of ['identityMatches','attempted','credentialExpired'])if(typeof raw?.[field]==='boolean')out[field]=raw[field];
  if(raw?.scopes&&typeof raw.scopes.wall==='boolean'&&typeof raw.scopes.photos==='boolean')out.scopes={wall:raw.scopes.wall,photos:raw.scopes.photos};
@@ -48,6 +54,7 @@ async function request(c,path,fetchImpl,body){
  if(!response.ok)throw new Error('SERVER_REJECTED');return response.json();
 }
 export async function readStatus(dir,{fetchImpl=globalThis.fetch}={}){return safeState(await request(loadConfig(dir),'/api/status',fetchImpl));}
+export async function readExistingPosts(dir,{fetchImpl=globalThis.fetch}={}){return safeState(await request(loadConfig(dir),'/api/readback-existing',fetchImpl,{}));}
 export async function publishOnce(dir,{fetchImpl=globalThis.fetch,now=Date.now,operation=OPERATION}={}){
  getOperationSpec(operation);
  const marker=join(dir,operation===OPERATION?'ATTEMPTED.json':operation===JPEG_OPERATION?'JPEG_ATTEMPTED.json':operation===JPEG03_OPERATION?'JPEG03_ATTEMPTED.json':'PNG04_ATTEMPTED.json');if(existsSync(marker))throw new Error('ALREADY_ATTEMPTED');
@@ -68,6 +75,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   if(mode==='init')console.log(JSON.stringify(createPrivateConfig(dir)));
   else if(mode==='origin')console.log(JSON.stringify(configureOrigin(dir,arg)));
   else if(mode==='status')console.log(JSON.stringify(await readStatus(dir)));
+  else if(mode==='readback-existing')console.log(JSON.stringify(await readExistingPosts(dir)));
   else if(mode==='publish-once')console.log(JSON.stringify(await publishOnce(dir)));
   else if(mode==='publish-jpeg-once')console.log(JSON.stringify(await publishOnce(dir,{operation:JPEG_OPERATION})));
   else if(mode==='publish-jpeg03-once')console.log(JSON.stringify(await publishOnce(dir,{operation:JPEG03_OPERATION})));

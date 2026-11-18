@@ -1,6 +1,7 @@
 import {randomBytes,createHash,createPublicKey,verify} from 'node:crypto';
 import {allowedVkPhotoUploadDestination,createVkConnector,validateVkCommunity,sanitizeVkPublicationDiagnostic,VkCommunityValidationError} from '../../lib/server/connectors/vk.ts';
 import {inspectUploadReply} from './upload-diagnostic.mjs';
+import {describeReadback,describeReadbackError,describeExistingReadback} from './readback-diagnostic.mjs';
 
 export const OPERATION='vk-render-photo-20261116-01';
 export const JPEG_OPERATION='vk-render-jpeg-20261116-02';
@@ -22,7 +23,8 @@ class ClosedError extends Error {constructor(reason,stage,code){super(reason);th
 function roleState(group){return {isAdmin:group?.is_admin===1?'YES':group?.is_admin===0?'NO':group?.is_admin===undefined?'MISSING':'INVALID',adminLevel:typeof group?.admin_level==='number'?({0:'NONE',1:'MODERATOR',2:'EDITOR',3:'ADMIN'})[group.admin_level]??'INVALID':group?.admin_level===undefined?'MISSING':'INVALID'};}
 function validOrigin(value){const u=new URL(value);if(u.protocol!=='https:'||u.origin!==value||u.username||u.password)throw new Error('ORIGIN_CONFIG');return u.origin;}
 
-export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=globalThis.fetch,now=Date.now,image,operation=OPERATION}){
+export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=globalThis.fetch,now=Date.now,image,operation=OPERATION,readbackOnly=false}){
+ if(typeof readbackOnly!=='boolean')throw new Error('READ_ONLY_CONFIG');
  const spec=getOperationSpec(operation);
  origin=validOrigin(origin);
  if(serviceToken!==undefined&&!validToken(serviceToken))throw new Error('SERVICE_TOKEN_CONFIG');
@@ -30,7 +32,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
  if(!(image instanceof Uint8Array)||image.length<8||image.length>1_000_000)throw new Error('IMAGE_CONFIG');
  if([JPEG_OPERATION,JPEG03_OPERATION].includes(operation)&&(image[0]!==255||image[1]!==216||image[2]!==255||image.at(-2)!==255||image.at(-1)!==217))throw new Error('IMAGE_CONFIG');
  const imageCopy=new Uint8Array(image);
- const bootId=random();let intent,access,credentialExpiry=0,attempted=false,expectedAttachment;
+ const bootId=random();let intent,access,credentialExpiry=0,attempted=false,expectedAttachment,readAttempted=false;
  let view={status:serviceToken?'READY_FOR_AUTH':'SERVICE_TOKEN_REQUIRED',stage:'CONFIG',appId:CLIENT_ID,communityId:COMMUNITY,bootId,operation,imageMimeType:spec.mimeType};
  const status=()=>structuredClone({...view,credentialExpired:credentialExpiry>0&&now()>=credentialExpiry,attempted});
  const set=(values)=>{view={...view,...values};return status();};
@@ -40,6 +42,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   if(init?.method!=='POST'||init.redirect!=='error')throw new ClosedError('TRANSPORT_POLICY','TRANSPORT');
   const allowedAPI=u.origin==='https://api.vk.com'&&['users.get','groups.getById','groups.get','photos.getWallUploadServer','photos.saveWallPhoto','wall.post','wall.getById'].some(m=>u.pathname===`/method/${m}`)&&!u.search;
   const allowedOAuth=u.href==='https://id.vk.ru/oauth2/auth';
+  if(readbackOnly&&!allowedOAuth&&!(allowedAPI&&['users.get','groups.getById','groups.get','wall.getById'].includes(method)))throw new ClosedError('READ_ONLY_MODE','TRANSPORT');
   const allowedUpload=access&&allowedVkPhotoUploadDestination(url,access);
   if(!allowedAPI&&!allowedOAuth&&!allowedUpload)throw new ClosedError('TRANSPORT_POLICY','TRANSPORT');
   if(method==='groups.getById'||method==='groups.get')view.stage='COMMUNITY_VALIDATION';
@@ -113,6 +116,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
    const groupTransport=async(url,init)=>{const response=await transport(url,init);if(new URL(url).pathname==='/method/groups.getById'){const raw=await response.clone().json();view.roles=roleState(raw?.response?.groups?.[0]);}return response;};
    const destination=await validateVkCommunity({token:access,communityId:COMMUNITY,fetchImpl:groupTransport});
    view.managementProof=destination.authorizationProof??'ROLE_FIELDS';
+    if(readbackOnly)return set({status:'PERMISSIONS_VERIFIED',stage:'READBACK',grantId:random(),reason:'READ_ONLY_NO_UPLOAD_OR_POST',expiresAt:credentialExpiry});
    const upload=await api('photos.getWallUploadServer',{group_id:COMMUNITY});
    if(!allowedVkPhotoUploadDestination(upload?.upload_url,access)||!Number.isSafeInteger(upload?.album_id)||upload?.user_id!==EXPECTED_USER||(upload.group_id!==undefined&&upload.group_id!==Number(COMMUNITY)))throw new ClosedError('UPLOAD_SERVER_INVALID','GET_UPLOAD_SERVER');
    return set({status:'PERMISSIONS_VERIFIED',stage:'GET_UPLOAD_SERVER',grantId:random(),reason:'NO_UPLOAD_OR_POST',expiresAt:credentialExpiry});
@@ -127,6 +131,7 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
   }catch{return false;}
  }
  async function publish(permit){
+  if(readbackOnly)throw new Error('READ_ONLY_MODE');
   if(attempted)throw new Error('ALREADY_ATTEMPTED');
   if(view.status!=='PERMISSIONS_VERIFIED'||!access||now()>=credentialExpiry)throw new Error('NOT_READY');
   if(!checkPermit(permit))throw new Error('INVALID_PERMIT');
@@ -138,14 +143,49 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
    const match=/^-242095689_([1-9]\d*)$/.exec(result.remoteId);
    if(!match)throw new ClosedError('RECEIPT_INVALID','WALL_POST');
    set({postUrl:`https://vk.com/wall${result.remoteId}`,postId:Number(match[1]),stage:'READBACK'});
-   const read=await api('wall.getById',{posts:result.remoteId});
+   let read;
+   try{read=await api('wall.getById',{posts:result.remoteId});}
+   catch(error){
+    let errorType='TRANSPORT';
+    if(error instanceof ClosedError){
+     // HTTP_REJECTED also labels a non-object envelope on an otherwise successful HTTP response.
+     errorType=error.reason==='HTTP_REJECTED'?(view.httpStatus>=200&&view.httpStatus<300?'RESPONSE_SHAPE':'HTTP'):
+      ['INVALID_RESPONSE','RESPONSE_LIMIT','TRANSPORT_POLICY'].includes(error.reason)?'RESPONSE_SHAPE':'VK_API';
+    }
+    const readbackDiagnostic=describeReadbackError(errorType);
+    return set({status:'OUTCOME_UNCONFIRMED',reason:readbackDiagnostic.reason,stage:'READBACK',readbackDiagnostic,...(error instanceof ClosedError&&error.vkErrorCode?{vkErrorCode:error.vkErrorCode}:{})});
+   }
+   const readbackDiagnostic=describeReadback(read,{postId:Number(match[1]),wallOwner:-Number(COMMUNITY),text:MESSAGE,attachment:expectedAttachment});
+   set({readbackDiagnostic});
+   try{
    const items=read?.items;
    const post=Array.isArray(items)&&items.length===1?items[0]:null;
    const photo=post?.attachments?.filter(a=>a.type==='photo');
-   if(!post||post.id!==Number(match[1])||post.owner_id!==-Number(COMMUNITY)||post.text!==MESSAGE||!Array.isArray(photo)||photo.length!==1||`photo${photo[0]?.photo?.owner_id}_${photo[0]?.photo?.id}`!==expectedAttachment)return set({status:'OUTCOME_UNCONFIRMED',reason:'READBACK_MISMATCH',stage:'READBACK'});
+   if(!post||post.id!==Number(match[1])||post.owner_id!==-Number(COMMUNITY)||post.text!==MESSAGE||!Array.isArray(photo)||photo.length!==1||`photo${photo[0]?.photo?.owner_id}_${photo[0]?.photo?.id}`!==expectedAttachment)return set({status:'OUTCOME_UNCONFIRMED',reason:readbackDiagnostic.reason,stage:'READBACK'});
+   }catch{return set({status:'OUTCOME_UNCONFIRMED',reason:'READBACK_INVALID_SHAPE',stage:'READBACK'});}
    return set({status:'POST_CONFIRMED',reason:'EXACT_TEXT_PHOTO_READBACK',stage:'READBACK'});
   }catch(error){return set({status:'OUTCOME_UNCONFIRMED',reason:error instanceof ClosedError?error.reason:'TRANSPORT_OR_RESPONSE_FAILED',stage:view.stage,...(error instanceof ClosedError&&error.vkErrorCode?{vkErrorCode:error.vkErrorCode}:{})});}
   finally{access=undefined;}
  }
- return Object.freeze({start,callback,publish,status});
+ async function readExisting(){
+  if(!readbackOnly)throw new Error('READ_ONLY_MODE');
+  if(readAttempted)throw new Error('READ_ALREADY_USED');
+  if(view.status!=='PERMISSIONS_VERIFIED'||!access||now()>=credentialExpiry)throw new Error('NOT_READY');
+  readAttempted=true;const observations=[];
+  try{
+   for(const postNumber of [5,6]){
+    let readbackDiagnostic;
+    try{
+     const read=await api('wall.getById',{posts:`-${COMMUNITY}_${postNumber}`});
+     readbackDiagnostic=describeExistingReadback(read,{postId:postNumber,wallOwner:-Number(COMMUNITY),text:MESSAGE});
+    }catch(error){
+     const type=error instanceof ClosedError?(['INVALID_RESPONSE','RESPONSE_LIMIT'].includes(error.reason)?'RESPONSE_SHAPE':error.reason==='HTTP_REJECTED'?(view.httpStatus>=200&&view.httpStatus<300?'RESPONSE_SHAPE':'HTTP'):'VK_API'):'TRANSPORT';
+     readbackDiagnostic=describeReadbackError(type);
+    }
+    observations.push({postNumber,readbackDiagnostic});
+   }
+   return set({status:'READBACK_OBSERVED',stage:'READBACK',reason:'EXISTING_POSTS_ONLY',observations});
+  }finally{access=undefined;}
+ }
+ return Object.freeze({start,callback,publish,status,readExisting});
 }
