@@ -1,5 +1,9 @@
 # Lentaro — current project state
 
+## Scope decision — 18 November 2026
+
+The Owner removed Instagram from the active roadmap: connecting it is currently unavailable for this project. Active networks are Telegram, MAX and VK. Instagram implementation, review/eligibility research, onboarding and acceptance are excluded and do not block M1 or release readiness. Reintroduction needs a new explicit Owner decision. Historical Instagram/four-network references below and in dated contracts remain records, not current scope. See [current roadmap scope](ROADMAP.md#current-scope-override--18112026-owner-decision). This documentation update performs no deployment, infrastructure or provider operation.
+
 ## Independent local restore - 26 October 2026
 
 Downloaded off-VPS backup saas-20261026-1793002809 restored transactionally into
