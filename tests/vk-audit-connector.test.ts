@@ -77,8 +77,8 @@ for (const owner of [0, 89, -999, '88', 88.5, Number.MAX_SAFE_INTEGER + 1, null]
     assert.ok(!requests.includes('wall.post'));
   });
 }
-test('VK positive-owner private receipt is refused before wall mutation', async () => {
-  const { connector, requests } = fixture({ saved: [{ id: 44, owner_id: 88, access_key: secret }] });
+test('VK positive-owner malformed access key is refused before wall mutation', async () => {
+  const { connector, requests } = fixture({ saved: [{ id: 44, owner_id: 88, access_key: { unexpected: secret } }] });
   assert.equal(failure(await connector.publish(input)).code, 'VK_PHOTO_RECEIPT');
   assert.ok(!requests.includes('wall.post'));
 });
@@ -167,7 +167,11 @@ for (const [reason, saved] of [
   ['PHOTO_OWNER_INVALID', [{ id: 44, owner_id: '88' }]],
   ['PHOTO_OWNER_MISMATCH', [{ id: 44, owner_id: 89 }]],
   ['PHOTO_OWNER_MISMATCH', [{ id: 44, owner_id: -999 }]],
-  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: secret }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: 123 }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: 'x'.repeat(8193) }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: 'key\u0000suffix' }]],
+  ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: 'invalid key' }]],
+  ['PHOTO_OWNER_MISMATCH', [{ id: 44, owner_id: -999, access_key: secret }]],
   ['PHOTO_ACCESS_KEY_PRESENT', [{ id: 44, owner_id: 88, access_key: '' }]],
   ['PHOTO_ACCESS_KEY_PRESENT', [{ ...receipt, access_key: null }]],
 ] as const) test(`server saved-photo denial reports closed ${reason} (${JSON.stringify(saved).length}) without wall.post`, async () => {
@@ -199,4 +203,12 @@ test('receipt reason crosses sanitizer only as a closed string at PHOTO_RECEIPT'
   let reads = 0;
   assert.deepEqual(sanitize({ stage: 'PHOTO_RECEIPT', get photoReceiptReason() { return ++reads === 1 ? reason : secret; } }), { stage: 'PHOTO_RECEIPT', photoReceiptReason: reason });
   assert.equal(reads, 1);
+});
+
+for (const owner of [-123, 88]) test(`documented optional access_key does not reject owned saved photo (${owner}) or enter attachment/receipt`, async () => {
+  const { connector, requests } = fixture({ saved: [{ id: 44, owner_id: owner, access_key: 'opaque-photo-key' }] });
+  const result = await connector.publish(input);
+  assert.equal(result.ok, true);
+  assert.equal(requests.filter(stage => stage === 'wall.post').length, 1);
+  assert.equal(JSON.stringify(result).includes('opaque-photo-key'), false);
 });

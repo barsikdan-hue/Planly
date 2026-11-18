@@ -25,7 +25,7 @@ export function vkCommunityOAuthFailure(error: unknown): VkOAuthError {
     if (error instanceof VkCommunityValidationError) {
       const { code, errorType, vkDiagnostic } = error;
       const diagnostic = sanitizeVkPublicationDiagnostic(vkDiagnostic);
-      const community = diagnostic?.stage === 'COMMUNITY_VALIDATION' && (!diagnostic.method || diagnostic.method === 'groups.getById') ? diagnostic : undefined;
+      const community = diagnostic?.stage === 'COMMUNITY_VALIDATION' && (!diagnostic.method || diagnostic.method === 'groups.getById' || diagnostic.method === 'groups.get') ? diagnostic : undefined;
       metadata = safeCommunityValidationMetadata({ connectorCode: code, errorType, vkErrorCode: community?.vkErrorCode, networkErrorClass: community?.networkErrorClass });
     }
   } catch { /* Unknown/mutable errors retain only the OAuth stage. */ }

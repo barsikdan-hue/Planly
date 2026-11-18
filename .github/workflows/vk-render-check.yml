@@ -1,0 +1,35 @@
+name: VK Render checker contracts
+on:
+  pull_request:
+    branches: [codex/vk-oauth-community-diag-20261109]
+    paths:
+      - 'experiments/vk-render-check/**'
+      - 'tests/vk-render-*.test.mjs'
+      - 'tests/vk-upload-reply-diagnostic.test.mjs'
+      - 'tests/vk-upload-wire.test.mjs'
+      - 'tests/vk-jpeg-operation.test.mjs'
+      - '.github/workflows/vk-render-check.yml'
+permissions:
+  contents: read
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: No dependencies, database, or provider credentials
+        run: |
+          node --check experiments/vk-render-check/core.mjs
+          node --check experiments/vk-render-check/server.mjs
+          node --check experiments/vk-render-check/controller.mjs
+          node --check experiments/vk-render-check/page.mjs
+          node --check experiments/vk-render-check/upload-diagnostic.mjs
+          node --experimental-strip-types --test tests/vk-render-check.test.mjs tests/vk-render-http.test.mjs tests/vk-render-controller.test.mjs tests/vk-upload-reply-diagnostic.test.mjs tests/vk-upload-wire.test.mjs tests/vk-jpeg-operation.test.mjs
+          test -s experiments/vk-render-check/fixture.png
+          test -s experiments/vk-render-check/fixture.jpg

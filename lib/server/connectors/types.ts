@@ -3,7 +3,7 @@ export type PublicationErrorType = 'TEMPORARY' | 'AUTH' | 'VALIDATION' | 'PERMAN
 
 export type VkPublicationDiagnostic = {
   stage: 'COMMUNITY_VALIDATION' | 'GET_UPLOAD_SERVER' | 'UPLOAD' | 'UPLOAD_RESPONSE' | 'SAVE_PHOTO' | 'PHOTO_RECEIPT' | 'WALL_POST';
-  method?: 'groups.getById' | 'photos.getWallUploadServer' | 'photos.saveWallPhoto' | 'wall.post';
+  method?: 'groups.getById' | 'groups.get' | 'photos.getWallUploadServer' | 'photos.saveWallPhoto' | 'wall.post';
   vkErrorCode?: number;
   uploadHttpStatus?: number;
   uploadHostClass?: 'VK_RU_PHOTO_UPLOAD' | 'VK_COM_PHOTO_UPLOAD';
