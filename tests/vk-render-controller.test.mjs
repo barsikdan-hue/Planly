@@ -30,3 +30,8 @@ test('existing-post controller uses only the fixed read endpoint, strips unknown
  assert.equal(calls,1);assert.equal(result.status,'READBACK_OBSERVED');assert.deepEqual(result.observations.map(x=>x.postNumber),[5]);assert.equal(result.observations[0].readbackDiagnostic.photoIdentityMatches,null);assert.equal(JSON.stringify(result).includes('PRIVATE'),false);
  assert.equal(existsSync(join(dir,'ATTEMPTED.json')),false);
 }));
+
+test('created post with unverified media remains a distinct non-success controller status',()=>fixture(async dir=>{
+ const result=await readStatus(dir,{fetchImpl:async()=>Response.json({status:'POST_CREATED_MEDIA_UNVERIFIED',reason:'PHOTO_IDENTITY_CHANGED',raw:'PRIVATE'})});
+ assert.equal(result.status,'POST_CREATED_MEDIA_UNVERIFIED');assert.notEqual(result.status,'POST_CONFIRMED');assert.equal(result.reason,'PHOTO_IDENTITY_CHANGED');assert.equal(JSON.stringify(result).includes('PRIVATE'),false);
+}));

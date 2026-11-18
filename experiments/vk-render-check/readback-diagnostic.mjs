@@ -54,6 +54,13 @@ export function describeReadbackError(errorType){
  const reason=errorType==='RESPONSE_SHAPE'?'READBACK_INVALID_SHAPE':'READBACK_API_ERROR';
  return {...blank(reason,'UNAVAILABLE',null,'READBACK_ERROR'),errorType:errorTypes.includes(errorType)?errorType:'TRANSPORT'};
 }
+// A verified post receipt and matching post fields do not prove media provenance.
+// This is a distinct non-success outcome; never upgrade it to POST_CONFIRMED.
+export function classifyCreatedPostWithUnverifiedMedia(diagnostic){
+ if(diagnostic&&['postIdMatches','wallOwnerMatches','textMatches','photoCountMatches'].every(k=>diagnostic[k]===true)&&diagnostic.photoIdentityMatches===false)
+  return {status:'POST_CREATED_MEDIA_UNVERIFIED',reason:'PHOTO_IDENTITY_CHANGED'};
+ return null;
+}
 // Existing records have no retained pre-publication attachment receipt. Never invent one.
 export function describeExistingReadback(read,expected){
  const out=describeReadback(read,{...expected,attachment:undefined});

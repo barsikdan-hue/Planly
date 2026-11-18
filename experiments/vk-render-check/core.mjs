@@ -1,7 +1,7 @@
 import {randomBytes,createHash,createPublicKey,verify} from 'node:crypto';
 import {allowedVkPhotoUploadDestination,createVkConnector,validateVkCommunity,sanitizeVkPublicationDiagnostic,VkCommunityValidationError} from '../../lib/server/connectors/vk.ts';
 import {inspectUploadReply} from './upload-diagnostic.mjs';
-import {describeReadback,describeReadbackError,describeExistingReadback} from './readback-diagnostic.mjs';
+import {describeReadback,describeReadbackError,describeExistingReadback,classifyCreatedPostWithUnverifiedMedia} from './readback-diagnostic.mjs';
 
 export const DIAG05_OPERATION='vk-render-diagnostic-20261118-05';
 export const OPERATION='vk-render-photo-20261116-01';
@@ -158,6 +158,8 @@ export function createVerifier({origin,serviceToken,permitPublicKey,fetchImpl=gl
    }
    const readbackDiagnostic=describeReadback(read,{postId:Number(match[1]),wallOwner:-Number(COMMUNITY),text:MESSAGE,attachment:expectedAttachment});
    set({readbackDiagnostic});
+   const createdWithUnverifiedMedia=classifyCreatedPostWithUnverifiedMedia(readbackDiagnostic);
+   if(createdWithUnverifiedMedia)return set({...createdWithUnverifiedMedia,stage:'READBACK'});
    try{
    const items=read?.items;
    const post=Array.isArray(items)&&items.length===1?items[0]:null;

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {describeReadback,sanitizeReadbackDiagnostic} from '../experiments/vk-render-check/readback-diagnostic.mjs';
+import {describeReadback,sanitizeReadbackDiagnostic,classifyCreatedPostWithUnverifiedMedia} from '../experiments/vk-render-check/readback-diagnostic.mjs';
 const expected={postId:51,wallOwner:-242095689,text:'PRIVATE_TEXT',attachment:'photo815727447_42'};
 const matching=()=>({id:51,owner_id:-242095689,text:'PRIVATE_TEXT',attachments:[{type:'photo',photo:{owner_id:815727447,id:42,access_key:'PRIVATE_KEY'}}]});
 
@@ -13,6 +13,15 @@ test('photo identity mismatch separates owner and ID changes without exposing ei
  const d=describeReadback({items:[p]},expected);assert.equal(d.photoIdentityMatches,false);
  assert.deepEqual(d.photoIdentityDetails,{ownerMatches:false,idMatches:false,expectedOwnerIsWall:false,actualOwnerIsWall:true});
  assert.deepEqual(sanitizeReadbackDiagnostic(d),d);assert.equal(JSON.stringify(d).includes(String(expected.wallOwner)),false);assert.equal(JSON.stringify(d).includes('815727447'),false);
+});
+
+test('partial created-post classification never upgrades media, missing data or other mismatches to success',()=>{
+ const p=matching();p.attachments[0].photo.id=99;const d=describeReadback({items:[p]},expected);
+ assert.deepEqual(classifyCreatedPostWithUnverifiedMedia(d),{status:'POST_CREATED_MEDIA_UNVERIFIED',reason:'PHOTO_IDENTITY_CHANGED'});
+ for(const key of ['postIdMatches','wallOwnerMatches','textMatches','photoCountMatches']){
+  assert.equal(classifyCreatedPostWithUnverifiedMedia({...d,[key]:false}),null);assert.equal(classifyCreatedPostWithUnverifiedMedia({...d,[key]:null}),null);
+ }
+ assert.equal(classifyCreatedPostWithUnverifiedMedia({...d,photoIdentityMatches:null}),null);assert.equal(classifyCreatedPostWithUnverifiedMedia({...d,photoIdentityMatches:true}),null);
 });
 test('missing or invalid types explain unavailable fields without masking independent booleans',()=>{
  const p=matching();p.id='51';delete p.text;delete p.attachments[0].photo.id;

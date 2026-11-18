@@ -126,13 +126,21 @@ for(const [label,change,failed] of [
  ['all match',()=>{},null],
 ])test(`closed readback diagnostics isolate ${label} without altering acceptance`,async()=>{
  const post=matchingPost();change(post);const f=fixture({'wall.getById':()=>({response:{items:[post]}})});await f.connect();const permit=f.permit();const result=await f.v.publish(permit);
- assert.equal(result.status,failed?'OUTCOME_UNCONFIRMED':'POST_CONFIRMED');
+ assert.equal(result.status,failed==='photoIdentityMatches'?'POST_CREATED_MEDIA_UNVERIFIED':failed?'OUTCOME_UNCONFIRMED':'POST_CONFIRMED');
  const d=result.readbackDiagnostic;assert.ok(d);assert.equal(d.reason,failed?'READBACK_MISMATCH':'READBACK_MATCH');assert.equal(d.responseType,'OBJECT');assert.equal(d.itemsCount,1);
  for(const [name,value]of Object.entries(allReadbackChecks))assert.equal(d[name],name===failed?false:failed==='photoCountMatches'&&name==='photoIdentityMatches'?null:value);
  assert.deepEqual(d.unavailable,failed==='photoCountMatches'?{photoIdentityMatches:'PHOTO_COUNT_NOT_ONE'}:{});
  assert.equal(JSON.stringify(d).includes('PRIVATE_DIAGNOSTIC_TEXT'),false);assert.equal(JSON.stringify(d).includes(MESSAGE),false);
  assert.equal(result.postUrl,'https://vk.com/wall-242095689_51');await assert.rejects(f.v.publish(permit),/ATTEMPTED/);
  assert.equal(f.calls.filter(c=>c.method==='wall.post').length,1);assert.equal(f.calls.filter(c=>c.method==='wall.getById').length,1);
+});
+
+test('canonical group photo replacement never becomes exact-content confirmation',async()=>{
+ const post=matchingPost();post.attachments[0].photo={id:99,owner_id:-242095689};
+ const f=fixture({'wall.getById':()=>({response:{items:[post]}})});await f.connect();const permit=f.permit();const result=await f.v.publish(permit);
+ assert.equal(result.status,'POST_CREATED_MEDIA_UNVERIFIED');assert.equal(result.reason,'PHOTO_IDENTITY_CHANGED');assert.equal(result.readbackDiagnostic.photoIdentityMatches,false);
+ assert.deepEqual(result.readbackDiagnostic.photoIdentityDetails,{ownerMatches:false,idMatches:false,expectedOwnerIsWall:false,actualOwnerIsWall:true});
+ assert.notEqual(result.status,'POST_CONFIRMED');assert.equal(result.postUrl,'https://vk.com/wall-242095689_51');await assert.rejects(f.v.publish(permit),/ATTEMPTED/);assert.equal(f.calls.filter(c=>c.method==='wall.post').length,1);
 });
 
 for(const [label,response,reason]of [

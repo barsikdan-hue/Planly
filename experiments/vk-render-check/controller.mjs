@@ -28,7 +28,7 @@ export function configureOrigin(dir,origin){
 // For the Render connector only; CLI intentionally has no secret-printing/export mode.
 export function publicEnvironment(dir){const c=loadConfig(dir);return [{key:'NODE_VERSION',value:'22.13.0'},{key:'VK_CHECK_OWNER_KEY',value:c.ownerKey},{key:'VK_CHECK_PERMIT_PUBLIC_KEY',value:c.publicKey}];}
 function safeState(raw){
- const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED','READBACK_OBSERVED'];
+ const out={};const states=['READY_FOR_AUTH','SERVICE_TOKEN_REQUIRED','AWAITING_VK','AUTH_IN_PROGRESS','AUTH_FAILED','PERMISSIONS_VERIFIED','ATTEMPTED','OUTCOME_UNCONFIRMED','POST_CONFIRMED','PUBLICATION_DENIED','READBACK_OBSERVED','POST_CREATED_MEDIA_UNVERIFIED'];
  out.status=states.includes(raw?.status)?raw.status:'OUTCOME_UNCONFIRMED';
  if([OPERATION,JPEG_OPERATION,JPEG03_OPERATION,PNG04_OPERATION,DIAG05_OPERATION].includes(raw?.operation))out.operation=raw.operation;
  if(['image/jpeg','image/png'].includes(raw?.imageMimeType))out.imageMimeType=raw.imageMimeType;
