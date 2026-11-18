@@ -8,6 +8,12 @@ test('diagnostic never returns expected/actual private values or payload fields'
  const p=matching();const d=describeReadback({items:[p],signed:'PRIVATE_URL'},expected);
  assert.equal(d.reason,'READBACK_MATCH');assert.equal(d.photoIdentityMatches,true);assert.equal(JSON.stringify(d).includes('PRIVATE'),false);assert.deepEqual(sanitizeReadbackDiagnostic(d),d);
 });
+test('photo identity mismatch separates owner and ID changes without exposing either identifier',()=>{
+ const p=matching();p.attachments[0].photo={owner_id:expected.wallOwner,id:99};
+ const d=describeReadback({items:[p]},expected);assert.equal(d.photoIdentityMatches,false);
+ assert.deepEqual(d.photoIdentityDetails,{ownerMatches:false,idMatches:false,expectedOwnerIsWall:false,actualOwnerIsWall:true});
+ assert.deepEqual(sanitizeReadbackDiagnostic(d),d);assert.equal(JSON.stringify(d).includes(String(expected.wallOwner)),false);assert.equal(JSON.stringify(d).includes('815727447'),false);
+});
 test('missing or invalid types explain unavailable fields without masking independent booleans',()=>{
  const p=matching();p.id='51';delete p.text;delete p.attachments[0].photo.id;
  const d=describeReadback({items:[p]},expected);assert.equal(d.reason,'READBACK_INVALID_SHAPE');assert.equal(d.postIdMatches,null);assert.equal(d.textMatches,null);assert.equal(d.wallOwnerMatches,true);assert.equal(d.photoCountMatches,true);assert.equal(d.photoIdentityMatches,null);

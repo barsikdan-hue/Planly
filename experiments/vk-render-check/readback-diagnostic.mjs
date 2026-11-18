@@ -39,7 +39,11 @@ export function describeReadback(read,expected){
    if(!record(photo)||!Object.hasOwn(photo,'owner_id')||!Object.hasOwn(photo,'id'))unavailable('photoIdentityMatches',record(photo)?'FIELD_MISSING':'FIELD_INVALID');
    else if(!['number','string'].includes(typeof photo.owner_id)||!['number','string'].includes(typeof photo.id))unavailable('photoIdentityMatches','FIELD_INVALID');
    // Do not tighten the old template-string comparison's numeric/string identity semantics.
-   else out.photoIdentityMatches=`photo${photo.owner_id}_${photo.id}`===expected.attachment;
+   else{
+    out.photoIdentityMatches=`photo${photo.owner_id}_${photo.id}`===expected.attachment;
+    const parts=typeof expected.attachment==='string'?/^photo(-?[1-9]\d*)_([1-9]\d*)$/.exec(expected.attachment):null;
+    if(parts)out.photoIdentityDetails={ownerMatches:String(photo.owner_id)===parts[1],idMatches:String(photo.id)===parts[2],expectedOwnerIsWall:parts[1]===String(expected.wallOwner),actualOwnerIsWall:String(photo.owner_id)===String(expected.wallOwner)};
+   }
   }
  }
  out.reason=Object.values(out.unavailable).some(r=>r!=='PHOTO_COUNT_NOT_ONE')?'READBACK_INVALID_SHAPE':
@@ -65,6 +69,11 @@ export function sanitizeReadbackDiagnostic(value){
   const {reason,responseType,itemsCount,errorType,unavailable}=value;
   if(!reasons.includes(reason)||!responseTypes.includes(responseType)||!(itemsCount===null||Number.isSafeInteger(itemsCount)&&itemsCount>=0&&itemsCount<=1_048_576)||!record(unavailable))return;
   const out={reason,responseType,itemsCount,unavailable:{}};
+  const details=value.photoIdentityDetails;
+  if(record(details)){
+   const safe={};for(const name of ['ownerMatches','idMatches','expectedOwnerIsWall','actualOwnerIsWall']){const result=details[name];if(typeof result!=='boolean')return;safe[name]=result;}
+   out.photoIdentityDetails=safe;
+  }
   if(errorType!==undefined){if(!errorTypes.includes(errorType))return;out.errorType=errorType;}
   for(const name of checkNames){
    const result=value[name];if(result!==null&&typeof result!=='boolean')return;
